@@ -1,6 +1,7 @@
 {
   "signature": "TAK Manager — {{url}}",
   "datetime_format": "[day]/[month]/[year] à [hour]:[minute] UTC",
+  "decimal_separator": ",",
   "login_code": {
     "subject": "Votre code de connexion : {{code}}",
     "body": "Bonjour,\n\nVotre code de connexion à TAK Manager est :\n\n    {{code}}\n\nIl est valable {{minutes}} minutes et ne sert qu'une fois. Si vous ne l'avez pas demandé, ignorez ce message : personne ne peut se connecter sans ce code."
@@ -52,5 +53,61 @@
   "event_team_removed": {
     "subject": "Votre équipe ne fait plus partie de l'événement {{event}}",
     "body": "Bonjour,\n\nL'équipe « {{host}} » a retiré votre équipe « {{team}} » de l'événement « {{event}} » (du {{start}} au {{end}}).\n\nSi votre équipe y participait, ses membres ont immédiatement cessé de voir les autres équipes et d'être vus par elles.\n\n    {{url}}"
+  },
+  "alert_digest": {
+    "subject": "{{subject}}",
+    "body": "Bonjour,\n\n{{sections}}\n\nLa page de supervision donne le détail et l'historique :\n\n    {{url}}\n\nVous recevez ce message parce que vous administrez cette plateforme. Une alerte est annoncée une fois, rappelée au plus une fois par jour tant qu'elle dure, puis annoncée de nouveau quand elle est terminée."
+  },
+  "certificate_notice": {
+    "subject": "{{team}} : le certificat TAK de {{access}} expire dans {{days}} jours",
+    "body": "Bonjour,\n\nLe zip de connexion de l'accès « {{access}} » de votre équipe « {{team}} » contient un certificat client qui expire le {{date}}, dans {{days}} jours.\n\nRien ne le renouvelle. Passé cette date, les appareils configurés avec ce zip ne se connecteront plus au serveur TAK.\n\nD'ici là, en tant que chef d'équipe :\n\n  1. ouvrez l'accès sur la page de votre équipe et choisissez « Régénérer » ;\n  2. téléchargez le nouveau zip et redistribuez-le à toutes les personnes qui l'utilisent.\n\nRégénérer déconnecte aussitôt les appareils qui utilisent l'accès : prévoyez-le à un moment où l'équipe peut reconfigurer ses appareils.\n\n    {{url}}"
+  },
+  "alerts": {
+    "subject_raised": "[TAK Manager] Alerte : {{text}}",
+    "subject_resolved": "[TAK Manager] Résolu : {{text}}",
+    "subject_several": "[TAK Manager] Alertes — nouvelles : {{raised}}, résolues : {{resolved}}, toujours en cours : {{reminded}}",
+    "heading_raised": "Nouvelles alertes :",
+    "heading_resolved": "Résolues :",
+    "heading_reminded": "Toujours en cours (rappel) :",
+    "severity": {
+      "low": "mineure",
+      "warning": "avertissement",
+      "critical": "critique"
+    },
+    "subjects": {
+      "root": "le disque système",
+      "docker": "le disque de Docker",
+      "data": "le disque des données de la plateforme",
+      "backups": "le disque des sauvegardes",
+      "root_ca": "l'autorité de certification racine",
+      "intermediate_ca": "l'autorité de certification intermédiaire (signe les certificats clients)",
+      "tak_server": "TAK Server",
+      "platform_api": "l'accès de la plateforme à TAK Server",
+      "enrollment": "le port d'enrôlement (8446)",
+      "web": "le site web (Let's Encrypt)"
+    },
+    "kinds": {
+      "agent_unreachable": "L'agent de l'hôte ne répond pas : le serveur et les services ne sont plus surveillés.",
+      "disk_full": "Disque presque plein : {{subject}} est utilisé à {{percent}} %.",
+      "memory_pressure": "La mémoire est utilisée à {{percent}} %.",
+      "service_down": "Le service {{subject}} ne tourne pas (état : {{state}}).",
+      "service_unhealthy": "Le service {{subject}} tourne mais échoue à son contrôle de santé.",
+      "service_restarting": "Le service {{subject}} redémarre en boucle ({{restarts}} redémarrages dans les 15 dernières minutes).",
+      "tak_process_down": "Le processus « {{subject}} » de TAK Server ne tourne pas.",
+      "tak_unreachable": "TAK Server ne répond pas (en échec : {{what}}).",
+      "directory_unreachable": "L'annuaire (OpenLDAP) ne répond pas.",
+      "reconciliation_failing": "La synchronisation avec l'annuaire et TAK Server n'a pas réussi depuis {{minutes}} minutes.",
+      "event_not_started": "L'événement « {{event}} » aurait dû commencer il y a {{minutes}} minutes et ne l'a pas fait : ses équipes ne se voient pas encore.",
+      "event_not_ended": "L'événement « {{event}} » aurait dû se terminer il y a {{minutes}} minutes et ne l'a pas fait : ses équipes se voient toujours.",
+      "certificate_expiring": "Certificat expirant dans {{days}} jours : {{subject}}.",
+      "certificate_expired": "Certificat expiré depuis {{days}} jours : {{subject}}.",
+      "client_certificates_expiring": "Certificats clients expirant sous {{days}} jours : {{count}}, dont {{urgent}} sous {{urgent_days}} jours.",
+      "backup_failed": "La dernière sauvegarde a échoué.",
+      "backup_stale": "Aucune sauvegarde n'a été faite depuis {{hours}} heures.",
+      "security_updates": "Mises à jour de sécurité en attente sur le serveur : {{count}}.",
+      "reboot_required": "Le serveur doit être redémarré pour terminer l'installation des mises à jour.",
+      "mail_failing": "Les e-mails ne partent plus ({{count}} échecs dans la dernière heure).",
+      "clock_unsynchronized": "L'horloge du serveur n'est pas synchronisée : les événements peuvent commencer et finir à la mauvaise heure."
+    }
   }
 }

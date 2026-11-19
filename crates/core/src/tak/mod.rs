@@ -39,15 +39,22 @@ pub struct IssuedCertificate {
 }
 
 /// A client connected to TAK Server.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Subscription {
     /// Identifier used to cut the session.
     pub subscription_uid: String,
+    /// Empty for a session that has no group: TAK Server then lists it without its account.
     pub username: String,
     pub callsign: Option<String>,
     pub client_uid: Option<String>,
     /// Groups the session currently has, which can lag behind the directory.
     pub groups: Vec<String>,
+    /// When TAK Server last received something from the client.
+    pub last_report_at: Option<OffsetDateTime>,
+    /// Address the client connects from, as TAK Server sees it.
+    pub ip_address: Option<String>,
+    /// The client software and its version, when it announced them (`ATAK-CIV 5.4.0`).
+    pub client: Option<String>,
 }
 
 /// A certificate the platform obtained on behalf of an account.

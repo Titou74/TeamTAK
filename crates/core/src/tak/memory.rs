@@ -55,6 +55,7 @@ impl MemoryTakServer {
             callsign: None,
             client_uid: None,
             groups: groups.iter().map(|g| g.to_string()).collect(),
+            ..Default::default()
         });
     }
 

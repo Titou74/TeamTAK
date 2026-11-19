@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};
 use crate::auth::AdminAccount;
 use crate::error::{ApiError, ApiResult};
 use crate::locale::Template;
@@ -105,6 +106,12 @@ pub async fn decide_team(
         return Err(if exists { ApiError::TeamAlreadyDecided } else { ApiError::NotFound });
     };
     tracing::info!(team = %team.slug, status, by = %admin.email, "team request decided");
+    let (action, details) = if body.approve {
+        (AuditAction::TeamApproved, Details::new().number(Detail::MemberCap, team.member_cap as i64))
+    } else {
+        (AuditAction::TeamRejected, Details::new())
+    };
+    audit::record(&state.db, Actor::Account(&admin), action, Target::team(&team), details).await;
 
     let (email, language) = requester(&state, &team).await?;
     let url = format!("{}/teams/{}", state.config.public_url, team.id);
@@ -157,9 +164,16 @@ pub async fn update_team(
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
+    if updated.member_cap != team.member_cap {
+        tracing::info!(team = %team.slug, member_cap = updated.member_cap, by = %admin.email, "member cap changed");
+        let details = Details::new().number(Detail::MemberCap, updated.member_cap as i64);
+        audit::record(&state.db, Actor::Account(&admin), AuditAction::TeamCapChanged, Target::team(&team), details).await;
+    }
     let synced = match new_status {
         Some(status) => {
             tracing::info!(team = %team.slug, status, by = %admin.email, "team status changed");
+            let action = if status == "suspended" { AuditAction::TeamSuspended } else { AuditAction::TeamReactivated };
+            audit::record(&state.db, Actor::Account(&admin), action, Target::team(&team), Details::new()).await;
             apply_change(&state).await
         }
         None => true,
@@ -210,15 +224,21 @@ pub async fn update_account(
     if account_id == admin.id && !body.is_admin {
         return Err(ApiError::Forbidden);
     }
-    let done = sqlx::query("UPDATE accounts SET is_admin = $2 WHERE id = $1")
-        .bind(account_id)
-        .bind(body.is_admin)
-        .execute(&state.db)
-        .await?;
-    if done.rows_affected() == 0 {
-        return Err(ApiError::NotFound);
-    }
+    // The role as it was, so that setting it to what it already is leaves no entry.
+    let changed: Option<(String, bool)> = sqlx::query_as(
+        "UPDATE accounts a SET is_admin = $2 FROM (SELECT id, is_admin FROM accounts WHERE id = $1 FOR UPDATE) before
+          WHERE a.id = before.id RETURNING a.email, before.is_admin",
+    )
+    .bind(account_id)
+    .bind(body.is_admin)
+    .fetch_optional(&state.db)
+    .await?;
+    let (email, was_admin) = changed.ok_or(ApiError::NotFound)?;
     tracing::info!(account = %account_id, is_admin = body.is_admin, by = %admin.email, "administrator role changed");
+    if was_admin != body.is_admin {
+        let action = if body.is_admin { AuditAction::AdminGranted } else { AuditAction::AdminRevoked };
+        audit::record(&state.db, Actor::Account(&admin), action, Target::object(&email), Details::new()).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -294,6 +314,7 @@ pub async fn reconciliation(State(state): State<SharedState>, AdminAccount(_): A
 /// no limit on what it deletes.
 pub async fn run_reconciliation(State(state): State<SharedState>, AdminAccount(admin): AdminAccount) -> ApiResult<Json<Value>> {
     tracing::info!(by = %admin.email, "reconciliation requested");
+    audit::record(&state.db, Actor::Account(&admin), AuditAction::ReconciliationRequested, Target::none(), Details::new()).await;
     state.reconciler.run(Trigger::Manual).await.map_err(|_| ApiError::Internal)?;
     Ok(Json(reconciliation_payload(&state).await?))
 }

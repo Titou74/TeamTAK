@@ -55,3 +55,35 @@ export function formatRelative(iso: string | null | undefined): string {
   }
   return rtf.format(Math.round(seconds), "second");
 }
+
+/** "2.3 GB", "640 MB": a size, with the unit written the way the current language does. */
+export function formatBytes(bytes: number): string {
+  const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const;
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return new Intl.NumberFormat(currentLanguage(), {
+    style: "unit",
+    unit: units[unit],
+    unitDisplay: "short",
+    maximumFractionDigits: unit === 0 || value >= 100 ? 0 : 1,
+  }).format(value);
+}
+
+/** "93 %" or "93%", as the current language writes a share given from 0 to 100. */
+export function formatPercent(value: number, fractionDigits = 0): string {
+  return new Intl.NumberFormat(currentLanguage(), { style: "percent", maximumFractionDigits: fractionDigits }).format(value / 100);
+}
+
+/** A time of day alone, for the axis of a chart. */
+export function formatTime(iso: string): string {
+  return new Intl.DateTimeFormat(currentLanguage(), { timeStyle: "short" }).format(new Date(iso));
+}
+
+/** A list written the way the current language joins it: "a, b and c". */
+export function formatList(items: string[]): string {
+  return new Intl.ListFormat(currentLanguage(), { style: "long", type: "conjunction" }).format(items);
+}

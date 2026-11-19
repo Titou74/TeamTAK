@@ -100,6 +100,8 @@ export interface TeamDetail {
     create_external_access: boolean;
     create_own_access: boolean;
     create_member_access: boolean;
+    /** Leaders (and administrators) see the devices connected with the team's accesses. */
+    view_devices: boolean;
   };
 }
 

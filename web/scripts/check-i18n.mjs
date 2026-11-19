@@ -7,8 +7,13 @@
 //      one/many/other), and each text uses the same {{placeholders}} as the English one;
 //   4. every key the code uses exists, and every key that exists is used.
 //
+//   5. every stable code the server sends (API errors, alert kinds and severities, audit
+//      actions and their details) has a text in every language. The codes are read from the
+//      Rust sources, so a code added there without its texts fails here as well as in the
+//      server's own tests.
+//
 // Run with `pnpm check:i18n`; it is part of `pnpm test`.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -112,10 +117,54 @@ for (const key of known) {
   if (!used.has(key) && !key.startsWith("errors.")) fail(`${DEFAULT}/translation.json: key "${key}" is not used by the code`);
 }
 
+// --- 5. codes of the server
+// Each list is the content of one Rust macro or function: `Variant => "code"`.
+function rustCodes(file, start, end) {
+  const path = join(root, "..", file);
+  if (!existsSync(path)) return null; // the web folder checked alone, without the server
+  const source = readFileSync(path, "utf8");
+  const from = source.indexOf(start);
+  const to = from < 0 ? -1 : source.indexOf(end, from);
+  if (from < 0 || to < 0) {
+    fail(`${file}: "${start}" not found; update scripts/check-i18n.mjs`);
+    return [];
+  }
+  return [...source.slice(from, to).matchAll(/=>\s*\(?"([a-z0-9_]+)"/g)].map((m) => m[1]);
+}
+const serverCodes = [
+  ["errors", "crates/server/src/error.rs", "api_errors! {", "\n}\n"],
+  ["alerts.kinds", "crates/core/src/alerts.rs", "alert_kinds! {", "\n}\n"],
+  ["alerts.severity", "crates/core/src/alerts.rs", "pub fn as_str(self) -> &'static str {", "\n    }\n"],
+  ["audit.actions", "crates/server/src/audit.rs", "audit_actions! {", "\n}\n"],
+  ["audit.details", "crates/server/src/audit.rs", "pub fn name(self) -> &'static str {", "\n    }\n"],
+];
+let checkedCodes = 0;
+for (const [prefix, file, start, end] of serverCodes) {
+  const codes = rustCodes(file, start, end);
+  if (codes === null) continue;
+  if (codes.length === 0) fail(`${file}: no code found for ${prefix}`);
+  for (const code of codes) {
+    checkedCodes += 1;
+    for (const lang of folders) {
+      const texts = catalogs["translation.json"]?.[lang];
+      if (texts && !texts.has(`${prefix}.${code}`)) fail(`${lang}/translation.json: "${prefix}.${code}" is missing (a code of ${file})`);
+    }
+    // Alerts are also written in e-mails.
+    if (prefix === "alerts.kinds" || prefix === "alerts.severity") {
+      for (const lang of folders) {
+        const texts = catalogs["email.json"]?.[lang];
+        if (texts && !texts.has(`${prefix}.${code}`)) fail(`${lang}/email.json: "${prefix}.${code}" is missing (a code of ${file})`);
+      }
+    }
+  }
+}
+
 if (errors.length > 0) {
   console.error(`i18n check failed (${errors.length}):`);
   for (const message of errors) console.error(`  - ${message}`);
   process.exit(1);
 }
 const count = catalogs["translation.json"][DEFAULT].size;
-console.log(`i18n check passed: ${folders.length} languages (${folders.join(", ")}), ${files.length} files each, ${count} UI texts in ${DEFAULT}.`);
+console.log(
+  `i18n check passed: ${folders.length} languages (${folders.join(", ")}), ${files.length} files each, ${count} UI texts in ${DEFAULT}, ${checkedCodes} server codes translated.`,
+);

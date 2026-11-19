@@ -11,6 +11,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::accesses::{self, retire_accesses, RetireScope};
+use crate::audit::{self, AuditAction, Detail, Details, Target};
 use crate::auth::{Account, CurrentAccount};
 use crate::error::{is_unique_violation, ApiError, ApiResult};
 use crate::locale::{self, Template};
@@ -161,6 +162,8 @@ pub async fn request_team(
         .await?;
     tx.commit().await?;
     tracing::info!(team = %team.slug, by = %account.email, "team requested");
+    let details = Details::new().text(Detail::Mode, body.mode.as_str());
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::TeamRequested, Target::team(&team), details).await;
 
     let admins: Vec<(String, String)> =
         sqlx::query_as("SELECT email, language FROM accounts WHERE is_admin").fetch_all(&state.db).await?;
@@ -234,6 +237,7 @@ pub async fn team_detail(
             "create_external_access": can(ctx.actor, Action::CreateAccess(AccessRef { kind: AccessKind::External, owned_by_actor: false })),
             "create_own_access": can(ctx.actor, Action::CreateAccess(own_individual)),
             "create_member_access": can(ctx.actor, Action::CreateAccess(AccessRef { kind: AccessKind::Individual, owned_by_actor: false })),
+            "view_devices": can(ctx.actor, Action::ViewTeamDevices),
         },
     })))
 }
@@ -264,6 +268,8 @@ pub async fn update_team(
     let removed = retire_accesses(&mut tx, team_id, RetireScope::NotFittingMode(body.mode)).await?;
     tx.commit().await?;
     tracing::info!(team = %ctx.team.slug, mode = body.mode.as_str(), removed, by = %account.email, "connection mode changed");
+    let details = Details::new().text(Detail::Mode, body.mode.as_str()).number(Detail::RemovedAccesses, removed as i64);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::TeamModeChanged, Target::team(&ctx.team), details).await;
     let synced = if removed > 0 { apply_change(&state).await } else { true };
     Ok(Json(json!({ "removed_accesses": removed, "synced": synced })))
 }
@@ -283,6 +289,8 @@ pub async fn delete_team(
     sqlx::query("DELETE FROM teams WHERE id = $1").bind(team_id).execute(&mut *tx).await?;
     tx.commit().await?;
     tracing::info!(team = %ctx.team.slug, removed, by = %account.email, "team deleted");
+    let details = Details::new().number(Detail::RemovedAccesses, removed as i64);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::TeamDeleted, Target::team(&ctx.team), details).await;
     let synced = if removed > 0 {
         apply_change(&state).await
     } else {
@@ -357,6 +365,7 @@ pub async fn invite(
         .await?;
     tx.commit().await?;
     tracing::info!(team = %ctx.team.slug, invitee = %email, by = %account.email, "member invited");
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::MemberInvited, Target::in_team(&ctx.team, &email), Details::new()).await;
 
     // The invitee's saved language; without an account yet, the one the inviter picked.
     let saved: Option<(String,)> =
@@ -383,18 +392,17 @@ pub async fn cancel_invitation(
 ) -> ApiResult<StatusCode> {
     let ctx = team_context(&state, team_id, &account).await?;
     ctx.require(Action::ManageMembers)?;
-    let done = sqlx::query(
-        "UPDATE invitations SET status = 'cancelled', decided_at = now() WHERE id = $1 AND team_id = $2 AND status = 'pending'",
+    let cancelled: Option<(String,)> = sqlx::query_as(
+        "UPDATE invitations SET status = 'cancelled', decided_at = now() WHERE id = $1 AND team_id = $2 AND status = 'pending' RETURNING email",
     )
     .bind(invitation_id)
     .bind(team_id)
-    .execute(&state.db)
+    .fetch_optional(&state.db)
     .await?;
-    if done.rows_affected() == 0 {
-        Err(ApiError::InvitationNotPending)
-    } else {
-        Ok(StatusCode::NO_CONTENT)
-    }
+    let (invitee,) = cancelled.ok_or(ApiError::InvitationNotPending)?;
+    tracing::info!(team = %ctx.team.slug, invitee = %invitee, by = %account.email, "invitation cancelled");
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::InvitationCancelled, Target::in_team(&ctx.team, &invitee), Details::new()).await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Deserialize)]
@@ -427,6 +435,9 @@ pub async fn answer_invitation(
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
+        let team_name: Option<(String,)> = sqlx::query_as("SELECT name FROM teams WHERE id = $1").bind(team_id).fetch_optional(&state.db).await?;
+        let target = Target::in_team_named(team_id, &team_name.map(|(n,)| n).unwrap_or_default(), &account.email);
+        audit::record(&state.db, audit::Actor::Account(&account), AuditAction::InvitationDeclined, target, Details::new()).await;
         return Ok(Json(json!({ "team_id": team_id, "accepted": false })));
     }
     let team: Team = sqlx::query_as(concat!("SELECT ", team_columns!(), " FROM teams WHERE id = $1 FOR UPDATE"))
@@ -451,6 +462,7 @@ pub async fn answer_invitation(
         .await?;
     tx.commit().await?;
     tracing::info!(team = %team.slug, member = %account.email, "invitation accepted");
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::InvitationAccepted, Target::in_team(&team, &account.email), Details::new()).await;
     Ok(Json(json!({ "team_id": team_id, "accepted": true })))
 }
 
@@ -497,6 +509,10 @@ pub async fn remove_member(
     let removed = retire_accesses(&mut tx, team_id, RetireScope::IndividualOf(member_id)).await?;
     tx.commit().await?;
     tracing::info!(team = %ctx.team.slug, member = %member_id, by = %account.email, removed, "member removed");
+    let member_email = member_email(&state, member_id).await?;
+    let action = if member_id == account.id { AuditAction::MemberLeft } else { AuditAction::MemberRemoved };
+    let details = Details::new().number(Detail::RemovedAccesses, removed as i64);
+    audit::record(&state.db, audit::Actor::Account(&account), action, Target::in_team(&ctx.team, &member_email), details).await;
     let synced = if removed > 0 { apply_change(&state).await } else { true };
     Ok(Json(json!({ "removed_accesses": removed, "synced": synced })))
 }
@@ -532,5 +548,17 @@ pub async fn set_member_role(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    if role != body.role.as_str() {
+        tracing::info!(team = %ctx.team.slug, member = %member_id, role = body.role.as_str(), by = %account.email, "member role changed");
+        let member_email = member_email(&state, member_id).await?;
+        let details = Details::new().text(Detail::Role, body.role.as_str());
+        audit::record(&state.db, audit::Actor::Account(&account), AuditAction::MemberRoleChanged, Target::in_team(&ctx.team, &member_email), details).await;
+    }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Address of an account, for the audit entries about a member.
+async fn member_email(state: &SharedState, account_id: Uuid) -> ApiResult<String> {
+    let email: Option<(String,)> = sqlx::query_as("SELECT email FROM accounts WHERE id = $1").bind(account_id).fetch_optional(&state.db).await?;
+    Ok(email.map(|(e,)| e).unwrap_or_default())
 }

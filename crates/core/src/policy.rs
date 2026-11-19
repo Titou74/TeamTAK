@@ -105,6 +105,18 @@ pub enum Action {
     CancelEvent,
     /// On an event the team is invited to: accept, decline, or leave after accepting.
     AnswerEventInvitation,
+    /// See the devices connected to TAK Server with the accesses of the team: which access,
+    /// which callsign, since when. With a shared identity this is the only way to know how
+    /// many devices use it.
+    ViewTeamDevices,
+    /// See every connected device of the platform, whatever its team, with the address it
+    /// connects from.
+    ViewAllDevices,
+    /// See the machine, the services, the certificates, the alerts and the audit log.
+    ViewMonitoring,
+    /// Restart a service, run a backup, hand over the Let's Encrypt certificate, change the
+    /// monitoring settings: everything that goes through the host agent.
+    OperatePlatform,
 }
 
 /// The single authorisation rule of the platform.
@@ -122,6 +134,11 @@ pub enum Action {
 ///   invitations still waiting for an answer;
 /// - an administrator sees every event and can cancel one, nothing more: events need no
 ///   approval, and inviting or answering belongs to the teams.
+///
+/// Monitoring belongs to the administrators: the machine, the services, the alerts, the
+/// audit log and the actions on the stack. One part of it is shared with team leaders, for
+/// their own team only: the list of devices connected with the team's accesses. Members do
+/// not see it.
 pub fn can(actor: Actor, action: Action) -> bool {
     use TeamRole::*;
     match action {
@@ -145,6 +162,8 @@ pub fn can(actor: Actor, action: Action) -> bool {
         Action::CreateEvent | Action::ListInvitableTeams | Action::ManageEvent | Action::AnswerEventInvitation => {
             actor.team_role == Some(Leader)
         }
+        Action::ViewTeamDevices => actor.is_admin || actor.team_role == Some(Leader),
+        Action::ViewAllDevices | Action::ViewMonitoring | Action::OperatePlatform => actor.is_admin,
     }
 }
 
@@ -193,8 +212,34 @@ mod tests {
             Action::ManageEvent,
             Action::CancelEvent,
             Action::AnswerEventInvitation,
+            Action::ViewTeamDevices,
+            Action::ViewAllDevices,
+            Action::ViewMonitoring,
+            Action::OperatePlatform,
         ] {
             assert!(!can(OUTSIDER, action), "{action:?}");
+        }
+    }
+
+    #[test]
+    fn connected_devices_are_for_administrators_and_for_the_leaders_of_the_team() {
+        assert!(can(ADMIN, Action::ViewAllDevices));
+        assert!(can(ADMIN, Action::ViewTeamDevices));
+        assert!(can(LEADER, Action::ViewTeamDevices), "a leader counts the devices on their team's accesses");
+        assert!(!can(LEADER, Action::ViewAllDevices), "but not those of the other teams");
+        assert!(!can(MEMBER, Action::ViewTeamDevices));
+        assert!(!can(MEMBER, Action::ViewAllDevices));
+        // An administrator who also leads a team keeps both views.
+        let both = Actor { is_admin: true, team_role: Some(TeamRole::Leader) };
+        assert!(can(both, Action::ViewAllDevices) && can(both, Action::ViewTeamDevices));
+    }
+
+    #[test]
+    fn monitoring_and_the_actions_on_the_stack_are_for_administrators_only() {
+        for action in [Action::ViewMonitoring, Action::OperatePlatform] {
+            assert!(can(ADMIN, action), "{action:?}");
+            assert!(!can(LEADER, action), "{action:?}");
+            assert!(!can(MEMBER, action), "{action:?}");
         }
     }
 

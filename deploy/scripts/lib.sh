@@ -3,10 +3,14 @@
 # Written for bash 3.2 (macOS) and later.
 set -euo pipefail
 
-DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# TM_DEPLOY_DIR is set by the host agent, which runs some of these scripts from inside its
+# container, where the repository is mounted under another path.
+DEPLOY_DIR="${TM_DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 REPO_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
 DATA_DIR="$DEPLOY_DIR/data"
 ENV_FILE="$DEPLOY_DIR/.env"
+# Name of the Compose project (the `name:` of docker-compose.yml).
+COMPOSE_PROJECT="${TM_COMPOSE_PROJECT:-tak-manager}"
 
 # uid of the "tak" user of the TAK Server image, and of the user of the app image.
 TAK_UID=1001
@@ -32,6 +36,22 @@ load_env() {
 # Docker Compose for the stack. Run from deploy/: the COMPOSE_FILE list of .env is relative
 # to the current directory.
 compose() { (cd "$DEPLOY_DIR" && docker compose "$@"); }
+
+# Identifier of the container that runs a service of this stack, empty when there is none.
+# Found by the labels Compose sets, so it works where `docker compose` cannot be used (inside
+# the agent's container), and never matches a container of another project.
+svc_container() {
+  docker ps -a -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --filter "label=com.docker.compose.service=$1" | head -n 1
+}
+
+# Runs a command in the container of a service, with stdin passed through.
+svc_exec() {
+  local service="$1" id
+  shift
+  id="$(svc_container "$service")"
+  [ -n "$id" ] || die "no container for the service $service: is the stack up?"
+  docker exec -i "$id" "$@"
+}
 
 # Value of KEY in deploy/.env, empty when absent.
 env_get() {
@@ -88,7 +108,9 @@ render_core_config() {
       "$DEPLOY_DIR/takserver/CoreConfig.tpl.xml" > "$tmp"
   # Rewritten in place: the file is bind-mounted into the container (its inode must not
   # change), and it may already belong to uid 1001.
-  if [ -f "$out" ] && ! [ -w "$out" ]; then
+  if [ -f "$out" ] && cmp -s "$tmp" "$out"; then
+    :
+  elif [ -f "$out" ] && ! [ -w "$out" ]; then
     docker run --rm -u 0 --entrypoint sh -v "$DATA_DIR/tak:/t" -v "$tmp:/new.xml:ro" "$TAK_IMAGE" -c 'cat /new.xml > /t/CoreConfig.xml'
   else
     cat "$tmp" > "$out"
@@ -101,7 +123,7 @@ wait_healthy() {
   local service="$1" timeout="$2" start state id
   start=$(date +%s)
   while :; do
-    id="$(compose ps -q "$service" 2>/dev/null | head -n 1)"
+    id="$(svc_container "$service")"
     state="absent"
     [ -n "$id" ] && state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id" 2>/dev/null || echo absent)"
     [ "$state" = healthy ] && return 0

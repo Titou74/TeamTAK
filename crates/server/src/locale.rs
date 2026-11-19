@@ -96,6 +96,11 @@ pub enum Template {
     EventEndedEarly,
     /// To the leaders of a team the host took out of an event.
     EventTeamRemoved,
+    /// To every administrator: alerts raised, resolved, or still open. Its subject and its
+    /// list are built by [`render_alerts`].
+    AlertDigest,
+    /// To the leaders of a team: a certificate shipped in one of its zips nears its end.
+    CertificateNotice,
 }
 
 impl Template {
@@ -114,6 +119,8 @@ impl Template {
         Template::EventRescheduled,
         Template::EventEndedEarly,
         Template::EventTeamRemoved,
+        Template::AlertDigest,
+        Template::CertificateNotice,
     ];
 
     pub fn key(self) -> &'static str {
@@ -131,6 +138,8 @@ impl Template {
             Template::EventRescheduled => "event_rescheduled",
             Template::EventEndedEarly => "event_ended_early",
             Template::EventTeamRemoved => "event_team_removed",
+            Template::AlertDigest => "alert_digest",
+            Template::CertificateNotice => "certificate_notice",
         }
     }
 }
@@ -149,6 +158,96 @@ pub fn render(template: Template, language: &str, vars: &[(&str, &str)], url: &s
     let body = fill(text(language, &[template.key(), "body"]), vars);
     let signature = fill(text(language, &["signature"]), &[("url", url)]);
     Rendered { subject, body: format!("{body}\n\n-- \n{signature}\n") }
+}
+
+// ------------------------------------------------------------------------------- alerts
+
+/// One alert as a notification mentions it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlertLine {
+    /// Stable code of the kind (`service_down`).
+    pub kind: String,
+    /// What it is about: a service, a filesystem, a certificate; empty for most kinds.
+    pub subject: String,
+    /// `low`, `warning` or `critical`.
+    pub severity: String,
+    /// Figures the sentence is filled with.
+    pub details: Value,
+}
+
+/// What one evaluation has to say: everything in one message.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AlertBatch {
+    pub raised: Vec<AlertLine>,
+    pub resolved: Vec<AlertLine>,
+    /// Still open, last mentioned long enough ago.
+    pub reminded: Vec<AlertLine>,
+}
+
+impl AlertBatch {
+    pub fn is_empty(&self) -> bool {
+        self.raised.is_empty() && self.resolved.is_empty() && self.reminded.is_empty()
+    }
+}
+
+fn alert_text(language: &str, path: &[&str]) -> Option<&'static str> {
+    lookup(language, path).or_else(|| lookup(DEFAULT_LANGUAGE, path))
+}
+
+/// The sentence of an alert in `language`. A kind or a subject without a text is written
+/// as its code: a notification is never dropped for a missing translation.
+pub fn alert_sentence(language: &str, line: &AlertLine) -> String {
+    let language = resolve(language);
+    let Some(template) = alert_text(language, &["alerts", "kinds", &line.kind]) else {
+        return format!("{} {}", line.kind, line.subject).trim().to_string();
+    };
+    // Subjects that are codes of the platform (a certificate, a filesystem) have a name;
+    // the others (a service, an event's group) are shown as they are.
+    let subject = alert_text(language, &["alerts", "subjects", &line.subject]).unwrap_or(&line.subject).to_string();
+    let mut vars: Vec<(String, String)> = vec![("subject".to_string(), subject)];
+    if let Value::Object(details) = &line.details {
+        for (key, value) in details {
+            let shown = match value {
+                Value::String(text) => text.clone(),
+                // Numbers are written the way the language writes them: "98,6" in French.
+                Value::Number(number) => number.to_string().replace('.', text(language, &["decimal_separator"])),
+                other => other.to_string(),
+            };
+            vars.push((key.clone(), shown));
+        }
+    }
+    let borrowed: Vec<(&str, &str)> = vars.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    fill(template, &borrowed)
+}
+
+/// The e-mail that tells an administrator what one evaluation found, in their language.
+/// A single alert is named in the subject; several are counted.
+pub fn render_alerts(language: &str, batch: &AlertBatch, url: &str) -> Rendered {
+    let lang = resolve(language);
+    let word = |key: &str| text(lang, &["alerts", key]);
+    let line = |alert: &AlertLine| {
+        let severity = alert_text(lang, &["alerts", "severity", &alert.severity]).unwrap_or(&alert.severity);
+        format!("  - [{severity}] {}", alert_sentence(lang, alert))
+    };
+    let mut sections = Vec::new();
+    for (heading, alerts) in [("heading_raised", &batch.raised), ("heading_resolved", &batch.resolved), ("heading_reminded", &batch.reminded)] {
+        if !alerts.is_empty() {
+            sections.push(format!("{}\n{}", word(heading), alerts.iter().map(line).collect::<Vec<_>>().join("\n")));
+        }
+    }
+    let subject = match (&batch.raised[..], &batch.resolved[..], &batch.reminded[..]) {
+        ([only], [], []) => fill(word("subject_raised"), &[("text", &alert_sentence(lang, only))]),
+        ([], [only], []) => fill(word("subject_resolved"), &[("text", &alert_sentence(lang, only))]),
+        _ => fill(
+            word("subject_several"),
+            &[
+                ("raised", &batch.raised.len().to_string()),
+                ("resolved", &batch.resolved.len().to_string()),
+                ("reminded", &batch.reminded.len().to_string()),
+            ],
+        ),
+    };
+    render(Template::AlertDigest, lang, &[("subject", &subject), ("sections", &sections.join("\n\n")), ("url", url)], url)
 }
 
 #[cfg(test)]
@@ -261,6 +360,156 @@ mod tests {
         assert!(fr.subject.contains("Alpha") && fr.body.contains("20/11/2026 à 14:05 UTC") && fr.body.contains("evt-exercice-mont-blanc"));
         let en = render(Template::EventAccepted, "en", &vars, "u");
         assert!(en.subject.contains("Bravo"), "{}", en.subject);
+    }
+
+    /// One finding of every kind, with the details the rules really produce.
+    fn every_kind_of_finding() -> Vec<AlertLine> {
+        use tak_manager_core::alerts::*;
+        use time::Duration;
+        let now = time::macros::datetime!(2026-11-19 12:00 UTC);
+        let service = |name: &str, state: Option<&str>, health: Option<&str>, restarts| ServiceObservation {
+            name: name.into(),
+            state: state.map(str::to_string),
+            health: health.map(str::to_string),
+            recent_restarts: restarts,
+        };
+        let obs = Observations {
+            agent: AgentState::Unreachable,
+            disks: Some(vec![("root".into(), 93.4)]),
+            memory_used_percent: Some(95.0),
+            services: Some(vec![
+                service("caddy", Some("exited"), None, 0),
+                service("openldap", Some("running"), Some("unhealthy"), 0),
+                service("takserver", Some("restarting"), None, 4),
+            ]),
+            tak_processes: Some(vec![("messaging".into(), false)]),
+            security_updates: Some(9),
+            reboot_required: Some(true),
+            clock_synchronized: Some(false),
+            tak_failures: Some(vec!["8089".into(), "api".into()]),
+            directory_reachable: Some(false),
+            reconcile: Some(ReconcileObservation { last_ok_at: Some(now - Duration::minutes(42)), running_since: None }),
+            overdue_events: Some(vec![
+                OverdueEvent { group: "evt-drill".into(), name: "Drill".into(), boundary: Boundary::Start, due_at: now - Duration::minutes(7) },
+                OverdueEvent { group: "evt-night".into(), name: "Night".into(), boundary: Boundary::End, due_at: now - Duration::minutes(9) },
+            ]),
+            certificates: Some(vec![
+                CertificateObservation { name: "tak_server".into(), expires_at: now + Duration::days(12) },
+                CertificateObservation { name: "platform_api".into(), expires_at: now - Duration::days(3) },
+            ]),
+            client_certificates: Some((5, 2)),
+            backups: Some(BackupObservation { enabled: true, newest_at: Some(now - Duration::hours(50)), since: None, last_run_failed: true }),
+            mail: Some(MailObservation { failures_last_hour: 6, last_failure_at: Some(now), last_success_at: None }),
+            ..Observations::empty(now)
+        };
+        let findings = evaluate(&obs, &Thresholds::default()).findings;
+        let kinds: BTreeSet<&str> = findings.iter().map(|f| f.kind.code()).collect();
+        assert_eq!(kinds.len(), AlertKind::ALL.len(), "this list must exercise every kind; it has {kinds:?}");
+        findings
+            .iter()
+            .map(|f| AlertLine { kind: f.kind.code().into(), subject: f.subject.clone(), severity: f.severity.as_str().into(), details: serde_json::json!(f.details) })
+            .collect()
+    }
+
+    /// Alert kinds are stable codes; each has a sentence in every language, for the e-mails
+    /// (email.json) and for the dashboard (translation.json), and so has each severity.
+    #[test]
+    fn every_alert_kind_and_severity_is_translated_in_every_language() {
+        use tak_manager_core::alerts::{AlertKind, Severity};
+        let locales = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/locales");
+        for language in languages() {
+            let ui: Value = serde_json::from_str(&std::fs::read_to_string(locales.join(language).join("translation.json")).unwrap()).unwrap();
+            for kind in AlertKind::ALL {
+                assert!(lookup(language, &["alerts", "kinds", kind.code()]).is_some_and(|t| !t.trim().is_empty()), "{language}/email.json: alerts.kinds.{}", kind.code());
+                let text = ui.pointer(&format!("/alerts/kinds/{}", kind.code())).and_then(|v| v.as_str());
+                assert!(text.is_some_and(|t| !t.trim().is_empty()), "{language}/translation.json: alerts.kinds.{}", kind.code());
+            }
+            for severity in Severity::ALL {
+                assert!(lookup(language, &["alerts", "severity", severity.as_str()]).is_some(), "{language}/email.json: alerts.severity.{}", severity.as_str());
+                assert!(ui.pointer(&format!("/alerts/severity/{}", severity.as_str())).is_some(), "{language}/translation.json: alerts.severity.{}", severity.as_str());
+            }
+        }
+    }
+
+    #[test]
+    fn every_alert_sentence_is_complete_in_every_language() {
+        for line in every_kind_of_finding() {
+            for language in languages() {
+                let sentence = alert_sentence(language, &line);
+                assert!(!sentence.contains("{{"), "{language} {}: a placeholder was left: {sentence}", line.kind);
+                assert!(sentence.chars().count() > 15, "{language} {}: {sentence}", line.kind);
+            }
+        }
+    }
+
+    /// The same sentences are shown by the dashboard: they must use the same figures.
+    #[test]
+    fn dashboard_and_email_sentences_use_the_same_placeholders() {
+        let locales = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/locales");
+        for language in languages() {
+            let ui: Value = serde_json::from_str(&std::fs::read_to_string(locales.join(language).join("translation.json")).unwrap()).unwrap();
+            for kind in tak_manager_core::alerts::AlertKind::ALL {
+                let mail = lookup(language, &["alerts", "kinds", kind.code()]).unwrap();
+                let page = ui.pointer(&format!("/alerts/kinds/{}", kind.code())).and_then(|v| v.as_str()).unwrap_or_default();
+                assert_eq!(placeholders(page), placeholders(mail), "{language}: alerts.kinds.{}", kind.code());
+            }
+        }
+    }
+
+    #[test]
+    fn alert_sentences_carry_their_figures_and_translated_subjects() {
+        let line = |kind: &str, subject: &str, details: Value| AlertLine { kind: kind.into(), subject: subject.into(), severity: "warning".into(), details };
+        let disk = line("disk_full", "docker", serde_json::json!({ "percent": 93.4 }));
+        assert_eq!(alert_sentence("en", &disk), "Disk nearly full: Docker's disk is 93.4 % used.");
+        assert_eq!(alert_sentence("fr", &disk), "Disque presque plein : le disque de Docker est utilisé à 93,4 %.", "a decimal comma in French");
+        let cert = line("certificate_expiring", "tak_server", serde_json::json!({ "days": 12 }));
+        assert_eq!(alert_sentence("en", &cert), "Certificate expiring in 12 days: TAK Server.");
+        let service = line("service_down", "caddy", serde_json::json!({ "state": "exited" }));
+        assert_eq!(alert_sentence("fr", &service), "Le service caddy ne tourne pas (état : exited).");
+        // A kind added later without its text is still said, by its code.
+        assert_eq!(alert_sentence("en", &line("brand_new_kind", "x", Value::Null)), "brand_new_kind x");
+        assert_eq!(alert_sentence("xx", &service), alert_sentence("en", &service), "unknown language: English");
+    }
+
+    #[test]
+    fn one_alert_is_named_in_the_subject_and_several_are_counted() {
+        let line = |kind: &str, subject: &str, severity: &str, details: Value| AlertLine { kind: kind.into(), subject: subject.into(), severity: severity.into(), details };
+        let down = line("service_down", "caddy", "critical", serde_json::json!({ "state": "exited" }));
+        let raised = AlertBatch { raised: vec![down.clone()], ..Default::default() };
+        let en = render_alerts("en", &raised, "https://tak.example.org/monitoring");
+        assert_eq!(en.subject, "[TAK Manager] Alert: The service caddy is not running (state: exited).");
+        assert!(en.body.contains("New alerts:\n  - [critical] The service caddy is not running (state: exited)."), "{}", en.body);
+        assert!(en.body.contains("https://tak.example.org/monitoring"));
+        let fr = render_alerts("fr", &raised, "u");
+        assert_eq!(fr.subject, "[TAK Manager] Alerte : Le service caddy ne tourne pas (état : exited).");
+        assert!(fr.body.contains("Nouvelles alertes :\n  - [critique] Le service caddy ne tourne pas"), "{}", fr.body);
+
+        let resolved = AlertBatch { resolved: vec![down.clone()], ..Default::default() };
+        assert_eq!(render_alerts("fr", &resolved, "u").subject, "[TAK Manager] Résolu : Le service caddy ne tourne pas (état : exited).");
+        assert!(render_alerts("en", &resolved, "u").subject.starts_with("[TAK Manager] Resolved: "));
+
+        // Everything fails at once: one message, counted in its subject, listed in its body.
+        let storm = AlertBatch {
+            raised: vec![down.clone(), line("tak_unreachable", "", "critical", serde_json::json!({ "what": "8089, api" })), line("directory_unreachable", "", "critical", Value::Null)],
+            resolved: vec![line("backup_failed", "", "warning", Value::Null)],
+            reminded: vec![line("security_updates", "", "low", serde_json::json!({ "count": 4 }))],
+        };
+        let mail = render_alerts("en", &storm, "u");
+        assert_eq!(mail.subject, "[TAK Manager] Alerts — new: 3, resolved: 1, still open: 1");
+        assert_eq!(mail.body.matches("\n  - [").count(), 5);
+        assert!(mail.body.contains("Still open (reminder):\n  - [low] Security updates waiting to be installed on the server: 4."));
+        assert!(!mail.subject.contains('\n') && !mail.body.contains("{{"));
+    }
+
+    #[test]
+    fn the_certificate_notice_tells_leaders_what_to_do() {
+        let vars = [("team", "Alpha"), ("access", "alpha-shared"), ("days", "30"), ("date", "19/12/2026 à 14:05 UTC"), ("url", "https://tak.example.org/teams/1")];
+        let fr = render(Template::CertificateNotice, "fr", &vars, "https://tak.example.org");
+        assert_eq!(fr.subject, "Alpha : le certificat TAK de alpha-shared expire dans 30 jours");
+        assert!(fr.body.contains("Régénérer") && fr.body.contains("19/12/2026 à 14:05 UTC") && fr.body.contains("https://tak.example.org/teams/1"));
+        let en = render(Template::CertificateNotice, "en", &vars, "u");
+        assert!(en.body.contains("Regenerate") && en.body.contains("Nothing renews it"));
+        assert!(!en.body.contains("{{") && !fr.body.contains("{{"));
     }
 
     #[test]

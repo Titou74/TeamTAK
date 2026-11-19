@@ -2,13 +2,16 @@
 
 mod accesses;
 mod admin;
+mod audit;
 mod auth;
 mod config;
 mod error;
 mod events;
 mod locale;
 mod mail;
+mod monitor;
 mod reconciler;
+mod settings;
 mod state;
 mod teams;
 
@@ -120,6 +123,7 @@ fn api_router(state: SharedState) -> Router {
         .route("/teams/{id}/invitations/{invitation_id}", delete(teams::cancel_invitation))
         .route("/teams/{id}/members/{account_id}", patch(teams::set_member_role).delete(teams::remove_member))
         .route("/teams/{id}/accesses", post(accesses::create_access))
+        .route("/teams/{id}/devices", get(monitor::devices::team_devices))
         .route("/teams/{id}/invitable-teams", get(events::invitable_teams))
         .route("/teams/{id}/events", get(events::list_team_events).post(events::create_event))
         .route("/teams/{id}/events/{event_id}", patch(events::update_event))
@@ -142,7 +146,19 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/accounts/{id}", patch(admin::update_account))
         .route("/admin/reconciliation", get(admin::reconciliation))
         .route("/admin/reconciliation/run", post(admin::run_reconciliation))
+        .route("/admin/monitoring", get(monitor::api::monitoring))
+        .route("/admin/monitoring/history", get(monitor::api::history))
+        .route("/admin/alerts/summary", get(monitor::api::alerts_summary))
+        .route("/admin/devices", get(monitor::devices::admin_devices))
+        .route("/admin/services/{service}/restart", post(monitor::api::restart_service))
+        .route("/admin/backups/run", post(monitor::api::run_backup))
+        .route("/admin/letsencrypt/sync", post(monitor::api::letsencrypt_sync))
+        .route("/admin/settings", get(settings::get).patch(settings::update))
+        .route("/admin/settings/webhook-test", post(monitor::api::webhook_test))
+        .route("/admin/audit", get(audit::list))
         .fallback(|| async { ApiError::NotFound })
+        // The client's address, for the audit log.
+        .layer(middleware::from_fn(audit::with_request_ip))
         .layer(middleware::from_fn(read_whole_body))
         .layer(middleware::from_fn(require_csrf_header))
         .layer(middleware::from_fn(no_store))
@@ -165,6 +181,7 @@ async fn serve(config: Config) -> Result<()> {
     let interval = config.reconcile_interval;
     let state = state::build_state(config).await?;
     tokio::spawn(reconciler::run_periodically(state.reconciler.clone(), interval));
+    tokio::spawn(monitor::run_periodically(state.monitor.clone()));
 
     let listener = tokio::net::TcpListener::bind(listen_addr).await.with_context(|| format!("listening on {listen_addr}"))?;
     tracing::info!(%listen_addr, languages = ?locale::languages(), "TAK Manager is listening");
@@ -207,6 +224,18 @@ async fn status(config: Config) -> Result<()> {
             failed = true;
             println!("TAK Server: FAILED: {e}");
         }
+    }
+    // The agent is not a backend: the platform works without it, so this line never fails
+    // the check. It says what the dashboard would say.
+    match config.monitor.agent_url.as_deref() {
+        None => println!("host agent: not configured (the server and the services are not monitored)"),
+        Some(url) => match monitor::agent::AgentClient::new(url, &config.monitor.agent_token) {
+            Ok(agent) => match agent.report().await {
+                Ok(report) => println!("host agent: ok ({} services of this stack, {} backup archives)", report.containers.containers.len(), report.backups.files.len()),
+                Err(e) => println!("host agent: NOT ANSWERING ({e}); monitoring, backups and restarts from the web UI need it"),
+            },
+            Err(e) => println!("host agent: NOT ANSWERING ({e})"),
+        },
     }
     if failed {
         bail!("at least one backend cannot be reached");

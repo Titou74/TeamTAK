@@ -64,6 +64,20 @@ pub struct Config {
     pub login: LoginPolicy,
     pub reconcile_interval: Duration,
     pub session_ttl_days: i64,
+    pub monitor: MonitorConfig,
+}
+
+/// Where the monitoring looks.
+#[derive(Debug, Clone)]
+pub struct MonitorConfig {
+    /// Address of the host agent; `None` when the platform runs without one.
+    pub agent_url: Option<String>,
+    pub agent_token: String,
+    /// How often everything is looked at and the alerts are evaluated.
+    pub interval: Duration,
+    /// `host:port` where the reverse proxy answers in TLS inside the network, to read the
+    /// certificate it presents for the web UI. Only used when the UI is served over HTTPS.
+    pub web_tls_probe: Option<String>,
 }
 
 fn var(name: &str) -> Result<String> {
@@ -147,6 +161,12 @@ impl Config {
             },
             reconcile_interval: Duration::from_secs(parsed("RECONCILE_INTERVAL_SECONDS", "60")?),
             session_ttl_days: parsed("SESSION_TTL_DAYS", "30")?,
+            monitor: MonitorConfig {
+                agent_url: Some(var_or("AGENT_URL", "").trim_end_matches('/').to_string()).filter(|u| !u.is_empty()),
+                agent_token: var_or("AGENT_TOKEN", ""),
+                interval: Duration::from_secs(parsed::<u64>("MONITOR_INTERVAL_SECONDS", "60")?.clamp(5, 3600)),
+                web_tls_probe: Some(var_or("WEB_TLS_PROBE", "")).filter(|p| !p.is_empty()),
+            },
         })
     }
 }

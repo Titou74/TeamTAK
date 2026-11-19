@@ -7,22 +7,32 @@
 # not by Caddy, so the certificate Caddy obtained for the web UI is converted to a Java
 # keystore and TAK Server is restarted to load it.
 #
-# Run once after the first start (install.sh does it with --tak-enroll-letsencrypt), then
-# daily: it does nothing unless the certificate changed (renewal, every ~60 days).
-# Restarting TAK Server disconnects the clients for about a minute; they reconnect alone.
+# It does nothing unless the certificate changed (renewal, every 60 days or so). When it
+# did, TAK Server is restarted: the clients are disconnected for about a minute and
+# reconnect by themselves.
 #
-#   sync-letsencrypt.sh [--wait <seconds>] [--install-cron] [--force]
+# Who runs it:
+#   - install.sh, once, after the first start (--tak-enroll-letsencrypt);
+#   - the host agent, every day on the platform's request, and when an administrator
+#     clicks "Hand over now" (administration, "Monitoring"). There is no cron job any more.
+# It can also be run by hand on the host:
 #
-# NOT TESTED: no domain was available when this was written (phase 1 report).
+#   sync-letsencrypt.sh [--wait <seconds>] [--force]
+#
+# It works the same on the host and inside the agent's container: the conversion runs in
+# the takserver container, which has openssl and keytool and the certificate folder.
+#
+# NOT TESTED: no domain was available when this was written (phase 1 and phase 3 reports).
 . "$(dirname "$0")/lib.sh"
 load_env
 
-WAIT=0 INSTALL_CRON=0 FORCE=0
+WAIT=0 FORCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --wait) WAIT="$2"; shift ;;
-    --install-cron) INSTALL_CRON=1 ;;
     --force) FORCE=1 ;;
+    # Accepted and ignored: the daily check is the agent's job now.
+    --install-cron) ;;
     *) die "unknown option: $1" ;;
   esac
   shift
@@ -48,39 +58,46 @@ fingerprint="$(cksum < "$crt")"
 stamp="$DATA_DIR/tak/certs/letsencrypt.cksum"
 if [ "$FORCE" = 0 ] && [ -f "$stamp" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$fingerprint" ] && [ -f "$DATA_DIR/tak/certs/letsencrypt.jks" ]; then
   info "certificate unchanged, nothing to do"
-else
-  log "Converting the Let's Encrypt certificate for TAK Server"
-  # PEM -> PKCS#12 -> JKS with the tools of the TAK Server image; written under a temporary
-  # name and moved into place so TAK Server never reads a half-written keystore.
-  docker run --rm -u 0 --entrypoint bash \
-    -v "$crt:/in/cert.crt:ro" -v "$key:/in/cert.key:ro" -v "$DATA_DIR/tak/certs:/out" \
-    -e PASS="$TAK_CERT_PASSWORD" -e FINGERPRINT="$fingerprint" "$TAK_IMAGE" -c '
-      set -e
-      openssl pkcs12 -export -in /in/cert.crt -inkey /in/cert.key -name letsencrypt \
-        -out /tmp/le.p12 -passout "pass:$PASS"
-      rm -f /out/letsencrypt.jks.new
-      keytool -importkeystore -noprompt -alias letsencrypt \
-        -srckeystore /tmp/le.p12 -srcstoretype PKCS12 -srcstorepass "$PASS" \
-        -destkeystore /out/letsencrypt.jks.new -deststoretype JKS -deststorepass "$PASS" -destkeypass "$PASS"
-      mv /out/letsencrypt.jks.new /out/letsencrypt.jks
-      printf "%s" "$FINGERPRINT" > /out/letsencrypt.cksum
-      chown 1001:0 /out/letsencrypt.jks /out/letsencrypt.cksum
-      chmod 640 /out/letsencrypt.jks
-    '
-  render_core_config
-  log "Restarting TAK Server to load it"
-  compose restart takserver
-  wait_healthy takserver 420 || die "TAK Server did not come back healthy"
-  info "port 8446 now presents the Let's Encrypt certificate of $PUBLIC_HOST"
+  echo "LETSENCRYPT_RESULT outcome=unchanged"
+  exit 0
 fi
 
-if [ "$INSTALL_CRON" = 1 ]; then
-  if [ "$(uname -s)" = Linux ] && [ -d /etc/cron.d ] && [ "$(id -u)" = 0 ]; then
-    printf '%s\n' "# TAK Manager: reload TAK Server when the Let's Encrypt certificate is renewed" \
-      "23 4 * * * root $DEPLOY_DIR/scripts/sync-letsencrypt.sh >> /var/log/tak-manager-letsencrypt.log 2>&1" \
-      > /etc/cron.d/tak-manager-letsencrypt
-    info "daily check installed: /etc/cron.d/tak-manager-letsencrypt"
-  else
-    info "no /etc/cron.d here: schedule $DEPLOY_DIR/scripts/sync-letsencrypt.sh to run daily"
-  fi
-fi
+log "Converting the Let's Encrypt certificate for TAK Server"
+[ -n "$(svc_container takserver)" ] || die "the takserver container does not exist: start the stack first"
+# PEM -> PKCS#12 -> JKS with the tools of the takserver container, where the certificate
+# folder is mounted. The keystore password, the key and the certificate travel on standard
+# input, never on a command line. The keystore is written under a temporary name and moved
+# into place, so TAK Server never reads a half-written one.
+{
+  printf '%s\n' "$TAK_CERT_PASSWORD"
+  printf '%s\n' "$fingerprint"
+  cat "$key"
+  echo "-----TAK-MANAGER-SEPARATOR-----"
+  cat "$crt"
+} | svc_exec takserver bash -c '
+    set -e
+    umask 077
+    work="$(mktemp -d)"
+    trap "rm -rf \"$work\"" EXIT
+    IFS= read -r PASS
+    IFS= read -r FINGERPRINT
+    awk -v dir="$work" "BEGIN { out = dir \"/cert.key\" } /^-----TAK-MANAGER-SEPARATOR-----\$/ { out = dir \"/cert.crt\"; next } { print > out }"
+    export PASS
+    openssl pkcs12 -export -in "$work/cert.crt" -inkey "$work/cert.key" -name letsencrypt -out "$work/le.p12" -passout env:PASS
+    out=/opt/tak/certs/files
+    rm -f "$out/letsencrypt.jks.new"
+    keytool -importkeystore -noprompt -alias letsencrypt \
+      -srckeystore "$work/le.p12" -srcstoretype PKCS12 -srcstorepass:env PASS \
+      -destkeystore "$out/letsencrypt.jks.new" -deststoretype JKS -deststorepass:env PASS -destkeypass:env PASS
+    chmod 640 "$out/letsencrypt.jks.new"
+    mv "$out/letsencrypt.jks.new" "$out/letsencrypt.jks"
+    printf "%s" "$FINGERPRINT" > "$out/letsencrypt.cksum"
+  ' || die "the conversion failed"
+
+# The 8446 connector points at the keystore once it exists.
+render_core_config
+log "Restarting TAK Server to load it"
+docker restart --time 30 "$(svc_container takserver)" > /dev/null
+wait_healthy takserver 420 || die "TAK Server did not come back healthy"
+info "port 8446 now presents the Let's Encrypt certificate of $PUBLIC_HOST"
+echo "LETSENCRYPT_RESULT outcome=updated"

@@ -1,6 +1,7 @@
 {
   "signature": "TAK Manager — {{url}}",
   "datetime_format": "[year]-[month]-[day] [hour]:[minute] UTC",
+  "decimal_separator": ".",
   "login_code": {
     "subject": "Your sign-in code: {{code}}",
     "body": "Hello,\n\nYour sign-in code for TAK Manager is:\n\n    {{code}}\n\nIt is valid for {{minutes}} minutes and can be used once. If you did not ask for it, ignore this message: nobody can sign in without the code."
@@ -52,5 +53,61 @@
   "event_team_removed": {
     "subject": "Your team is no longer part of the event {{event}}",
     "body": "Hello,\n\nThe team \"{{host}}\" took your team \"{{team}}\" out of the event \"{{event}}\" ({{start}} to {{end}}).\n\nIf your team was taking part, its members stopped seeing the other teams, and being seen by them, at once.\n\n    {{url}}"
+  },
+  "alert_digest": {
+    "subject": "{{subject}}",
+    "body": "Hello,\n\n{{sections}}\n\nThe monitoring page has the details and the history:\n\n    {{url}}\n\nYou receive this message because you are an administrator of this platform. An alert is announced once, recalled at most once a day while it lasts, and announced again when it is over."
+  },
+  "certificate_notice": {
+    "subject": "{{team}}: the TAK certificate of {{access}} expires in {{days}} days",
+    "body": "Hello,\n\nThe connection zip of the access \"{{access}}\" of your team \"{{team}}\" carries a client certificate that expires on {{date}}, in {{days}} days.\n\nNothing renews it. After that date the devices set up with this zip will no longer connect to the TAK server.\n\nBefore then, as a team leader:\n\n  1. open the access on your team's page and choose \"Regenerate\";\n  2. download the new zip and hand it out again to everyone who uses it.\n\nRegenerating disconnects the devices that use the access at once: plan it when the team can set its devices up again.\n\n    {{url}}"
+  },
+  "alerts": {
+    "subject_raised": "[TAK Manager] Alert: {{text}}",
+    "subject_resolved": "[TAK Manager] Resolved: {{text}}",
+    "subject_several": "[TAK Manager] Alerts — new: {{raised}}, resolved: {{resolved}}, still open: {{reminded}}",
+    "heading_raised": "New alerts:",
+    "heading_resolved": "Resolved:",
+    "heading_reminded": "Still open (reminder):",
+    "severity": {
+      "low": "low",
+      "warning": "warning",
+      "critical": "critical"
+    },
+    "subjects": {
+      "root": "the system disk",
+      "docker": "Docker's disk",
+      "data": "the platform's data disk",
+      "backups": "the backup disk",
+      "root_ca": "the root certificate authority",
+      "intermediate_ca": "the intermediate certificate authority (signs the client certificates)",
+      "tak_server": "TAK Server",
+      "platform_api": "the platform's access to TAK Server",
+      "enrollment": "the enrollment port (8446)",
+      "web": "the website (Let's Encrypt)"
+    },
+    "kinds": {
+      "agent_unreachable": "The host agent does not answer: the server and the services are no longer watched.",
+      "disk_full": "Disk nearly full: {{subject}} is {{percent}} % used.",
+      "memory_pressure": "Memory is {{percent}} % used.",
+      "service_down": "The service {{subject}} is not running (state: {{state}}).",
+      "service_unhealthy": "The service {{subject}} runs but fails its health check.",
+      "service_restarting": "The service {{subject}} keeps restarting ({{restarts}} restarts in the last 15 minutes).",
+      "tak_process_down": "TAK Server's \"{{subject}}\" process is not running.",
+      "tak_unreachable": "TAK Server does not answer (failing: {{what}}).",
+      "directory_unreachable": "The directory (OpenLDAP) does not answer.",
+      "reconciliation_failing": "The synchronisation with the directory and TAK Server has not succeeded for {{minutes}} minutes.",
+      "event_not_started": "The event \"{{event}}\" should have started {{minutes}} minutes ago and has not: its teams do not see each other yet.",
+      "event_not_ended": "The event \"{{event}}\" should have ended {{minutes}} minutes ago and has not: its teams still see each other.",
+      "certificate_expiring": "Certificate expiring in {{days}} days: {{subject}}.",
+      "certificate_expired": "Certificate expired {{days}} days ago: {{subject}}.",
+      "client_certificates_expiring": "Client certificates expiring within {{days}} days: {{count}}, of which {{urgent}} within {{urgent_days}} days.",
+      "backup_failed": "The last backup failed.",
+      "backup_stale": "No backup has been made for {{hours}} hours.",
+      "security_updates": "Security updates waiting to be installed on the server: {{count}}.",
+      "reboot_required": "The server must be restarted to finish installing updates.",
+      "mail_failing": "E-mails are not going out ({{count}} failed in the last hour).",
+      "clock_unsynchronized": "The server's clock is not synchronised: events may start and end at the wrong time."
+    }
   }
 }

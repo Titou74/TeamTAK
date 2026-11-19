@@ -83,6 +83,16 @@ api_errors! {
     TeamAlreadyInEvent => ("team_already_in_event", CONFLICT),
     /// No invitation to this event is waiting for the team's answer.
     EventInvitationNotPending => ("event_invitation_not_pending", CONFLICT),
+    /// The host agent is not installed or does not answer: nothing was done.
+    AgentUnavailable => ("agent_unavailable", SERVICE_UNAVAILABLE),
+    /// The host agent is in the middle of another action (a backup, a restart).
+    AgentBusy => ("agent_busy", CONFLICT),
+    /// Not a service of this stack that can be restarted from the web UI.
+    ServiceNotAllowed => ("service_not_allowed", BAD_REQUEST),
+    /// The host agent, or the webhook, tried and failed; the server's log has the reason.
+    ActionFailed => ("action_failed", BAD_GATEWAY),
+    /// No webhook address is set.
+    WebhookNotSet => ("webhook_not_set", CONFLICT),
     Internal => ("internal", INTERNAL_SERVER_ERROR),
 }
 

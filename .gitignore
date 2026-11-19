@@ -13,6 +13,8 @@ takserver-docker-*/
 spike/work/
 # Everything install.sh generates: certificates, TAK Server configuration, logs
 deploy/data/
+# Backup archives: they hold every secret of the platform
+deploy/backups/
 
 # Build
 target/

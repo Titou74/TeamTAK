@@ -4,6 +4,8 @@
 //! its database, asks [`reconcile`] what has to change, and applies the result through the
 //! [`directory::Directory`] and [`tak::TakServer`] traits, so either backend can be replaced.
 
+pub mod alerts;
+pub mod certs;
 pub mod directory;
 pub mod events;
 pub mod login;
@@ -13,6 +15,7 @@ pub mod policy;
 pub mod reconcile;
 pub mod secret;
 pub mod tak;
+pub mod versions;
 
 /// Random string drawn from `alphabet` with a uniform distribution.
 pub fn random_string(len: usize, alphabet: &[u8]) -> String {
@@ -29,4 +32,23 @@ pub const UNAMBIGUOUS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwx
 /// needed on the enrollment port, and free of characters that need escaping in a URL or XML.
 pub fn generate_tak_password() -> String {
     random_string(24, UNAMBIGUOUS)
+}
+
+/// An HTTPS client for public servers (container registries, a webhook), trusting the
+/// usual certificate authorities. Plain `http://` addresses work too.
+pub fn public_http_client(timeout: std::time::Duration) -> Result<reqwest::Client, String> {
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let tls = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(rustls::crypto::ring::default_provider()))
+        .with_safe_default_protocol_versions()
+        .map_err(|e| e.to_string())?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    reqwest::Client::builder()
+        .tls_backend_preconfigured(tls)
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(timeout)
+        .user_agent(concat!("tak-manager/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| e.to_string())
 }

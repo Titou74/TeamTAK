@@ -16,28 +16,31 @@ hex = "0.4.3"
 hmac = "0.13.0"
 lettre = { version = "0.11.24", default-features = false, features = ["tokio1", "tokio1-rustls", "ring", "rustls-native-certs", "smtp-transport", "builder", "hostname"] }
 rand = "0.10.4"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls-no-provider"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pki-types = { version = "1.16.0", features = ["std"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 sqlx = { version = "0.9.1", default-features = false, features = ["postgres", "runtime-tokio", "uuid", "time", "migrate", "macros"] }
+# The report the host agent produces is read back with the agent's own types.
+tak-manager-agent = { version = "0.1.0", path = "../agent" }
 tak-manager-core = { version = "0.1.0", path = "../core" }
 thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["serde", "formatting"] }
 tokio = { version = "1.54.1", features = ["full"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 tower-http = { version = "0.7.1", features = ["fs", "trace"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.29.3", features = ["v4", "serde"] }
 
 [dev-dependencies]
-# Integration tests (tests/e2e.rs): API client, mail catcher, zip and PKCS#12 reading, and
-# a scripted TAK client over mutual TLS.
+# Integration tests (tests/): API client, mail catcher, zip and PKCS#12 reading, and a
+# scripted TAK client over mutual TLS (rustls and tokio-rustls are regular dependencies).
 p12-keystore = "0.4.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls-no-provider", "cookies", "query"] }
-rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 time = { version = "0.3.55", features = ["macros"] }
-tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 zip = { version = "9.7.3", default-features = false, features = ["deflate"] }
 
 [[bin]]

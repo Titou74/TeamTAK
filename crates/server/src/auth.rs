@@ -13,9 +13,11 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tak_manager_core::login::{self, RequestDecision};
 use tak_manager_core::names::normalize_email;
+use tak_manager_core::policy::{can, Action, Actor};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
+use crate::audit::{self, AuditAction, Details, Target};
 use crate::error::{ApiError, ApiResult};
 use crate::locale::{self, Template};
 use crate::state::SharedState;
@@ -32,6 +34,21 @@ pub struct Account {
 }
 
 impl Account {
+    /// What the account is on the platform, outside any team.
+    pub fn platform_actor(&self) -> Actor {
+        Actor { is_admin: self.is_admin, team_role: None }
+    }
+
+    /// Refuses unless the account may do `action` on the platform as a whole. Like every
+    /// other decision, it is taken by `policy::can`.
+    pub fn require_platform(&self, action: Action) -> ApiResult<()> {
+        if can(self.platform_actor(), action) {
+            Ok(())
+        } else {
+            Err(ApiError::Forbidden)
+        }
+    }
+
     /// How the account is named to others: its display name, or its address.
     pub fn label(&self) -> &str {
         if self.display_name.trim().is_empty() {
@@ -97,11 +114,8 @@ impl FromRequestParts<SharedState> for AdminAccount {
 
     async fn from_request_parts(parts: &mut Parts, state: &SharedState) -> Result<Self, Self::Rejection> {
         let CurrentAccount(account) = CurrentAccount::from_request_parts(parts, state).await?;
-        if account.is_admin {
-            Ok(AdminAccount(account))
-        } else {
-            Err(ApiError::Forbidden)
-        }
+        account.require_platform(Action::AdministerPlatform)?;
+        Ok(AdminAccount(account))
     }
 }
 
@@ -267,6 +281,10 @@ pub async fn verify(
         .expires(OffsetDateTime::now_utc() + Duration::days(state.config.session_ttl_days))
         .build();
     tracing::info!(email, ip, "signed in");
+    // Administrator sign-ins are part of the audit log; other sign-ins are not recorded.
+    if account.is_admin {
+        audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AdminSignedIn, Target::none(), Details::new()).await;
+    }
     Ok((jar.add(cookie), Json(me_payload(&state, &account).await?)))
 }
 
@@ -413,6 +431,8 @@ pub async fn grant_admin(state: &SharedState, email: &str) -> anyhow::Result<(St
     .bind(state.config.login.code_ttl_secs as f64)
     .execute(&state.db)
     .await?;
+    // The rescue command is a way in that bypasses e-mail: its use is recorded.
+    audit::record(&state.db, audit::Actor::CommandLine, AuditAction::RescueCodeIssued, Target::object(&email), Details::new()).await;
     Ok((code, state.config.login.code_ttl_secs / 60))
 }
 

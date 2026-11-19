@@ -15,15 +15,18 @@ use tak_manager_core::tak::TakServer;
 
 use crate::config::Config;
 use crate::mail::Mailer;
+use crate::monitor::Monitor;
 use crate::reconciler::Reconciler;
 
 pub struct AppState {
     pub config: Config,
     pub db: PgPool,
     pub secrets: SecretBox,
-    pub mailer: Mailer,
+    pub mailer: Arc<Mailer>,
     pub tak: Arc<dyn TakServer>,
     pub reconciler: Arc<Reconciler>,
+    /// The monitoring loop and what it last saw.
+    pub monitor: Arc<Monitor>,
     /// Truststore shipped in every zip: the CA certificates of TAK Server.
     pub truststore_p12: Vec<u8>,
 }
@@ -75,10 +78,11 @@ pub fn build_backends(config: &Config) -> Result<Backends> {
 pub async fn build_state(config: Config) -> Result<SharedState> {
     let db = connect_database(&config).await?;
     let secrets = SecretBox::new(config.app_secret.as_bytes());
-    let mailer = Mailer::new(&config.smtp, &config.public_url)?;
+    let mailer = Arc::new(Mailer::new(&config.smtp, &config.public_url, Some(db.clone()))?);
     let Backends { directory, tak, ca_ders } = build_backends(&config)?;
     let truststore_p12 = build_truststore(&ca_ders, config.tak.p12_format).context("building the client truststore")?;
     let protected = BTreeSet::from([config.tak.api_cert_name.clone()]);
     let reconciler = Arc::new(Reconciler::new(db.clone(), directory.clone(), tak.clone(), secrets.clone(), protected));
-    Ok(Arc::new(AppState { config, db, secrets, mailer, tak, reconciler, truststore_p12 }))
+    let monitor = Arc::new(Monitor::new(&config, db.clone(), tak.clone(), mailer.clone(), secrets.clone()));
+    Ok(Arc::new(AppState { config, db, secrets, mailer, tak, reconciler, monitor, truststore_p12 }))
 }

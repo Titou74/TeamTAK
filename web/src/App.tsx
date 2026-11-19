@@ -9,6 +9,7 @@ import { useErrorText, useMe } from "@/lib/hooks";
 import { AdminPage } from "@/pages/admin";
 import { HomePage } from "@/pages/home";
 import { LoginPage } from "@/pages/login";
+import { MonitoringPage } from "@/pages/monitoring";
 import { ProfilePage } from "@/pages/profile";
 import { TeamPage } from "@/pages/team";
 
@@ -49,6 +50,7 @@ export function App() {
         <Route path="/teams/:id" element={<TeamPage me={me.data} />} />
         <Route path="/profile" element={<ProfilePage me={me.data} />} />
         <Route path="/admin" element={me.data.account.is_admin ? <AdminPage me={me.data} /> : <Navigate to="/" replace />} />
+        <Route path="/monitoring" element={me.data.account.is_admin ? <MonitoringPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

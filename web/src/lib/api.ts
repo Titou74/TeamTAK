@@ -1,6 +1,17 @@
 // The only place that talks to the API. Errors carry the API's stable code; the UI
 // translates it (`errors.<code>`), it never shows a sentence coming from the server.
 import type {
+  AlertsSummary,
+  AuditFilter,
+  AuditPage,
+  BackupRun,
+  Devices,
+  History,
+  Monitoring,
+  Settings,
+  SettingsView,
+} from "./monitoring-types";
+import type {
   AccessDetail,
   AccessKind,
   AdminAccount,
@@ -133,4 +144,29 @@ export const api = {
   setAdmin: (id: string, isAdmin: boolean) => json<void>("PATCH", `/admin/accounts/${id}`, { is_admin: isAdmin }),
   reconciliation: () => json<Reconciliation>("GET", "/admin/reconciliation"),
   runReconciliation: () => json<Reconciliation>("POST", "/admin/reconciliation/run"),
+
+  // Monitoring (administrators). What is shown is what the platform last saw; `refresh`
+  // makes it look first.
+  monitoring: (refresh = false) => json<Monitoring>("GET", `/admin/monitoring${refresh ? "?refresh=true" : ""}`),
+  monitoringHistory: (hours: number) => json<History>("GET", `/admin/monitoring/history?hours=${hours}`),
+  alertsSummary: () => json<AlertsSummary>("GET", "/admin/alerts/summary"),
+  adminDevices: () => json<Devices>("GET", "/admin/devices"),
+  teamDevices: (teamId: string) => json<Devices>("GET", `/teams/${teamId}/devices`),
+  restartService: (service: string) => json<{ restarted: boolean; accepted: boolean }>("POST", `/admin/services/${service}/restart`),
+  runBackup: () => json<{ run: BackupRun }>("POST", "/admin/backups/run"),
+  syncLetsEncrypt: () => json<{ outcome: string }>("POST", "/admin/letsencrypt/sync"),
+  settings: () => json<SettingsView>("GET", "/admin/settings"),
+  /** Only the fields given change. `backup_passphrase`: a new one, or "" to remove it. */
+  updateSettings: (changes: { settings?: DeepPartial<Settings>; backup_passphrase?: string }) =>
+    json<SettingsView>("PATCH", "/admin/settings", changes),
+  testWebhook: () => json<{ status: number }>("POST", "/admin/settings/webhook-test"),
+  audit: (filter: AuditFilter) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    return json<AuditPage>("GET", `/admin/audit?${query.toString()}`);
+  },
 };
+
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };

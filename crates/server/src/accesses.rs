@@ -23,6 +23,7 @@ use tak_manager_core::{generate_tak_password, random_string, UNAMBIGUOUS};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::audit::{self, AuditAction, Detail, Details, Target};
 use crate::auth::{Account, CurrentAccount};
 use crate::error::{ApiError, ApiResult};
 use crate::reconciler::{sync_certificates, Trigger, PASSWORD_CONTEXT};
@@ -290,6 +291,8 @@ pub async fn create_access(
     }
     tx.commit().await?;
     tracing::info!(team = %ctx.team.slug, username, kind = body.kind.as_str(), by = %account.email, "access created");
+    let details = Details::new().text(Detail::Kind, body.kind.as_str());
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AccessCreated, Target::in_team(&ctx.team, &username), details).await;
     let synced = apply_change(&state).await;
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "username": username, "synced": synced }))))
 }
@@ -328,6 +331,10 @@ pub async fn access_detail(
 ) -> ApiResult<Json<Value>> {
     let (access, ctx, r) = access_context(&state, access_id, &account).await?;
     let password = state.secrets.open_string(PASSWORD_CONTEXT, &access.password_enc)?;
+    // This answer carries the password and the QR codes: who was shown them is recorded,
+    // the credentials themselves never are.
+    let details = Details::new().text(Detail::Kind, &access.kind);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AccessCredentialsViewed, Target::in_team(&ctx.team, &access.username), details).await;
     let certificates: Vec<CertificateView> = sqlx::query_as(
         "SELECT fingerprint, source, issued_at, expires_at FROM tak_certificates
           WHERE access_id = $1 AND inactive_at IS NULL AND revoke_requested_at IS NULL ORDER BY issued_at",
@@ -448,6 +455,8 @@ pub async fn access_package(
     };
     let zip = build_connection_zip(&package, PackageLayout::Official)?;
     tracing::info!(username = %access.username, form, by = %account.email, "connection zip downloaded");
+    let details = Details::new().text(Detail::Form, &form).text(Detail::Kind, &access.kind);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AccessPackageDownloaded, Target::in_team(&ctx.team, &access.username), details).await;
     Ok((
         [
             (CONTENT_TYPE, "application/zip".to_string()),
@@ -523,6 +532,8 @@ pub async fn regenerate_access(
         }
     }
     tracing::info!(username = %access.username, by = %account.email, "access regenerated");
+    let details = Details::new().text(Detail::Kind, &access.kind);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AccessRegenerated, Target::in_team(&ctx.team, &access.username), details).await;
 
     if had_package {
         let fresh: Access = sqlx::query_as(concat!("SELECT ", access_columns!(), " FROM tak_accesses WHERE id = $1"))
@@ -547,6 +558,8 @@ pub async fn delete_access(
     retire_accesses(&mut tx, access.team_id, RetireScope::One(access.id)).await?;
     tx.commit().await?;
     tracing::info!(username = %access.username, by = %account.email, "access removed");
+    let details = Details::new().text(Detail::Kind, &access.kind);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AccessRemoved, Target::in_team(&ctx.team, &access.username), details).await;
     let synced = apply_change(&state).await;
     Ok(Json(json!({ "synced": synced })))
 }

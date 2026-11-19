@@ -39,13 +39,17 @@ Settings (first run only):
 Other:
   --zip <path>               TAK Server ZIP (default: takserver-docker-hardened-*.zip at the
                              repository root).
+  --upgrade-tak              Move an installed platform to the TAK Server version of the ZIP
+                             given with --zip (or of the only other ZIP at the repository
+                             root): backup, new images, restart. See README, "Upgrading TAK
+                             Server". NOT TESTED: only one TAK Server ZIP exists so far.
   --no-start                 Prepare everything but do not start the stack.
   -h, --help
 EOF
 }
 
 MODE_ARG="" DOMAIN_ARG="" HOST_ARG="" ADMIN_EMAIL_ARG="" ACME_EMAIL_ARG="" VALIDITY_ARG=""
-ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0
+ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0
 SMTP_HOST_ARG="" SMTP_PORT_ARG="" SMTP_USERNAME_ARG="" SMTP_PASSWORD_ARG="" SMTP_TLS_ARG="" MAIL_FROM_ARG=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -63,6 +67,7 @@ while [ $# -gt 0 ]; do
     --smtp-tls) SMTP_TLS_ARG="$2"; shift ;;
     --mail-from) MAIL_FROM_ARG="$2"; shift ;;
     --zip) ZIP_ARG="$2"; shift ;;
+    --upgrade-tak) UPGRADE_TAK=1 ;;
     --no-start) NO_START=1 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown option: $1" ;;
@@ -109,6 +114,7 @@ if [ ! -f "$ENV_FILE" ]; then
     MAIL_FROM="${MAIL_FROM_ARG:-TAK Manager <no-reply@$DOMAIN_ARG>}"
     LOGIN_MAX_CODES_PER_IP=30
     LOGIN_MAX_FAILURES_PER_IP=30
+    MONITOR_INTERVAL_SECONDS=60
   else
     PUBLIC_HOST="${HOST_ARG:-localhost}"
     PUBLIC_URL="http://$PUBLIC_HOST:8480"
@@ -125,6 +131,8 @@ if [ ! -f "$ENV_FILE" ]; then
     # production, and is tested.
     LOGIN_MAX_CODES_PER_IP=1000
     LOGIN_MAX_FAILURES_PER_IP=1000
+    # The integration tests wait for alerts to be raised and resolved.
+    MONITOR_INTERVAL_SECONDS=10
   fi
   [ "${ENROLL_LE_ARG:-false}" = true ] && [ "$MODE" != production ] && die "--tak-enroll-letsencrypt needs --domain"
 
@@ -186,12 +194,17 @@ LOGIN_MAX_CODES_PER_EMAIL=5
 LOGIN_MAX_CODES_PER_IP=$LOGIN_MAX_CODES_PER_IP
 LOGIN_MAX_FAILURES_PER_IP=$LOGIN_MAX_FAILURES_PER_IP
 RECONCILE_INTERVAL_SECONDS=60
+# How often the platform looks at the machine, the services and TAK Server, and evaluates
+# the alerts. Seconds.
+MONITOR_INTERVAL_SECONDS=$MONITOR_INTERVAL_SECONDS
 
 # --- Directory
 LDAP_BASE_DN=dc=takmanager,dc=internal
 
 # --- Secrets (generated)
 APP_SECRET=$(rand 48)
+# Shared by the platform and the host agent
+AGENT_TOKEN=$(rand 48)
 POSTGRES_PASSWORD=$(rand)
 LDAP_ROOT_PW=$(rand)
 LDAP_TAKSERVER_PW=$(rand)
@@ -205,7 +218,61 @@ else
   info "keeping existing settings: $ENV_FILE"
   [ -z "$MODE_ARG$DOMAIN_ARG$HOST_ARG$VALIDITY_ARG" ] || info "note: mode, domain, host and validity options are only read on the first run; edit $ENV_FILE to change them"
 fi
+# Settings added since this file was generated (an installation made before phase 3).
+if [ -z "$(env_get AGENT_TOKEN)" ]; then
+  env_set AGENT_TOKEN "$(rand 48)"
+  info "added to $ENV_FILE: AGENT_TOKEN (secret shared with the host agent)"
+fi
+if [ -z "$(env_get MONITOR_INTERVAL_SECONDS)" ]; then
+  if [ "$(env_get MODE)" = local ]; then env_set MONITOR_INTERVAL_SECONDS 10; else env_set MONITOR_INTERVAL_SECONDS 60; fi
+fi
 load_env
+# Backup archives are written here by the host agent. They hold every secret.
+mkdir -p "$DEPLOY_DIR/backups"
+chmod 700 "$DEPLOY_DIR/backups"
+
+# ----------------------------------------------------------------------------- TAK Server upgrade
+
+# Moves the installation to the TAK Server version of another ZIP. Everything it changes
+# before the restart can be undone by putting the three TAK_ lines of deploy/.env back.
+if [ "$UPGRADE_TAK" = 1 ]; then
+  log "Upgrading TAK Server"
+  NEW_ZIP="$ZIP_ARG"
+  if [ -z "$NEW_ZIP" ]; then
+    candidates="$(ls "$REPO_DIR"/takserver-docker-hardened-*.zip 2>/dev/null | grep -v -F "takserver-docker-hardened-$TAK_VERSION.zip" || true)"
+    [ "$(printf '%s\n' "$candidates" | grep -c .)" = 1 ] || die "give the new ZIP with --zip <path> (found: ${candidates:-none other than the installed version})"
+    NEW_ZIP="$candidates"
+  fi
+  [ -f "$NEW_ZIP" ] || die "TAK Server ZIP not found: $NEW_ZIP"
+  NEW_VERSION="$(basename "$NEW_ZIP" .zip)"; NEW_VERSION="${NEW_VERSION#takserver-docker-hardened-}"
+  [ "$NEW_VERSION" != "$TAK_VERSION" ] || die "TAK Server $TAK_VERSION is already the installed version"
+  OLD_VERSION="$TAK_VERSION" OLD_DB_IMAGE="$TAK_DB_IMAGE"
+  NEW_IMAGE="tak-manager/takserver:$NEW_VERSION" NEW_DB_IMAGE="tak-manager/takserver-db:$NEW_VERSION"
+  info "installed: $OLD_VERSION — new: $NEW_VERSION"
+
+  [ -n "$(svc_container takserver-db)" ] || die "the stack must be running for an upgrade (the backup is taken from it)"
+  info "backup first"
+  "$DEPLOY_DIR/scripts/backup.sh" > "$DATA_DIR/upgrade-backup.log" 2>&1 || { tail -n 20 "$DATA_DIR/upgrade-backup.log" >&2; die "the backup failed: nothing was changed"; }
+  info "$(sed -n 's/^BACKUP_RESULT file=\([^ ]*\).*/archive: deploy\/backups\/\1/p' "$DATA_DIR/upgrade-backup.log")"
+  rm -f "$DATA_DIR/upgrade-backup.log"
+
+  "$DEPLOY_DIR/scripts/build-tak-images.sh" "$NEW_ZIP" "$NEW_IMAGE" "$NEW_DB_IMAGE"
+
+  # TAK Server's database lives in a Docker volume written by the old image's PostgreSQL.
+  # A new major version of PostgreSQL cannot open it: stop before anything is switched.
+  pg_major() { docker run --rm --entrypoint postgres "$1" --version 2>/dev/null | sed -n 's/.* \([0-9][0-9]*\)\..*/\1/p'; }
+  old_pg="$(pg_major "$OLD_DB_IMAGE")" new_pg="$(pg_major "$NEW_DB_IMAGE")"
+  if [ -z "$old_pg" ] || [ -z "$new_pg" ] || [ "$old_pg" != "$new_pg" ]; then
+    die "the new database image runs PostgreSQL ${new_pg:-?}, the installed one ${old_pg:-?}: the data volume cannot be reused as it is. Nothing was changed. See README, \"Upgrading TAK Server\"."
+  fi
+
+  env_set TAK_VERSION "$NEW_VERSION"
+  env_set TAK_IMAGE "$NEW_IMAGE"
+  env_set TAK_DB_IMAGE "$NEW_DB_IMAGE"
+  load_env
+  info "deploy/.env now names TAK Server $NEW_VERSION (to go back: TAK_VERSION, TAK_IMAGE and TAK_DB_IMAGE to $OLD_VERSION, then ./install.sh; the database is in the backup above)"
+  ZIP_ARG="$NEW_ZIP"
+fi
 ZIP="${ZIP_ARG:-$REPO_DIR/takserver-docker-hardened-$TAK_VERSION.zip}"
 info "mode: $MODE — public host: $PUBLIC_HOST — web: $PUBLIC_URL — client certificates: $CERT_VALIDITY_DAYS days"
 if [ "$MODE" = production ] && [ -z "$SMTP_HOST" ]; then
@@ -286,10 +353,10 @@ info "CoreConfig.xml rendered (client certificates valid $CERT_VALIDITY_DAYS day
 
 # ----------------------------------------------------------------------------- platform image
 
-log "Building the platform image (first build: several minutes)"
-compose build app > "$DATA_DIR/build-app.log" 2>&1 || { tail -n 40 "$DATA_DIR/build-app.log" >&2; die "could not build the platform image"; }
+log "Building the platform and agent images (first build: several minutes)"
+compose build app agent > "$DATA_DIR/build-app.log" 2>&1 || { tail -n 40 "$DATA_DIR/build-app.log" >&2; die "could not build the platform images"; }
 rm -f "$DATA_DIR/build-app.log"
-info "tak-manager/app:local built"
+info "tak-manager/app:local and tak-manager/agent:local built"
 
 if [ "$NO_START" = 1 ]; then
   log "Prepared. Start with: cd deploy && docker compose up -d"
@@ -308,10 +375,14 @@ grant_api_certificate
 
 info "waiting for the platform"
 wait_healthy app 120 || { compose logs --tail 40 app >&2; die "the platform did not become healthy"; }
+# The platform works without the agent, with a dashboard that says so: a warning, not a failure.
+wait_healthy agent 60 || info "WARNING: the host agent is not healthy; monitoring, backups and restarts from the web UI need it. See: cd deploy && docker compose logs agent"
 
 if [ "${TAK_ENROLL_LETSENCRYPT:-false}" = true ]; then
   log "Let's Encrypt certificate for the enrollment port (8446)"
-  "$DEPLOY_DIR/scripts/sync-letsencrypt.sh" --wait 180 --install-cron || info "WARNING: not done yet; run deploy/scripts/sync-letsencrypt.sh once Caddy has its certificate"
+  "$DEPLOY_DIR/scripts/sync-letsencrypt.sh" --wait 180 || info "WARNING: not done yet; the platform asks the agent again every day, or use \"Hand over now\" in the administration once Caddy has its certificate"
+  # Installations made before phase 3 had a cron job for this; the agent does it now.
+  rm -f /etc/cron.d/tak-manager-letsencrypt 2>/dev/null || true
 fi
 
 log "Checking that the platform reaches the directory and TAK Server"
@@ -336,5 +407,6 @@ info "TAK clients:       $PUBLIC_HOST:8089 (TLS)   enrollment: $PUBLIC_HOST:8446
 if [ "$MODE" = local ]; then
   info "Mail catcher:      http://localhost:${MAILPIT_PORT:-8025} (login codes arrive here)"
 fi
+info "Backups:           deploy/backups/ (daily, set in the administration); restore: deploy/scripts/restore.sh"
 info "Stop:              cd deploy && docker compose down      (start again: docker compose up -d)"
 info "Rescue admin code: cd deploy && docker compose exec app tak-manager grant-admin <email>"

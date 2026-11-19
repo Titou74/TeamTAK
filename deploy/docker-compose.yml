@@ -6,6 +6,9 @@
 #
 # Published ports: web (Caddy), 8089 (TAK clients) and 8446 (TAK enrollment).
 # 8443 (TAK Server API) is NOT published: the platform reaches it over the Docker network.
+#
+# The host agent is the only service that holds the Docker socket. It sits alone on a
+# network without any way out ("agent"), which only the platform also joins.
 name: tak-manager
 
 services:
@@ -68,14 +71,68 @@ services:
       LOGIN_MAX_CODES_PER_IP: ${LOGIN_MAX_CODES_PER_IP:-30}
       LOGIN_MAX_FAILURES_PER_IP: ${LOGIN_MAX_FAILURES_PER_IP:-30}
       RECONCILE_INTERVAL_SECONDS: ${RECONCILE_INTERVAL_SECONDS:-60}
+      # Monitoring: the host agent, and how often the platform looks at everything
+      AGENT_URL: http://agent:9300
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-60}
+      # Where Caddy answers inside the network, to read the certificate it presents
+      WEB_TLS_PROBE: ${WEB_TLS_PROBE:-caddy:443}
     volumes:
       - ./data/app:/data:ro
+    networks:
+      - default
+      - agent
     healthcheck:
       test: ["CMD", "/usr/local/bin/tak-manager", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 10s
+
+  agent:
+    image: tak-manager/agent:local
+    build:
+      context: ..
+      dockerfile: deploy/agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      AGENT_PROJECT: tak-manager
+    volumes:
+      # The only Docker socket of the stack.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The machine, read-only, and no more of it than the report needs: the distribution
+      # and its package sources (/etc), the package database and Docker's disk (/var/lib),
+      # the "reboot required" flag (/run).
+      - /etc:/host/etc:ro
+      - /var/lib:/host/var/lib:ro
+      - /run:/host/run:ro
+      # The repository, read-only: the scripts the agent runs, deploy/.env and deploy/data
+      # for the backups, the name of a TAK Server ZIP at its root.
+      - ..:/repo:ro
+      # Written by the agent: the backup archives, and under data/tak the keystore of the
+      # Let's Encrypt hand-over and the housekeeping of TAK Server's logs.
+      - ./backups:/repo/deploy/backups
+      - ./data/tak:/repo/deploy/data/tak
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      # Read the files of the other services (certificates, settings), whoever owns them.
+      - DAC_OVERRIDE
+      - DAC_READ_SEARCH
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - agent
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/tak-manager-agent", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
 
   postgres:
     image: postgres:17-alpine
@@ -193,6 +250,11 @@ services:
       timeout: 10s
       retries: 6
       start_period: 180s
+
+networks:
+  # Platform <-> agent only. "internal": no route to the outside, in either direction.
+  agent:
+    internal: true
 
 volumes:
   postgres-data:

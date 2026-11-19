@@ -6,6 +6,9 @@
 #
 # Everything is lost: accounts, teams, certificates, the certificate authority. Only touches
 # Docker objects of the "tak-manager" project.
+#
+# The backup archives in deploy/backups/ are kept: they are the way back
+# (deploy/scripts/restore.sh). Delete that folder by hand to remove them too.
 . "$(dirname "$0")/lib.sh"
 
 IMAGES=0 YES=0
@@ -35,8 +38,11 @@ if [ -d "$DATA_DIR" ]; then
 fi
 rm -f "$ENV_FILE"
 if [ "$IMAGES" = 1 ]; then
-  for image in "$TAK_IMAGE_NAME" "$TAK_DB_IMAGE_NAME" tak-manager/app:local; do
+  for image in "$TAK_IMAGE_NAME" "$TAK_DB_IMAGE_NAME" tak-manager/app:local tak-manager/agent:local; do
     [ -n "$image" ] && docker image rm "$image" 2>/dev/null || true
   done
 fi
 echo "Cleaned."
+if ls "$DEPLOY_DIR/backups"/tak-manager-backup-* > /dev/null 2>&1; then
+  echo "Backup archives are still in $DEPLOY_DIR/backups/ (restore one with deploy/scripts/restore.sh)."
+fi

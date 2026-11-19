@@ -185,12 +185,22 @@ pub fn parse_subscription(v: &Value) -> Option<Subscription> {
             names
         })
         .unwrap_or_default();
+    // TAK Server writes "unknown" where a client said nothing about itself.
+    let said = |key: &str| text(v, key).map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && s != "unknown");
+    let client = match (said("takClient"), said("takVersion")) {
+        (Some(name), Some(version)) => Some(format!("{name} {version}")),
+        (Some(name), None) => Some(name),
+        (None, version) => version,
+    };
     Some(Subscription {
         subscription_uid: text(v, "subscriptionUid")?,
         username: text(v, "username").unwrap_or_default(),
         callsign: text(v, "callsign"),
         client_uid: text(v, "clientUid"),
         groups,
+        last_report_at: date(v, "lastReportMilliseconds"),
+        ip_address: said("ipAddress"),
+        client,
     })
 }
 
@@ -311,6 +321,24 @@ mod tests {
         assert_eq!(s.groups, vec!["team-bravo".to_string()]);
         let none = parse_subscription(&json!({"subscriptionUid": "tls:12", "username": "x", "groups": []})).unwrap();
         assert!(none.groups.is_empty());
+        assert_eq!((none.last_report_at, none.ip_address, none.client), (None, None, None));
+    }
+
+    #[test]
+    fn what_a_device_says_about_itself_is_read() {
+        // Shapes observed on TAK Server 5.8-RELEASE-103: a phone, and a session without any
+        // group, which the server lists without its account.
+        let phone = json!({"subscriptionUid": "tls:21", "username": "alpha-shared", "callsign": "ALPHA-1", "clientUid": "ANDROID-1",
+            "lastReportMilliseconds": 1795108155112i64, "takClient": "ATAK-CIV", "takVersion": "5.4.0.2", "ipAddress": " 192.168.186.1",
+            "groups": [{"name": "alpha", "direction": "IN"}]});
+        let s = parse_subscription(&phone).unwrap();
+        assert_eq!(s.client.as_deref(), Some("ATAK-CIV 5.4.0.2"));
+        assert_eq!(s.ip_address.as_deref(), Some("192.168.186.1"), "the server pads the address with a space");
+        assert_eq!(s.last_report_at.unwrap().unix_timestamp(), 1795108155);
+        let ghost = json!({"subscriptionUid": "tls:3", "username": null, "dn": null, "callsign": "E2E-x", "takClient": "unknown",
+            "takVersion": "", "role": "unknown", "ipAddress": "", "groups": []});
+        let s = parse_subscription(&ghost).unwrap();
+        assert_eq!((s.username.as_str(), s.client, s.ip_address), ("", None, None));
     }
 
     #[test]

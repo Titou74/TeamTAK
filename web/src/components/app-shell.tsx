@@ -1,5 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { LogOutIcon, ShieldCheckIcon, UserIcon, UsersIcon } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ActivityIcon, LogOutIcon, ShieldCheckIcon, UserIcon, UsersIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, useNavigate } from "react-router-dom";
@@ -47,6 +47,28 @@ function NavItem({ to, children }: { to: string; children: ReactNode }) {
   );
 }
 
+/** Link to the monitoring, with the number of open alerts when there are some. */
+function MonitoringNavItem() {
+  const { t } = useTranslation();
+  const query = useQuery({ queryKey: ["admin", "alerts-summary"], queryFn: api.alertsSummary, refetchInterval: 60_000, retry: false });
+  const summary = query.data;
+  const serious = summary ? summary.critical + summary.warning : 0;
+  return (
+    <NavItem to="/monitoring">
+      <ActivityIcon className="size-4" />
+      {t("nav.monitoring")}
+      {summary && summary.open > 0 && (
+        <span
+          className={cn("rounded-full px-1.5 text-xs tabular-nums", serious > 0 ? "bg-destructive text-white" : "bg-muted-foreground/20 text-foreground")}
+          aria-label={t("nav.openAlerts", { count: summary.open })}
+        >
+          {summary.open}
+        </span>
+      )}
+    </NavItem>
+  );
+}
+
 /** Page frame of the signed-in area: brand, navigation, language, account menu. */
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const { t } = useTranslation();
@@ -82,6 +104,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                 {t("nav.admin")}
               </NavItem>
             )}
+            {me.account.is_admin && <MonitoringNavItem />}
           </nav>
           <LanguageSwitcher />
           <DropdownMenu>

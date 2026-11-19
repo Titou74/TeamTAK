@@ -27,6 +27,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::audit::{self, AuditAction, Detail, Details, Target};
 use crate::auth::{Account, AdminAccount, CurrentAccount};
 use crate::error::{ApiError, ApiResult};
 use crate::locale::{self, Template};
@@ -332,6 +333,8 @@ pub async fn create_event(
     .await?;
     tx.commit().await?;
     tracing::info!(event = %group_name, host = %ctx.team.slug, %starts_at, %ends_at, by = %account.email, "event created");
+    let details = Details::new().time(Detail::StartsAt, starts_at).time(Detail::EndsAt, ends_at);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::EventCreated, Target::in_team(&ctx.team, &name), details).await;
     // Live at once when it starts now; otherwise the pass only wakes the scheduler.
     let synced = apply_change(&state).await;
     Ok((
@@ -477,6 +480,8 @@ pub async fn invite_team(
     let (invited_name,) = invited.ok_or(ApiError::NotFound)?;
     let (event, _) = change_participation(&state, event_id, body.team_id, ParticipationChange::Invite, &account).await?;
     tracing::info!(event = %event.group_name, team = %invited_name, by = %account.email, "team invited to an event");
+    let details = Details::new().text(Detail::OtherTeam, &invited_name);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::EventTeamInvited, event_target(&event), details).await;
     notify(&state, Notice { template: Template::EventInvitation, event, about_team: invited_name.clone(), to: vec![body.team_id], skip: None });
     Ok((StatusCode::CREATED, Json(json!({ "team_id": body.team_id, "name": invited_name }))))
 }
@@ -496,6 +501,8 @@ pub async fn remove_team(
     let (other_name,) = other.ok_or(ApiError::NotFound)?;
     let (event, previous) = change_participation(&state, event_id, other_team_id, ParticipationChange::Remove, &account).await?;
     tracing::info!(event = %event.group_name, team = %other_name, by = %account.email, "team removed from an event");
+    let details = Details::new().text(Detail::OtherTeam, &other_name);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::EventTeamRemoved, event_target(&event), details).await;
     let synced = if previous == Some(Participation::Accepted) { apply_change(&state).await } else { true };
     notify(&state, Notice { template: Template::EventTeamRemoved, event, about_team: other_name, to: vec![other_team_id], skip: None });
     Ok(Json(json!({ "synced": synced })))
@@ -528,6 +535,9 @@ pub async fn answer_event(
     };
     let (event, _) = change_participation(&state, event_id, team_id, change, &account).await?;
     tracing::info!(event = %event.group_name, team = %ec.ctx.team.slug, accept = body.accept, by = %account.email, "event invitation answered");
+    // Recorded on the team that answers, which is the one the caller acted for.
+    let action = if body.accept { AuditAction::EventInvitationAccepted } else { AuditAction::EventInvitationDeclined };
+    audit::record(&state.db, audit::Actor::Account(&account), action, Target::in_team(&ec.ctx.team, &event.name), Details::new()).await;
     let synced = if body.accept { apply_change(&state).await } else { true };
     let template = if body.accept { Template::EventAccepted } else { Template::EventDeclined };
     let to = event.host_team_id.into_iter().collect();
@@ -550,6 +560,7 @@ pub async fn leave_event(
     }
     let (event, _) = change_participation(&state, event_id, team_id, ParticipationChange::Leave, &account).await?;
     tracing::info!(event = %event.group_name, team = %ec.ctx.team.slug, by = %account.email, "team left an event");
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::EventLeft, Target::in_team(&ec.ctx.team, &event.name), Details::new()).await;
     let synced = apply_change(&state).await;
     let to = event.host_team_id.into_iter().collect();
     notify(&state, Notice { template: Template::EventLeft, event, about_team: ec.ctx.team.name.clone(), to, skip: None });
@@ -594,6 +605,8 @@ pub async fn update_event(
         event.starts_at = starts_at;
         event.ends_at = ends_at;
         tracing::info!(event = %event.group_name, %starts_at, %ends_at, by = %account.email, "event dates changed");
+        let details = Details::new().time(Detail::StartsAt, starts_at).time(Detail::EndsAt, ends_at);
+        audit::record(&state.db, audit::Actor::Account(&account), AuditAction::EventRescheduled, event_target(&event), details).await;
         // A start brought back to now takes effect in this pass; any other date wakes the scheduler.
         synced = apply_change(&state).await;
         let to = concerned_teams(&state, &event, &[Participation::Accepted, Participation::Invited]).await?;
@@ -619,10 +632,20 @@ pub async fn end_event(
     tx.commit().await?;
     event.ends_at = ends_at;
     tracing::info!(event = %event.group_name, by = %account.email, "event ended early");
+    let details = Details::new().time(Detail::EndsAt, ends_at);
+    audit::record(&state.db, audit::Actor::Account(&account), AuditAction::EventEndedEarly, event_target(&event), details).await;
     let synced = apply_change(&state).await;
     let to = concerned_teams(&state, &event, &[Participation::Accepted, Participation::Invited]).await?;
     notify(&state, Notice { template: Template::EventEndedEarly, event, about_team: String::new(), to, skip: Some(account.id) });
     Ok(Json(json!({ "ends_at": rfc3339(ends_at), "synced": synced })))
+}
+
+/// What an audit entry about an event points at: the event, in its host team.
+fn event_target(event: &EventRow) -> Target {
+    match event.host_team_id {
+        Some(host) => Target::in_team_named(host, &event.host_team_name, &event.name),
+        None => Target::object(&event.name),
+    }
 }
 
 /// Who calls an event off.
@@ -660,6 +683,8 @@ async fn cancel(state: &SharedState, event_id: Uuid, reason: CancelReason, by: &
     tx.commit().await?;
     event.cancelled_at = Some(now);
     tracing::info!(event = %event.group_name, reason = reason.as_str(), by = %by.email, "event cancelled");
+    let details = Details::new().text(Detail::Reason, reason.as_str());
+    audit::record(&state.db, audit::Actor::Account(by), AuditAction::EventCancelled, event_target(&event), details).await;
     let synced = apply_change(state).await;
     let to = concerned_teams(state, &event, &[Participation::Accepted, Participation::Invited]).await?;
     notify(state, Notice { template: Template::EventCancelled, event, about_team: String::new(), to, skip: Some(by.id) });
@@ -754,6 +779,9 @@ pub async fn before_team_deletion(
 pub async fn after_team_deletion(state: &SharedState, deletion: TeamDeletion, by: &Account) -> ApiResult<()> {
     for event in deletion.cancelled {
         tracing::info!(event = %event.group_name, by = %by.email, "event cancelled: its host team was deleted");
+        // The host team is gone: the entry keeps its name with the event's.
+        let details = Details::new().text(Detail::Reason, CancelReason::HostDeleted.as_str()).text(Detail::OtherTeam, &event.host_team_name);
+        audit::record(&state.db, audit::Actor::Account(by), AuditAction::EventCancelled, Target::object(&event.name), details).await;
         let to = concerned_teams(state, &event, &[Participation::Accepted, Participation::Invited]).await?;
         notify(state, Notice { template: Template::EventCancelled, event, about_team: String::new(), to, skip: Some(by.id) });
     }
