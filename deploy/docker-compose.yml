@@ -1,0 +1,201 @@
+# TAK Manager: the full stack. Started by install.sh, which generates deploy/.env and
+# everything under deploy/data/ (both git-ignored). One of the two override files is added
+# through COMPOSE_FILE in .env:
+#   docker-compose.production.yml   public ports 80/443, Let's Encrypt
+#   docker-compose.local.yml        plain HTTP on localhost, mail catcher
+#
+# Published ports: web (Caddy), 8089 (TAK clients) and 8446 (TAK enrollment).
+# 8443 (TAK Server API) is NOT published: the platform reaches it over the Docker network.
+name: tak-manager
+
+services:
+  caddy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${PUBLIC_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./caddy/Caddyfile.${MODE}:/etc/caddy/Caddyfile:ro
+      # Bind mount: in production, scripts/sync-letsencrypt.sh reads the certificate here.
+      - ./data/caddy/data:/data
+      - ./data/caddy/config:/config
+
+  app:
+    image: tak-manager/app:local
+    build:
+      context: ..
+      dockerfile: deploy/app/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openldap:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tak_manager:${POSTGRES_PASSWORD}@postgres:5432/tak_manager
+      APP_SECRET: ${APP_SECRET}
+      PUBLIC_URL: ${PUBLIC_URL}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # E-mail (Brevo in production)
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-starttls}
+      MAIL_FROM: ${MAIL_FROM}
+      # Directory
+      LDAP_URL: ldap://openldap:389
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      LDAP_BIND_DN: cn=tak-manager,ou=Services,${LDAP_BASE_DN}
+      LDAP_BIND_PASSWORD: ${LDAP_MANAGER_PW}
+      # TAK Server, over the Docker network
+      TAK_API_URL: https://takserver:8443
+      TAK_ENROLL_URL: ${TAK_ENROLL_URL:-https://takserver:8446}
+      TAK_CA_FILE: /data/tak/ca-chain.pem
+      TAK_API_CERT_FILE: /data/tak/api-cert.pem
+      TAK_API_KEY_FILE: /data/tak/api-key.pem
+      TAK_API_CERT_NAME: ${TAK_API_CERT_NAME}
+      # What users are handed
+      TAK_PUBLIC_HOST: ${PUBLIC_HOST}
+      TAK_CONNECTION_NAME: ${TAK_CONNECTION_NAME:-TAK Manager}
+      P12_FORMAT: ${P12_FORMAT:-modern}
+      # Limits (defaults in the binary; see deploy/.env.example)
+      DEFAULT_MEMBER_CAP: ${DEFAULT_MEMBER_CAP:-10}
+      LOGIN_MAX_CODES_PER_EMAIL: ${LOGIN_MAX_CODES_PER_EMAIL:-5}
+      LOGIN_MAX_CODES_PER_IP: ${LOGIN_MAX_CODES_PER_IP:-30}
+      LOGIN_MAX_FAILURES_PER_IP: ${LOGIN_MAX_FAILURES_PER_IP:-30}
+      RECONCILE_INTERVAL_SECONDS: ${RECONCILE_INTERVAL_SECONDS:-60}
+    volumes:
+      - ./data/app:/data:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/tak-manager", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tak_manager
+      POSTGRES_USER: tak_manager
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tak_manager -d tak_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  openldap:
+    # Community image rebuilt weekly on debian:trixie-slim (slapd 2.6), amd64 + arm64.
+    # Pinned by digest (tag 2.6.10 as of 2026-11-19): the two ACL/memberOf overrides below
+    # rely on paths the image does not document.
+    image: vegardit/openldap@sha256:f6e74dd8cb4bd7945d9c97e1127a87977ab3ae6fb3110d8dd5ac192e5c9cdd31
+    restart: unless-stopped
+    environment:
+      LDAP_INIT_ORG_DN: ${LDAP_BASE_DN}
+      LDAP_INIT_ORG_NAME: TAK Manager
+      LDAP_INIT_ROOT_USER_DN: cn=admin,${LDAP_BASE_DN}
+      LDAP_INIT_ROOT_USER_PW: ${LDAP_ROOT_PW}
+      LDAP_INIT_PPOLICY_DEFAULT_DN: cn=DefaultPasswordPolicy,ou=Policies,${LDAP_BASE_DN}
+      LDAP_INIT_ALLOW_CONFIG_ACCESS: "false"
+      # No password-quality module: passwords are generated, never chosen.
+      LDAP_PPOLICY_PPM_CONFIG: ""
+      # Used by ldap/init_org_entries.ldif
+      TM_LDAP_TAKSERVER_PW: ${LDAP_TAKSERVER_PW}
+      TM_LDAP_MANAGER_PW: ${LDAP_MANAGER_PW}
+    volumes:
+      # Mount points supported by the image
+      - ./ldap/init_org_tree.ldif:/opt/ldifs/init_org_tree.ldif:ro
+      - ./ldap/init_org_entries.ldif:/opt/ldifs/init_org_entries.ldif:ro
+      - ./ldap/init_org_ppolicy.ldif:/opt/ldifs/init_org_ppolicy.ldif:ro
+      # Overrides the image does not document (memberOf on groupOfNames, ACLs)
+      - ./ldap/init_module_memberof.ldif:/opt/ldifs/init_module_memberof.ldif:ro
+      - ./ldap/init_mdb_acls.ldif:/opt/ldifs/init_mdb_acls.ldif:ro
+      - ldap-config:/etc/ldap/slapd.d
+      - ldap-data:/var/lib/ldap
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost:389 -b '' -s base namingContexts >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  takserver-db:
+    image: ${TAK_DB_IMAGE}
+    restart: unless-stopped
+    environment:
+      # Read by db-utils/takserver-setup-db.sh of the ZIP: password of martiuser
+      envpass: ${TAK_DB_PASSWORD}
+    volumes:
+      - tak-db-data:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          # The image creates TAK Server's tables at startup with a tool that connects to
+          # the host name written in the ZIP's example configuration: "tak-database".
+          # Without this name the tables are never created.
+          - tak-database
+    healthcheck:
+      # The image's own healthcheck passes as soon as PostgreSQL listens; here we wait for
+      # the "cot" database, the martiuser role and TAK Server's tables.
+      test: ["CMD-SHELL", "psql -U postgres -d cot -tAc \"select count(*) from pg_roles r, information_schema.tables t where r.rolname='martiuser' and t.table_name='certificate'\" | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  takserver:
+    image: ${TAK_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      takserver-db:
+        condition: service_healthy
+      openldap:
+        condition: service_healthy
+    # Our entrypoint starts TAK Server as the image does, then exits if one of its five
+    # processes dies, so that the restart policy brings it back.
+    entrypoint: ["/bin/bash", "/opt/tak-manager/entrypoint.sh"]
+    environment:
+      # Java heap sizes in MB. Empty: TAK Server sizes them from the machine's RAM.
+      API_MAX_HEAP: ${TAK_API_MAX_HEAP:-}
+      MESSAGING_MAX_HEAP: ${TAK_MESSAGING_MAX_HEAP:-}
+      CONFIG_MAX_HEAP: ${TAK_CONFIG_MAX_HEAP:-}
+      PLUGIN_MANAGER_MAX_HEAP: ${TAK_PLUGIN_MANAGER_MAX_HEAP:-}
+      RETENTION_MAX_HEAP: ${TAK_RETENTION_MAX_HEAP:-}
+    volumes:
+      - ./takserver/entrypoint.sh:/opt/tak-manager/entrypoint.sh:ro
+      - ./takserver/healthcheck.sh:/opt/tak-manager/healthcheck.sh:ro
+      - ./data/tak/CoreConfig.xml:/opt/tak/CoreConfig.xml
+      # Provided up front to avoid a race on first start (phase 0 report, section 11)
+      - ./data/tak/TAKIgniteConfig.xml:/opt/tak/TAKIgniteConfig.xml
+      # Holds the administrator role of the platform's API certificate
+      - ./data/tak/UserAuthenticationFile.xml:/opt/tak/UserAuthenticationFile.xml
+      - ./data/tak/certs:/opt/tak/certs/files
+      - ./data/tak/logs:/opt/tak/logs
+    ports:
+      - "${BIND_ADDRESS}:8089:8089"   # TAK clients (mutual TLS)
+      - "${BIND_ADDRESS}:8446:8446"   # enrollment (username + password)
+    networks:
+      default:
+        aliases:
+          # The name carried by a Let's Encrypt certificate on 8446, so the platform can
+          # verify it from inside the network.
+          - ${TAK_NETWORK_ALIAS:-takserver.internal}
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/opt/tak-manager/healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 180s
+
+volumes:
+  postgres-data:
+  ldap-config:
+  ldap-data:
+  tak-db-data:

@@ -1,0 +1,322 @@
+//! TAK Server 5.8 over HTTPS, with the calls validated in phase 0:
+//!
+//! - port 8443, client certificate declared administrator: groups, sessions, certificates;
+//! - port 8446, HTTP Basic with the directory account: certificate enrollment.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use rustls::pki_types::pem::PemObject;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use serde_json::Value;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
+
+use super::enroll;
+use super::{normalize_fingerprint, EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer};
+
+#[derive(Clone)]
+pub struct HttpTakConfig {
+    /// For example `https://takserver:8443`.
+    pub api_url: String,
+    /// For example `https://takserver:8446`.
+    pub enroll_url: String,
+    /// CA certificates that sign TAK Server's own certificate (root and intermediate), PEM.
+    pub ca_pem: Vec<u8>,
+    /// The platform's client certificate, declared administrator in TAK Server, PEM.
+    pub client_cert_pem: Vec<u8>,
+    /// Its private key, unencrypted PEM.
+    pub client_key_pem: Vec<u8>,
+    /// Value of the `version` parameter of enrollment requests, shown by TAK Server next to
+    /// the certificate.
+    pub client_version: String,
+}
+
+pub struct HttpTakServer {
+    config: HttpTakConfig,
+    api: reqwest::Client,
+    enroll: reqwest::Client,
+}
+
+fn crypto(e: impl std::fmt::Display) -> TakError {
+    TakError::Crypto(e.to_string())
+}
+
+fn unavailable(e: reqwest::Error) -> TakError {
+    TakError::Unavailable(format!("{e}{}", e.source_chain()))
+}
+
+trait SourceChain {
+    fn source_chain(&self) -> String;
+}
+
+impl SourceChain for reqwest::Error {
+    fn source_chain(&self) -> String {
+        let mut out = String::new();
+        let mut source = std::error::Error::source(self);
+        while let Some(e) = source {
+            out.push_str(&format!(": {e}"));
+            source = e.source();
+        }
+        out
+    }
+}
+
+/// Characters that may appear in a path segment sent to TAK Server. Platform usernames and
+/// subscription identifiers (`tls:12`) only use these; anything else is percent-encoded.
+fn encode_segment(segment: &str) -> String {
+    let mut out = String::new();
+    for b in segment.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.~:".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+impl HttpTakServer {
+    pub fn new(config: HttpTakConfig) -> Result<Self, TakError> {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+
+        let mut roots = rustls::RootCertStore::empty();
+        let mut private = 0;
+        for cert in CertificateDer::pem_slice_iter(&config.ca_pem) {
+            roots.add(cert.map_err(crypto)?).map_err(crypto)?;
+            private += 1;
+        }
+        if private == 0 {
+            return Err(TakError::Crypto("no CA certificate found in the TAK Server CA file".into()));
+        }
+
+        // 8443: private CA only, with the platform's administrator certificate.
+        let chain: Vec<CertificateDer<'static>> =
+            CertificateDer::pem_slice_iter(&config.client_cert_pem).collect::<Result<_, _>>().map_err(crypto)?;
+        let key = PrivateKeyDer::from_pem_slice(&config.client_key_pem).map_err(crypto)?;
+        let api_tls = rustls::ClientConfig::builder_with_provider(provider.clone())
+            .with_safe_default_protocol_versions()
+            .map_err(crypto)?
+            .with_root_certificates(roots.clone())
+            .with_client_auth_cert(chain, key)
+            .map_err(crypto)?;
+
+        // 8446: the private CA, or a public one when the connector presents a Let's Encrypt
+        // certificate (QR enrollment). No client certificate.
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let enroll_tls = rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(crypto)?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+
+        let build = |tls: rustls::ClientConfig| {
+            reqwest::Client::builder()
+                .tls_backend_preconfigured(tls)
+                .connect_timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(crypto)
+        };
+        Ok(Self { api: build(api_tls)?, enroll: build(enroll_tls)?, config })
+    }
+
+    async fn api_call(&self, method: reqwest::Method, path: &str) -> Result<reqwest::Response, TakError> {
+        let url = format!("{}{}", self.config.api_url, path);
+        let response =
+            self.api.request(method.clone(), &url).header("Accept", "application/json").send().await.map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: format!("{method} {path}"), status: response.status().as_u16() });
+        }
+        Ok(response)
+    }
+
+    async fn api_data(&self, path: &str) -> Result<Vec<Value>, TakError> {
+        let body: Value = self.api_call(reqwest::Method::GET, path).await?.json().await.map_err(unavailable)?;
+        match body.get("data") {
+            Some(Value::Array(items)) => Ok(items.clone()),
+            Some(Value::Null) | None => Ok(Vec::new()),
+            Some(other) => Err(TakError::Protocol(format!("{path}: data is not a list: {other}"))),
+        }
+    }
+}
+
+fn text(v: &Value, key: &str) -> Option<String> {
+    v.get(key).and_then(|x| x.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
+}
+
+fn date(v: &Value, key: &str) -> Option<OffsetDateTime> {
+    match v.get(key)? {
+        Value::String(s) => OffsetDateTime::parse(s, &Rfc3339).ok(),
+        Value::Number(n) => n.as_i64().and_then(|ms| OffsetDateTime::from_unix_timestamp_nanos(ms as i128 * 1_000_000).ok()),
+        _ => None,
+    }
+}
+
+/// Reads one element of `certadmin/cert`, whatever its state.
+pub fn parse_certificate(v: &Value) -> Option<IssuedCertificate> {
+    Some(IssuedCertificate {
+        id: v.get("id")?.as_i64()?,
+        username: text(v, "userDn")?,
+        fingerprint: normalize_fingerprint(&text(v, "hash")?),
+        client_uid: text(v, "clientUid"),
+        issued_at: date(v, "issuanceDate"),
+        expires_at: date(v, "expirationDate"),
+    })
+}
+
+/// True when TAK Server still accepts the certificate: neither revoked nor expired.
+pub fn is_usable(v: &Value, now: OffsetDateTime) -> bool {
+    let revoked = v.get("revocationDate").is_some_and(|d| !d.is_null());
+    let expired = date(v, "expirationDate").is_some_and(|expiry| expiry <= now);
+    !revoked && !expired
+}
+
+/// Reads one element of `subscriptions/all`.
+pub fn parse_subscription(v: &Value) -> Option<Subscription> {
+    let groups = v
+        .get("groups")
+        .and_then(|g| g.as_array())
+        .map(|items| {
+            let mut names: Vec<String> = items.iter().filter_map(|g| text(g, "name")).collect();
+            names.sort();
+            names.dedup();
+            names
+        })
+        .unwrap_or_default();
+    Some(Subscription {
+        subscription_uid: text(v, "subscriptionUid")?,
+        username: text(v, "username").unwrap_or_default(),
+        callsign: text(v, "callsign"),
+        client_uid: text(v, "clientUid"),
+        groups,
+    })
+}
+
+#[async_trait]
+impl TakServer for HttpTakServer {
+    async fn version(&self) -> Result<String, TakError> {
+        let body = self.api_call(reqwest::Method::GET, "/Marti/api/version").await?.text().await.map_err(unavailable)?;
+        Ok(body.trim().trim_matches('"').to_string())
+    }
+
+    async fn refresh_groups(&self, username: &str) -> Result<(), TakError> {
+        let path = format!("/Marti/api/groups/update/{}", encode_segment(username));
+        self.api_call(reqwest::Method::GET, &path).await.map(|_| ())
+    }
+
+    async fn subscriptions(&self) -> Result<Vec<Subscription>, TakError> {
+        let items = self.api_data("/Marti/api/subscriptions/all").await?;
+        Ok(items.iter().filter_map(parse_subscription).collect())
+    }
+
+    async fn cut_subscription(&self, subscription_uid: &str) -> Result<(), TakError> {
+        let path = format!("/Marti/api/subscriptions/delete/{}", encode_segment(subscription_uid));
+        self.api_call(reqwest::Method::DELETE, &path).await.map(|_| ())
+    }
+
+    async fn active_certificates(&self) -> Result<Vec<IssuedCertificate>, TakError> {
+        // Not `certadmin/cert/active`: on TAK Server 5.8 that list is "the latest certificate
+        // of each user and device", so it still shows a revoked certificate when it is the
+        // latest, and hides an older one that was never revoked and still works. The full
+        // list is read instead, and filtered here.
+        let items = self.api_data("/Marti/api/certadmin/cert").await?;
+        let now = OffsetDateTime::now_utc();
+        Ok(items.iter().filter(|v| is_usable(v, now)).filter_map(parse_certificate).collect())
+    }
+
+    async fn revoke_certificate(&self, id: i64) -> Result<(), TakError> {
+        self.api_call(reqwest::Method::DELETE, &format!("/Marti/api/certadmin/cert/revoke/{id}")).await.map(|_| ())
+    }
+
+    async fn enroll(&self, username: &str, password: &str, client_uid: &str) -> Result<EnrolledCertificate, TakError> {
+        let config_url = format!("{}/Marti/api/tls/config", self.config.enroll_url);
+        let response = self.enroll.get(&config_url).basic_auth(username, Some(password)).send().await.map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: "GET /Marti/api/tls/config".into(), status: response.status().as_u16() });
+        }
+        let name_entries = enroll::parse_name_entries(&response.text().await.map_err(unavailable)?);
+
+        let cn = username.to_string();
+        let made =
+            tokio::task::spawn_blocking(move || enroll::generate_key_and_csr(&name_entries, &cn)).await.map_err(crypto)??;
+
+        let sign_url = format!(
+            "{}/Marti/api/tls/signClient/v2?clientUid={}&version={}",
+            self.config.enroll_url,
+            encode_segment(client_uid),
+            encode_segment(&self.config.client_version)
+        );
+        let response = self
+            .enroll
+            .post(&sign_url)
+            .basic_auth(username, Some(password))
+            .header("Content-Type", "text/plain")
+            .header("Accept", "application/json")
+            .body(enroll::csr_body(&made.csr_der))
+            .send()
+            .await
+            .map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status {
+                call: "POST /Marti/api/tls/signClient/v2".into(),
+                status: response.status().as_u16(),
+            });
+        }
+        let body: Value = response.json().await.map_err(unavailable)?;
+        enroll::read_signed_response(username, made.private_key_der, &body)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn certificates_are_read_as_the_server_lists_them() {
+        // Shape observed on TAK Server 5.8-RELEASE-103 (phase 0, question 4).
+        let v = json!({"id": 7, "userDn": "dave", "clientUid": "spike-dave", "serialNumber": "7c8b879b",
+            "hash": "AB:CD:EF:01", "issuanceDate": "2026-11-19T14:49:32.461Z",
+            "expirationDate": "2026-12-19T14:49:32.460Z", "revocationDate": null});
+        let c = parse_certificate(&v).unwrap();
+        assert_eq!((c.id, c.username.as_str(), c.fingerprint.as_str()), (7, "dave", "abcdef01"));
+        assert_eq!(c.client_uid.as_deref(), Some("spike-dave"));
+        assert_eq!(c.expires_at.unwrap().unix_timestamp(), 1797691772);
+        assert!(parse_certificate(&json!({"id": 1})).is_none());
+    }
+
+    #[test]
+    fn revoked_and_expired_certificates_are_not_active() {
+        let now = OffsetDateTime::parse("2026-11-20T00:00:00Z", &Rfc3339).unwrap();
+        let cert = |revoked: Value, expires: &str| json!({"id": 1, "userDn": "u", "hash": "ab", "revocationDate": revoked, "expirationDate": expires});
+        assert!(is_usable(&cert(Value::Null, "2027-11-19T15:49:32.952Z"), now));
+        // Shape returned by TAK Server for a revoked certificate, which it still lists under
+        // certadmin/cert/active when it is the latest one of its user and device.
+        assert!(!is_usable(&cert(json!("2026-11-19T15:50:15.906Z"), "2027-11-19T15:49:32.952Z"), now));
+        assert!(!is_usable(&cert(Value::Null, "2026-11-19T15:49:32.952Z"), now));
+        assert!(
+            is_usable(&json!({"id": 1, "userDn": "u", "hash": "ab"}), now),
+            "no dates: assume usable, so it gets revoked when it should"
+        );
+    }
+
+    #[test]
+    fn subscriptions_are_read_as_the_server_lists_them() {
+        let v = json!({"subscriptionUid": "tls:11", "username": "frank", "callsign": "FRANK", "clientUid": "U1",
+            "groups": [{"name": "team-bravo", "direction": "IN"}, {"name": "team-bravo", "direction": "OUT"}]});
+        let s = parse_subscription(&v).unwrap();
+        assert_eq!(s.subscription_uid, "tls:11");
+        assert_eq!(s.groups, vec!["team-bravo".to_string()]);
+        let none = parse_subscription(&json!({"subscriptionUid": "tls:12", "username": "x", "groups": []})).unwrap();
+        assert!(none.groups.is_empty());
+    }
+
+    #[test]
+    fn path_segments_are_encoded() {
+        assert_eq!(encode_segment("alpha-shared"), "alpha-shared");
+        assert_eq!(encode_segment("tls:11"), "tls:11");
+        assert_eq!(encode_segment("a/b ?"), "a%2Fb%20%3F");
+    }
+}

@@ -1,0 +1,29 @@
+version: 1
+
+# Directory tree (replaces the one shipped with the image).
+# ou=People and ou=Group are the defaults of userBaseRDN / groupBaseRDN in
+# CoreConfig.xsd.
+
+dn: ${LDAP_INIT_ORG_DN}
+description: ${LDAP_INIT_ORG_NAME}
+objectClass: top
+objectClass: organization
+${LDAP_INIT_ORG_COMPUTED_ATTRS}
+
+dn: ou=People,${LDAP_INIT_ORG_DN}
+ou: People
+description: TAK accounts (one per person, or one per team with a shared identity)
+objectClass: top
+objectClass: organizationalUnit
+
+dn: ou=Group,${LDAP_INIT_ORG_DN}
+ou: Group
+description: TAK groups (one team or one event = one group)
+objectClass: top
+objectClass: organizationalUnit
+
+dn: ou=Services,${LDAP_INIT_ORG_DN}
+ou: Services
+description: Service accounts
+objectClass: top
+objectClass: organizationalUnit

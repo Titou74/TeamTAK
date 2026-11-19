@@ -1,0 +1,20 @@
+version: 1
+
+# The two service accounts. TAK accounts and groups are not created here: the platform
+# writes them from its database (reconciliation). Passwords come from deploy/.env.
+
+dn: cn=takserver,ou=Services,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: takserver
+description: Read-only account used by TAK Server (serviceAccountDN)
+userPassword: ${TM_LDAP_TAKSERVER_PW}
+
+dn: cn=tak-manager,ou=Services,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: tak-manager
+description: Read-write account of the platform, the only writer of ou=People and ou=Group
+userPassword: ${TM_LDAP_MANAGER_PW}

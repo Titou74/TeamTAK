@@ -1,0 +1,7 @@
+# Production: Caddy on the public ports, certificate from Let's Encrypt.
+services:
+  caddy:
+    ports:
+      - "${BIND_ADDRESS}:80:80"     # ACME HTTP challenge and redirect to HTTPS
+      - "${BIND_ADDRESS}:443:443"
+      - "${BIND_ADDRESS}:443:443/udp"

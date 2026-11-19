@@ -1,0 +1,23 @@
+{
+  "signature": "TAK Manager — {{url}}",
+  "login_code": {
+    "subject": "Your sign-in code: {{code}}",
+    "body": "Hello,\n\nYour sign-in code for TAK Manager is:\n\n    {{code}}\n\nIt is valid for {{minutes}} minutes and can be used once. If you did not ask for it, ignore this message: nobody can sign in without the code."
+  },
+  "invitation": {
+    "subject": "{{inviter}} invites you to the team {{team}}",
+    "body": "Hello,\n\n{{inviter}} invites you to join the team \"{{team}}\" on TAK Manager, where you will get your access to the TAK server.\n\nTo answer, sign in with this e-mail address ({{email}}):\n\n    {{url}}\n\nThe invitation is waiting on your home page. If you do not know this team, ignore this message."
+  },
+  "team_request": {
+    "subject": "New team request: {{team}}",
+    "body": "Hello,\n\n{{requester}} asks to create the team \"{{team}}\".\n\nMessage: {{message}}\n\nApprove or reject the request in the administration area:\n\n    {{url}}"
+  },
+  "team_approved": {
+    "subject": "Your team {{team}} is approved",
+    "body": "Hello,\n\nYour team \"{{team}}\" has been approved. You can now invite its members and set up its access to the TAK server:\n\n    {{url}}"
+  },
+  "team_rejected": {
+    "subject": "Your team request {{team}} was not approved",
+    "body": "Hello,\n\nYour request to create the team \"{{team}}\" was not approved.\n\nReason given: {{note}}"
+  }
+}

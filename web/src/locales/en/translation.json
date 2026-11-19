@@ -1,0 +1,364 @@
+{
+  "app": {
+    "name": "TAK Manager"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "copied": "Copied",
+    "copyThing": "Copy: {{thing}}",
+    "language": "Language",
+    "loading": "Loading…",
+    "optional": "optional",
+    "save": "Save",
+    "working": "One moment…"
+  },
+  "nav": {
+    "admin": "Administration",
+    "main": "Main navigation",
+    "menu": "Account menu",
+    "profile": "Profile",
+    "signOut": "Sign out",
+    "teams": "My teams"
+  },
+  "login": {
+    "title": "Sign in",
+    "intro": "Enter your e-mail address and we will send you a one-time code. There is no password to remember.",
+    "email": "E-mail address",
+    "emailPlaceholder": "you@example.org",
+    "send": "Send me a code",
+    "haveCode": "I already have a code",
+    "haveCodeIntro": "Enter the 6-digit code you were given for {{email}}.",
+    "codeTitle": "Enter your code",
+    "codeIntro": "We sent a 6-digit code to {{email}}. It is valid for {{minutes}} minutes.",
+    "code": "Code",
+    "verify": "Sign in",
+    "resend": "Send a new code",
+    "changeEmail": "Use another address",
+    "codeSent": "A new code is on its way."
+  },
+  "home": {
+    "title": "My teams",
+    "description": "A team is a group on the TAK server: its members see each other, and nobody else sees them.",
+    "empty": {
+      "title": "You are not in a team yet",
+      "description": "Without a team, an account has no access to the TAK server. There are two ways to get one:",
+      "invited": "A team leader invites you with this e-mail address: the invitation then appears on this page.",
+      "request": "You request a new team: an administrator reviews the request, and you become its leader."
+    },
+    "invitations": {
+      "title": "Invitations",
+      "text": "{{inviter}} invites you to join the team {{team}}.",
+      "accept": "Join",
+      "decline": "Decline",
+      "joined": "You are now a member of {{team}}."
+    },
+    "request": {
+      "open": "Request a team",
+      "title": "Request a team",
+      "description": "An administrator reviews each request. Once it is approved, you invite the members yourself.",
+      "name": "Team name",
+      "nameHelp": "It also names the team's channel in ATAK and iTAK.",
+      "modeHelp": "You can change this later in the team's settings.",
+      "message": "Message to the administrator",
+      "submit": "Send the request",
+      "sent": "Request sent. You will receive an e-mail when it is reviewed."
+    }
+  },
+  "status": {
+    "pending": "Waiting for approval",
+    "active": "Active",
+    "rejected": "Not approved",
+    "suspended": "Suspended"
+  },
+  "role": {
+    "leader": "Team leader",
+    "member": "Member",
+    "admin": "Administrator"
+  },
+  "mode": {
+    "label": "Connection mode",
+    "shared": {
+      "name": "Shared identity",
+      "description": "One TAK account and one zip for the whole team. Simple to hand out; if a phone is lost or a member leaves, the access is regenerated for everyone."
+    },
+    "individual": {
+      "name": "Individual accounts",
+      "description": "One TAK account per member, created and revoked one by one. Each member sets up their own devices."
+    },
+    "external": {
+      "name": "External accounts only",
+      "description": "The team leader creates a named TAK account for each person; these people need no account on this platform."
+    }
+  },
+  "team": {
+    "channel": "TAK channel: {{slug}}",
+    "notFound": "This team does not exist, or you are not a member of it.",
+    "notice": {
+      "reason": "Reason given: {{note}}",
+      "pending": {
+        "title": "Waiting for an administrator",
+        "text": "This team has been requested but not approved yet. Members and TAK accesses become available once it is approved."
+      },
+      "rejected": {
+        "title": "This request was not approved",
+        "text": "You can delete this request and send a new one."
+      },
+      "suspended": {
+        "title": "This team is suspended",
+        "text": "An administrator has suspended this team: its members are disconnected from the TAK server until it is reactivated."
+      }
+    },
+    "access": {
+      "title": "Access to the TAK server",
+      "sharedTitle": "Team access — {{team}}",
+      "sharedNotReady": "The team leader has not created the team access yet.",
+      "mine": "My access",
+      "externalTitle": "External — {{label}}",
+      "externalOnly": "In this team, the team leader hands out the accesses.",
+      "notCreated": "No access yet",
+      "create": "Create the access",
+      "connect": "Connect a device",
+      "certificates_one": "{{count}} active certificate, expires {{relative}}",
+      "certificates_other": "{{count}} active certificates, first expiry {{relative}}",
+      "noCertificate": "no device connected yet",
+      "pendingSync": "The access is saved but could not be sent to the TAK server yet. It will be retried automatically within a minute.",
+      "externalLabel": "External access for",
+      "externalPlaceholder": "Name of the person or partner",
+      "externalAdd": "Add an external access",
+      "externalHelp": "For someone who has no account on this platform. They connect to the team's channel like any member."
+    },
+    "members": {
+      "title": "Members",
+      "count_one": "{{count}} member, {{cap}} at most",
+      "count_other": "{{count}} members, {{cap}} at most",
+      "seatsLeft_one": "{{count}} invitation left",
+      "seatsLeft_other": "{{count}} invitations left",
+      "you": "you",
+      "promote": "Make leader",
+      "demote": "Make member",
+      "remove": "Remove",
+      "leave": "Leave the team",
+      "removeTitle": "Remove this member?",
+      "removeText": "{{name}} leaves the team. Their individual TAK access is revoked at once and their devices are disconnected.",
+      "leaveTitle": "Leave this team?",
+      "leaveText": "You leave {{team}}. Your individual TAK access is revoked at once and your devices are disconnected.",
+      "pending": "Invitations waiting for an answer",
+      "cancelInvitation": "Cancel the invitation of {{email}}",
+      "inviteLabel": "Invite by e-mail",
+      "inviteLanguage": "E-mail language",
+      "invite": "Invite",
+      "inviteHelp": "The person signs in with this address and finds the invitation on their home page. The e-mail language only applies if they have not chosen one yet.",
+      "full": "The team has reached its limit of {{cap}} members, pending invitations included. An administrator can raise it.",
+      "invited": "Invitation sent to {{email}}.",
+      "invitedNoMail": "Invitation saved, but the e-mail to {{email}} could not be sent. Tell them to sign in: the invitation is waiting for them."
+    },
+    "settings": {
+      "title": "Settings",
+      "modeHelp": "External accesses can be added in every mode.",
+      "modeTitle": "Switch to “{{mode}}”?",
+      "modeLoss_one": "{{count}} existing access does not fit this mode: it will be revoked and its devices disconnected.",
+      "modeLoss_other": "{{count}} existing accesses do not fit this mode: they will be revoked and their devices disconnected.",
+      "modeConfirm": "Change the mode",
+      "modeChanged_one": "Mode changed. {{count}} access was removed.",
+      "modeChanged_other": "Mode changed. {{count}} accesses were removed.",
+      "deleteTitle": "Delete this team",
+      "deleteHelp": "Removes the team, its members and every TAK access of it.",
+      "delete": "Delete the team",
+      "deleteConfirmTitle": "Delete {{team}}?",
+      "deleteConfirmText": "Every TAK access of the team is revoked and its devices are disconnected. This cannot be undone.",
+      "deleted": "{{team}} was deleted."
+    }
+  },
+  "access": {
+    "description": "Three ways to set up ATAK or iTAK. The zip never contains a callsign, a team colour or a role: the device keeps its own.",
+    "sharedNote": {
+      "title": "One identity for the whole team",
+      "text": "Every device of the team uses this access. Channel switches are shared too: a channel turned off on one device is turned off for all."
+    },
+    "tabs": {
+      "qr": "QR code",
+      "zip": "Zip file",
+      "manual": "Username and password"
+    },
+    "qr": {
+      "atakTitle": "ATAK (Android)",
+      "atakHelp": "Scan it from ATAK. It carries the server address, the username and the password.",
+      "itakTitle": "iTAK (iPhone)",
+      "itakHelp": "Scan it from iTAK, then enter the username and password of the third tab.",
+      "warning": "Anyone who sees the ATAK code can connect as this account: show it, do not send it. QR codes only work when the server's enrollment port has a publicly trusted certificate; otherwise use the zip file."
+    },
+    "zip": {
+      "certificateTitle": "Zip with certificate",
+      "certificateHelp": "The device connects as soon as the file is imported, without typing anything. The file is a key: hand it over like a password.",
+      "enrollmentTitle": "Zip without certificate",
+      "enrollmentHelp": "The device asks for the username and password, then obtains its own certificate from the server.",
+      "download": "Download",
+      "note": "Import the file in ATAK or iTAK (Import, then pick the zip)."
+    },
+    "manual": {
+      "host": "Server address",
+      "port": "Port",
+      "enrollPort": "Enrollment port",
+      "username": "Username",
+      "password": "Password",
+      "show": "Show the password",
+      "hide": "Hide the password",
+      "help": "For a manual setup: add a TAK server with this address and port over SSL, tick “Enroll for client certificate”, and enter the username and password."
+    },
+    "certificates": {
+      "none": "No certificate issued yet.",
+      "summary_one": "{{count}} active certificate, valid until {{date}} ({{relative}}).",
+      "summary_other": "{{count}} active certificates, the first one expires on {{date}} ({{relative}})."
+    },
+    "regenerate": {
+      "action": "Regenerate",
+      "title": "Regenerate this access?",
+      "text": "Every certificate of this access is revoked and its password is changed. The devices using it are disconnected at once and must be set up again with the new QR code or zip.",
+      "sharedText": "Every certificate of the team's shared access is revoked and its password is changed. All the team's devices are disconnected at once and must be set up again with the new QR code or zip.",
+      "confirm": "Regenerate",
+      "done": "Access regenerated. Hand out the new QR code or zip."
+    },
+    "remove": {
+      "action": "Remove",
+      "title": "Remove this access?",
+      "text": "Its certificates are revoked, its devices are disconnected at once, and its account is deleted from the TAK server. This cannot be undone.",
+      "confirm": "Remove the access",
+      "done": "Access removed.",
+      "pending": "Access removed. The TAK server could not be reached: the revocation will be applied automatically as soon as it answers."
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "description": "How you appear to the members of your teams, and the language of this site and of the e-mails you receive.",
+    "email": "E-mail address",
+    "displayName": "Display name",
+    "displayNameHelp": "Shown to the members of your teams instead of your e-mail address.",
+    "languageHelp": "Also used for the e-mails sent to you.",
+    "saved": "Profile saved."
+  },
+  "admin": {
+    "title": "Administration",
+    "description": "Approve team requests, set member limits, and check that the TAK server matches this platform.",
+    "memberCap": "Member limit",
+    "memberCapFor": "Member limit of {{team}}",
+    "tabs": {
+      "teams": "Teams",
+      "accounts": "Accounts",
+      "sync": "TAK server sync"
+    },
+    "requests": {
+      "title_one": "{{count}} request to review",
+      "title_other": "{{count}} requests to review",
+      "none": "No request is waiting.",
+      "by": "Requested by {{requester}} on {{date}}",
+      "note": "Note for the requester",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approved": "{{team}} is approved.",
+      "rejected": "The request for {{team}} is rejected."
+    },
+    "teams": {
+      "title": "Teams",
+      "none": "No team yet.",
+      "team": "Team",
+      "status": "Status",
+      "mode": "Mode",
+      "members": "Members",
+      "accesses": "TAK accesses",
+      "plusInvited_one": "+ {{count}} invited",
+      "plusInvited_other": "+ {{count}} invited",
+      "capSaved": "Member limit saved.",
+      "suspend": "Suspend",
+      "resume": "Reactivate",
+      "suspendTitle": "Suspend {{team}}?",
+      "suspendText": "The team's group is removed from the TAK server: its devices are disconnected and see nobody until the team is reactivated. Accounts and certificates are kept.",
+      "suspended": "{{team}} is suspended.",
+      "resumed": "{{team}} is active again.",
+      "deleteFor": "Delete {{team}}"
+    },
+    "accounts": {
+      "title_one": "{{count}} account",
+      "title_other": "{{count}} accounts",
+      "description": "Anyone can sign in, but an account without a team can do nothing and has no access to the TAK server.",
+      "account": "Account",
+      "teams": "Teams",
+      "lastLogin": "Last sign-in",
+      "never": "never",
+      "makeAdmin": "Make administrator",
+      "revokeAdmin": "Remove administrator role"
+    },
+    "sync": {
+      "title": "TAK server sync",
+      "description": "This platform's database is the reference. Every {{seconds}} seconds, and after each change, the directory read by the TAK server is compared with it and corrected.",
+      "directory": "Directory (OpenLDAP)",
+      "takServer": "TAK server",
+      "reachable": "reachable",
+      "unreachable": "unreachable",
+      "lastRun": "Last check",
+      "lastOk": "Last check without error",
+      "expected": "Expected on the TAK server",
+      "expectedValue": "{{accounts}} accounts in {{groups}} groups",
+      "drift7d": "Unexpected differences corrected (7 days)",
+      "errorsTitle": "The last check reported errors",
+      "run": "Check now",
+      "ran": "Check done.",
+      "journal": "Corrections journal",
+      "journalHelp": "What the checks changed. “Drift” marks a difference this platform did not cause itself: someone or something modified the directory or the TAK server directly.",
+      "noEvents": "Nothing has been changed yet.",
+      "when": "When",
+      "what": "Correction",
+      "account": "Account",
+      "group": "Group",
+      "origin": "Origin",
+      "drift": "Drift"
+    }
+  },
+  "reconcile": {
+    "kinds": {
+      "user_created": "Account created",
+      "password_set": "Password set",
+      "member_added": "Added to the group",
+      "member_removed": "Removed from the group",
+      "foreign_member_removed": "Unknown member removed from the group",
+      "user_deleted": "Account deleted",
+      "certificate_revoked": "Certificate revoked",
+      "orphan_certificate_revoked": "Certificate without access revoked",
+      "session_cut": "Session cut",
+      "groups_refreshed": "Groups pushed to the connected device"
+    },
+    "triggers": {
+      "change": "Platform change",
+      "periodic": "Periodic check",
+      "manual": "Manual check",
+      "startup": "Startup"
+    }
+  },
+  "errors": {
+    "unknown": "Something went wrong. Please try again.",
+    "network": "The server cannot be reached. Check your connection and try again.",
+    "unauthenticated": "Your session has ended. Please sign in again.",
+    "forbidden": "You are not allowed to do this.",
+    "not_found": "This no longer exists, or you do not have access to it.",
+    "invalid_input": "Some of the information entered is not valid.",
+    "invalid_email": "This e-mail address is not valid.",
+    "invalid_team_name": "This name cannot be used for a team. Use at least two letters or digits.",
+    "rate_limited": "Too many attempts. Please wait a while before trying again.",
+    "invalid_code": "This code is wrong or has expired. Check it, or ask for a new one.",
+    "mail_unavailable": "The e-mail could not be sent. Please try again in a moment.",
+    "team_name_taken": "A team with this name already exists.",
+    "too_many_pending_requests": "You already have several requests waiting. Wait for an answer before sending another one.",
+    "team_not_active": "This team is not active.",
+    "team_already_decided": "This request has already been reviewed.",
+    "team_full": "The team has reached its member limit.",
+    "already_member": "This person is already a member of the team.",
+    "already_invited": "This person has already been invited.",
+    "invitation_not_pending": "This invitation is no longer waiting for an answer.",
+    "last_leader": "A team needs at least one leader. Name another leader first.",
+    "access_exists": "This access already exists.",
+    "access_kind_not_allowed": "This kind of access does not fit the team's connection mode.",
+    "tak_unavailable": "The TAK server cannot be reached right now. Nothing is lost: try again in a moment.",
+    "directory_unavailable": "The directory of the TAK server cannot be reached right now. Try again in a moment.",
+    "internal": "The server met an unexpected problem. Please try again."
+  }
+}

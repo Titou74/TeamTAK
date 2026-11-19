@@ -1,8 +1,8 @@
-# Archives TAK Server (licence tak.gov, ne pas versionner)
+# TAK Server archives (tak.gov licence, never version them)
 *.zip
 takserver-docker-*/
 
-# Secrets et certificats générés
+# Secrets and generated certificates
 .env
 .env.*
 !.env.example
@@ -11,12 +11,15 @@ takserver-docker-*/
 *.pem
 *.key
 spike/work/
+# Everything install.sh generates: certificates, TAK Server configuration, logs
+deploy/data/
 
 # Build
 target/
 node_modules/
 dist/
 .DS_Store
+*.tsbuildinfo
 
 # Python
 __pycache__/

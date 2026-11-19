@@ -1,0 +1,23 @@
+{
+  "signature": "TAK Manager — {{url}}",
+  "login_code": {
+    "subject": "Votre code de connexion : {{code}}",
+    "body": "Bonjour,\n\nVotre code de connexion à TAK Manager est :\n\n    {{code}}\n\nIl est valable {{minutes}} minutes et ne sert qu'une fois. Si vous ne l'avez pas demandé, ignorez ce message : personne ne peut se connecter sans ce code."
+  },
+  "invitation": {
+    "subject": "{{inviter}} vous invite dans l'équipe {{team}}",
+    "body": "Bonjour,\n\n{{inviter}} vous invite à rejoindre l'équipe « {{team}} » sur TAK Manager, où vous obtiendrez votre accès au serveur TAK.\n\nPour répondre, connectez-vous avec cette adresse e-mail ({{email}}) :\n\n    {{url}}\n\nL'invitation vous attend sur votre page d'accueil. Si vous ne connaissez pas cette équipe, ignorez ce message."
+  },
+  "team_request": {
+    "subject": "Nouvelle demande d'équipe : {{team}}",
+    "body": "Bonjour,\n\n{{requester}} demande la création de l'équipe « {{team}} ».\n\nMessage : {{message}}\n\nApprouvez ou refusez la demande dans l'espace d'administration :\n\n    {{url}}"
+  },
+  "team_approved": {
+    "subject": "Votre équipe {{team}} est approuvée",
+    "body": "Bonjour,\n\nVotre équipe « {{team}} » a été approuvée. Vous pouvez maintenant inviter ses membres et configurer son accès au serveur TAK :\n\n    {{url}}"
+  },
+  "team_rejected": {
+    "subject": "Votre demande d'équipe {{team}} n'a pas été approuvée",
+    "body": "Bonjour,\n\nVotre demande de création de l'équipe « {{team}} » n'a pas été approuvée.\n\nMotif indiqué : {{note}}"
+  }
+}

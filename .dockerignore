@@ -1,0 +1,12 @@
+# The build context of the platform image is the repository root: keep it small, and keep
+# the TAK Server ZIP, secrets and generated files out of it.
+*
+!Cargo.toml
+!Cargo.lock
+!crates/
+!web/
+web/node_modules/
+web/dist/
+**/target/
+**/.env
+**/.env.*
