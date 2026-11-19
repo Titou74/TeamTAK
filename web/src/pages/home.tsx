@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRightIcon, MailOpenIcon, PlusIcon, UsersIcon } from "lucide-react";
+import { CalendarClockIcon, ChevronRightIcon, MailOpenIcon, PlusIcon, UsersIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { ModeBadge, RoleBadge, StatusBadge } from "@/components/badges";
 import { ModePicker } from "@/components/mode-picker";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -181,6 +182,12 @@ export function HomePage({ me }: { me: Me }) {
                       <StatusBadge status={team.status} />
                       <RoleBadge role={team.role} />
                       {team.status === "active" && <ModeBadge mode={team.mode} />}
+                      {team.event_invitations > 0 && (
+                        <Badge className="border-primary/40 text-primary" variant="outline">
+                          <CalendarClockIcon />
+                          {t("home.eventInvitations", { count: team.event_invitations })}
+                        </Badge>
+                      )}
                     </CardDescription>
                   </CardHeader>
                 </Card>

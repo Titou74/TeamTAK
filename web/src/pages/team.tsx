@@ -9,6 +9,7 @@ import { AccessDialog } from "@/components/access-dialog";
 import { PageHeader } from "@/components/app-shell";
 import { ModeBadge, RoleBadge, StatusBadge } from "@/components/badges";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EventsSection } from "@/components/events-section";
 import { ModePicker } from "@/components/mode-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -485,7 +486,7 @@ function StatusNotice({ detail }: { detail: TeamDetail }) {
   );
 }
 
-/** A team: its TAK accesses, its members, its settings. */
+/** A team: its TAK accesses, its events, its members, its settings. */
 export function TeamPage({ me }: { me: Me }) {
   const { t } = useTranslation();
   const { id = "" } = useParams();
@@ -535,6 +536,7 @@ export function TeamPage({ me }: { me: Me }) {
       <div className="space-y-6">
         <StatusNotice detail={detail} />
         {team.status === "active" && detail.my_role && <AccessSection detail={detail} me={me} reload={reload} />}
+        {(team.status === "active" || team.status === "suspended") && <EventsSection team={team} isMember={detail.my_role !== null} />}
         <MembersSection detail={detail} me={me} reload={reload} />
         <SettingsSection detail={detail} reload={reload} />
       </div>

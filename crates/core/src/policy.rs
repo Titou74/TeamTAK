@@ -90,6 +90,21 @@ pub enum Action {
     CreateAccess(AccessRef),
     /// Regenerate or remove an access.
     ManageAccess(AccessRef),
+    /// See the events a team takes part in: name, dates, participating teams, state.
+    ViewEvents,
+    /// See the invitations to events waiting for the team's answer.
+    ViewEventInvitations,
+    /// Create an event hosted by the team.
+    CreateEvent,
+    /// List the names of the other active teams, for the sole purpose of inviting them.
+    ListInvitableTeams,
+    /// On an event the team hosts: invite a team, withdraw an invitation, remove a
+    /// participating team, change the dates, end it early.
+    ManageEvent,
+    /// Call an event off. The actor is looked at in the host team.
+    CancelEvent,
+    /// On an event the team is invited to: accept, decline, or leave after accepting.
+    AnswerEventInvitation,
 }
 
 /// The single authorisation rule of the platform.
@@ -99,6 +114,14 @@ pub enum Action {
 /// - A leader manages the team and every access of it.
 /// - A member sees the team, uses the shared access, and handles their own individual access.
 /// - An account outside the team can do nothing with it.
+///
+/// Cross-team events follow the same pattern, the team being the one the caller acts for:
+/// - a leader creates events for their team, runs the ones it hosts, and answers the
+///   invitations it receives; a leader also sees the names of the other teams, to invite them;
+/// - a member sees the events of their team but manages nothing, and does not see the
+///   invitations still waiting for an answer;
+/// - an administrator sees every event and can cancel one, nothing more: events need no
+///   approval, and inviting or answering belongs to the teams.
 pub fn can(actor: Actor, action: Action) -> bool {
     use TeamRole::*;
     match action {
@@ -116,6 +139,12 @@ pub fn can(actor: Actor, action: Action) -> bool {
             Some(Member) => a.kind == AccessKind::Individual && a.owned_by_actor,
             None => false,
         },
+        Action::ViewEvents => actor.is_admin || actor.team_role.is_some(),
+        Action::ViewEventInvitations => actor.is_admin || actor.team_role == Some(Leader),
+        Action::CancelEvent => actor.is_admin || actor.team_role == Some(Leader),
+        Action::CreateEvent | Action::ListInvitableTeams | Action::ManageEvent | Action::AnswerEventInvitation => {
+            actor.team_role == Some(Leader)
+        }
     }
 }
 
@@ -157,8 +186,56 @@ mod tests {
             Action::UseAccess(access(AccessKind::Shared, false)),
             Action::CreateAccess(access(AccessKind::Individual, true)),
             Action::ManageAccess(access(AccessKind::External, false)),
+            Action::ViewEvents,
+            Action::ViewEventInvitations,
+            Action::CreateEvent,
+            Action::ListInvitableTeams,
+            Action::ManageEvent,
+            Action::CancelEvent,
+            Action::AnswerEventInvitation,
         ] {
             assert!(!can(OUTSIDER, action), "{action:?}");
+        }
+    }
+
+    #[test]
+    fn a_leader_runs_the_events_of_their_team() {
+        for action in [
+            Action::ViewEvents,
+            Action::ViewEventInvitations,
+            Action::CreateEvent,
+            Action::ListInvitableTeams,
+            Action::ManageEvent,
+            Action::CancelEvent,
+            Action::AnswerEventInvitation,
+        ] {
+            assert!(can(LEADER, action), "{action:?}");
+        }
+    }
+
+    #[test]
+    fn a_member_sees_the_events_and_manages_nothing() {
+        assert!(can(MEMBER, Action::ViewEvents));
+        for action in [
+            Action::ViewEventInvitations,
+            Action::CreateEvent,
+            Action::ListInvitableTeams,
+            Action::ManageEvent,
+            Action::CancelEvent,
+            Action::AnswerEventInvitation,
+        ] {
+            assert!(!can(MEMBER, action), "{action:?}");
+        }
+    }
+
+    #[test]
+    fn an_administrator_sees_every_event_and_can_only_cancel() {
+        assert!(can(ADMIN, Action::ViewEvents));
+        assert!(can(ADMIN, Action::ViewEventInvitations));
+        assert!(can(ADMIN, Action::CancelEvent));
+        // No approval of events, and no acting in a team's name.
+        for action in [Action::CreateEvent, Action::ListInvitableTeams, Action::ManageEvent, Action::AnswerEventInvitation] {
+            assert!(!can(ADMIN, action), "{action:?}");
         }
     }
 

@@ -39,7 +39,9 @@
   },
   "home": {
     "title": "My teams",
-    "description": "A team is a group on the TAK server: its members see each other, and nobody else sees them.",
+    "description": "A team is a group on the TAK server: its members see each other, and nobody else sees them, except the teams it shares an event with, for the duration of that event.",
+    "eventInvitations_one": "{{count}} event invitation",
+    "eventInvitations_other": "{{count}} event invitations",
     "empty": {
       "title": "You are not in a team yet",
       "description": "Without a team, an account has no access to the TAK server. There are two ways to get one:",
@@ -228,6 +230,117 @@
       "pending": "Access removed. The TAK server could not be reached: the revocation will be applied automatically as soon as it answers."
     }
   },
+  "events": {
+    "title": "Cross-team events",
+    "description": "During an event, your team and the other participating teams see each other on the TAK server through a dedicated channel. It appears on the devices at the start and disappears at the end, by itself. Outside events, teams never see each other.",
+    "descriptionOutside": "During an event, the participating teams see each other on the TAK server through a dedicated channel. It appears on the devices at the start and disappears at the end, by itself. Outside events, teams never see each other.",
+    "sharedNote": "Your team uses a shared identity: an event applies to all its devices at once, and a channel switched off on one device is switched off for all of them.",
+    "none": "No event at the moment.",
+    "noneLeader": "Create one, then invite the teams you want to work with.",
+    "noneMember": "Team leaders create events and answer the invitations of other teams.",
+    "past_one": "{{count}} past event",
+    "past_other": "{{count}} past events",
+    "hostedByUs": "Hosted by your team",
+    "hostedBy": "Hosted by {{team}}",
+    "channel": "Channel in ATAK and iTAK during the event:",
+    "pendingSync": "Saved, but the TAK server could not be reached: the change will be applied automatically within a minute.",
+    "phase": {
+      "scheduled": "Upcoming",
+      "running": "In progress",
+      "ended": "Ended",
+      "cancelled": "Cancelled"
+    },
+    "when": {
+      "scheduled": "starts {{relative}}",
+      "running": "ends {{relative}}",
+      "ended": "ended {{relative}}",
+      "cancelled": "cancelled {{relative}}"
+    },
+    "cancelReason": {
+      "host": "Cancelled by the host team.",
+      "admin": "Cancelled by an administrator.",
+      "host_deleted": "Cancelled because the host team was deleted."
+    },
+    "teamStatus": {
+      "host": "host",
+      "accepted": "takes part",
+      "invited": "invited, no answer yet",
+      "declined": "declined",
+      "left": "left",
+      "removed": "removed"
+    },
+    "form": {
+      "start": "Start",
+      "end": "End",
+      "timeZone": "Dates and times are in your time zone ({{zone}}). Each person sees them in their own.",
+      "endBeforeStart": "The end must be after the start."
+    },
+    "create": {
+      "open": "New event",
+      "title": "New event",
+      "description": "{{team}} hosts the event. You then invite the other teams; each team leader accepts or declines. No administrator is involved.",
+      "name": "Event name",
+      "nameHelp": "It also names the channel shown in ATAK and iTAK during the event.",
+      "startNow": "Start now",
+      "submit": "Create the event",
+      "created": "Event created. Invite the teams that take part."
+    },
+    "invitation": {
+      "title": "Invitations to events",
+      "text": "{{host}} invites your team to the event “{{event}}”.",
+      "others": "Also taking part: {{teams}}.",
+      "first": "No other team has accepted yet.",
+      "effect": "If you accept, your members and theirs see each other on the TAK server for the duration of the event.",
+      "accept": "Accept",
+      "decline": "Decline",
+      "accepted": "Your team takes part in “{{event}}”.",
+      "declined": "Invitation declined."
+    },
+    "invite": {
+      "label": "Invite a team",
+      "placeholder": "Choose a team…",
+      "noTeam": "No other team to invite",
+      "submit": "Invite",
+      "done": "{{team}} is invited. Its leaders receive an e-mail."
+    },
+    "removeTeam": {
+      "action": "Remove {{team}} from the event",
+      "title": "Remove {{team}} from the event?",
+      "text": "If the team takes part, its members stop seeing the other teams, and being seen by them, at once. Its leaders are told by e-mail. You can invite it again later.",
+      "confirm": "Remove the team",
+      "done": "{{team}} is no longer in the event."
+    },
+    "dates": {
+      "action": "Change the dates",
+      "title": "Change the dates of “{{event}}”",
+      "description": "The channel appears and disappears at the new dates. The leaders of the participating teams are told by e-mail.",
+      "running": "The event has started: only its end can change. The leaders of the participating teams are told by e-mail.",
+      "submit": "Save the dates",
+      "done": "Dates changed."
+    },
+    "end": {
+      "action": "End now",
+      "title": "End “{{event}}” now?",
+      "text": "The event's channel disappears from every device at once and the teams stop seeing each other. This cannot be undone.",
+      "confirm": "End the event",
+      "done": "Event ended."
+    },
+    "cancel": {
+      "action": "Cancel the event",
+      "title": "Cancel “{{event}}”?",
+      "text": "The event will not take place. If it is running, its channel disappears from every device at once and the teams stop seeing each other. The leaders of the teams concerned are told by e-mail. This cannot be undone.",
+      "confirm": "Cancel the event",
+      "keep": "Keep the event",
+      "done": "Event cancelled."
+    },
+    "leave": {
+      "action": "Leave the event",
+      "title": "Leave “{{event}}”?",
+      "text": "Your members stop seeing the other teams, and being seen by them, at once. The host team is told by e-mail and can invite you again.",
+      "confirm": "Leave the event",
+      "done": "Your team left the event."
+    }
+  },
   "profile": {
     "title": "Profile",
     "description": "How you appear to the members of your teams, and the language of this site and of the e-mails you receive.",
@@ -239,11 +352,12 @@
   },
   "admin": {
     "title": "Administration",
-    "description": "Approve team requests, set member limits, and check that the TAK server matches this platform.",
+    "description": "Approve team requests, set member limits, keep an eye on events, and check that the TAK server matches this platform.",
     "memberCap": "Member limit",
     "memberCapFor": "Member limit of {{team}}",
     "tabs": {
       "teams": "Teams",
+      "events": "Events",
       "accounts": "Accounts",
       "sync": "TAK server sync"
     },
@@ -277,6 +391,16 @@
       "resumed": "{{team}} is active again.",
       "deleteFor": "Delete {{team}}"
     },
+    "events": {
+      "title_one": "{{count}} event",
+      "title_other": "{{count}} events",
+      "description": "Teams create and run their events themselves; nothing here needs approval. You can cancel an event: its channel then disappears from the TAK server at once.",
+      "none": "No event yet.",
+      "event": "Event",
+      "state": "State",
+      "dates": "Dates",
+      "teams": "Teams"
+    },
     "accounts": {
       "title_one": "{{count}} account",
       "title_other": "{{count}} accounts",
@@ -290,7 +414,7 @@
     },
     "sync": {
       "title": "TAK server sync",
-      "description": "This platform's database is the reference. Every {{seconds}} seconds, and after each change, the directory read by the TAK server is compared with it and corrected.",
+      "description": "This platform's database is the reference. Every {{seconds}} seconds, after each change, and at the start and the end of each event, the directory read by the TAK server is compared with it and corrected.",
       "directory": "Directory (OpenLDAP)",
       "takServer": "TAK server",
       "reachable": "reachable",
@@ -331,7 +455,8 @@
       "change": "Platform change",
       "periodic": "Periodic check",
       "manual": "Manual check",
-      "startup": "Startup"
+      "startup": "Startup",
+      "schedule": "Start or end of an event"
     }
   },
   "errors": {
@@ -359,6 +484,14 @@
     "access_kind_not_allowed": "This kind of access does not fit the team's connection mode.",
     "tak_unavailable": "The TAK server cannot be reached right now. Nothing is lost: try again in a moment.",
     "directory_unavailable": "The directory of the TAK server cannot be reached right now. Try again in a moment.",
+    "invalid_event_name": "This name cannot be used for an event. Use at least two letters or digits.",
+    "invalid_event_dates": "These dates are not valid: an event ends after it starts, in the future, lasts between one minute and one year, and its start cannot change once it has begun.",
+    "event_name_taken": "Another event that is not over has the same name. Choose another one.",
+    "too_many_events": "Your team already hosts too many events. End or cancel one first.",
+    "event_closed": "This event is over or cancelled: it can no longer be changed.",
+    "event_not_running": "This event has not started yet. You can cancel it instead.",
+    "team_already_in_event": "This team is already invited to the event, or already takes part in it.",
+    "event_invitation_not_pending": "This invitation is no longer waiting for an answer.",
     "internal": "The server met an unexpected problem. Please try again."
   }
 }

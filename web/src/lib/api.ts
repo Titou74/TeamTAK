@@ -6,11 +6,14 @@ import type {
   AdminAccount,
   AdminTeam,
   AdminTeams,
+  InvitableTeam,
   Me,
   PublicConfig,
   Reconciliation,
   Team,
   TeamDetail,
+  TeamEvent,
+  TeamEvents,
   TeamRole,
 } from "./types";
 
@@ -101,7 +104,27 @@ export const api = {
     return { name, blob: await response.blob() };
   },
 
+  // Cross-team events. Every call names the team the caller acts for.
+  teamEvents: (teamId: string) => json<TeamEvents>("GET", `/teams/${teamId}/events`),
+  invitableTeams: (teamId: string) => json<{ teams: InvitableTeam[] }>("GET", `/teams/${teamId}/invitable-teams`),
+  /** Dates are ISO 8601 in UTC; a missing start means "now". */
+  createEvent: (teamId: string, body: { name: string; starts_at?: string; ends_at: string }) =>
+    json<Synced & { id: string; group_name: string }>("POST", `/teams/${teamId}/events`, body),
+  updateEvent: (teamId: string, eventId: string, dates: { starts_at?: string; ends_at?: string }) =>
+    json<Synced>("PATCH", `/teams/${teamId}/events/${eventId}`, dates),
+  endEvent: (teamId: string, eventId: string) => json<Synced>("POST", `/teams/${teamId}/events/${eventId}/end`),
+  cancelEvent: (teamId: string, eventId: string) => json<Synced>("POST", `/teams/${teamId}/events/${eventId}/cancel`),
+  inviteTeamToEvent: (teamId: string, eventId: string, invitedTeamId: string) =>
+    json<{ team_id: string; name: string }>("POST", `/teams/${teamId}/events/${eventId}/teams`, { team_id: invitedTeamId }),
+  removeTeamFromEvent: (teamId: string, eventId: string, otherTeamId: string) =>
+    json<Synced>("DELETE", `/teams/${teamId}/events/${eventId}/teams/${otherTeamId}`),
+  answerEvent: (teamId: string, eventId: string, accept: boolean) =>
+    json<Synced & { accepted: boolean }>("POST", `/teams/${teamId}/events/${eventId}/answer`, { accept }),
+  leaveEvent: (teamId: string, eventId: string) => json<Synced>("POST", `/teams/${teamId}/events/${eventId}/leave`),
+
   adminTeams: () => json<AdminTeams>("GET", "/admin/teams"),
+  adminEvents: () => json<{ events: TeamEvent[] }>("GET", "/admin/events"),
+  adminCancelEvent: (eventId: string) => json<Synced>("POST", `/admin/events/${eventId}/cancel`),
   decideTeam: (id: string, approve: boolean, options: { member_cap?: number; note?: string }) =>
     json<Team>("POST", `/admin/teams/${id}/decision`, { approve, ...options }),
   adminUpdateTeam: (id: string, changes: { member_cap?: number; suspended?: boolean }) =>

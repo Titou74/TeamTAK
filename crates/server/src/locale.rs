@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use serde_json::Value;
+use time::OffsetDateTime;
 
 include!(concat!(env!("OUT_DIR"), "/email_locales.rs"));
 
@@ -55,6 +56,17 @@ fn text(language: &str, path: &[&str]) -> &'static str {
         .unwrap_or_else(|| panic!("e-mail text {} missing in the default language", path.join(".")))
 }
 
+/// A date and time written the way `language` writes them, in UTC and saying so.
+///
+/// The server does not know where the reader is, so an e-mail gives UTC; the site shows the
+/// same dates in the reader's own time zone. The format comes from the language's
+/// `email.json` (`datetime_format`, in the notation of the `time` crate).
+pub fn format_datetime(language: &str, at: OffsetDateTime) -> String {
+    let pattern = text(resolve(language), &["datetime_format"]);
+    let utc = at.to_offset(time::UtcOffset::UTC);
+    time::format_description::parse_borrowed::<2>(pattern).ok().and_then(|format| utc.format(&format).ok()).unwrap_or_else(|| utc.to_string())
+}
+
 fn fill(template: &str, vars: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
     for (name, value) in vars {
@@ -71,12 +83,38 @@ pub enum Template {
     TeamRequest,
     TeamApproved,
     TeamRejected,
+    /// To the leaders of a team invited to an event.
+    EventInvitation,
+    /// To the leaders of the host: an invited team accepted, declined, or left.
+    EventAccepted,
+    EventDeclined,
+    EventLeft,
+    /// To the leaders of every team concerned: the event was called off, its dates
+    /// changed, or it was ended before its time.
+    EventCancelled,
+    EventRescheduled,
+    EventEndedEarly,
+    /// To the leaders of a team the host took out of an event.
+    EventTeamRemoved,
 }
 
 impl Template {
     #[cfg_attr(not(test), allow(dead_code))]
-    pub const ALL: &'static [Template] =
-        &[Template::LoginCode, Template::Invitation, Template::TeamRequest, Template::TeamApproved, Template::TeamRejected];
+    pub const ALL: &'static [Template] = &[
+        Template::LoginCode,
+        Template::Invitation,
+        Template::TeamRequest,
+        Template::TeamApproved,
+        Template::TeamRejected,
+        Template::EventInvitation,
+        Template::EventAccepted,
+        Template::EventDeclined,
+        Template::EventLeft,
+        Template::EventCancelled,
+        Template::EventRescheduled,
+        Template::EventEndedEarly,
+        Template::EventTeamRemoved,
+    ];
 
     pub fn key(self) -> &'static str {
         match self {
@@ -85,6 +123,14 @@ impl Template {
             Template::TeamRequest => "team_request",
             Template::TeamApproved => "team_approved",
             Template::TeamRejected => "team_rejected",
+            Template::EventInvitation => "event_invitation",
+            Template::EventAccepted => "event_accepted",
+            Template::EventDeclined => "event_declined",
+            Template::EventLeft => "event_left",
+            Template::EventCancelled => "event_cancelled",
+            Template::EventRescheduled => "event_rescheduled",
+            Template::EventEndedEarly => "event_ended_early",
+            Template::EventTeamRemoved => "event_team_removed",
         }
     }
 }
@@ -176,6 +222,45 @@ mod tests {
         assert!(!en.body.contains("{{") && !fr.body.contains("{{"));
         let fallback = render(Template::LoginCode, "de", &vars, "u");
         assert_eq!(fallback.subject, en.subject);
+    }
+
+    #[test]
+    fn dates_are_written_in_the_recipient_language_and_in_utc() {
+        let at = time::macros::datetime!(2026-11-20 15:05 +01:00);
+        assert_eq!(format_datetime("en", at), "2026-11-20 14:05 UTC");
+        assert_eq!(format_datetime("fr", at), "20/11/2026 à 14:05 UTC");
+        assert_eq!(format_datetime("xx", at), format_datetime("en", at), "unknown language: English");
+        for language in languages() {
+            assert!(format_datetime(language, at).contains("UTC"), "{language}: the time zone must be said");
+        }
+    }
+
+    #[test]
+    fn event_emails_are_complete_in_every_language() {
+        let vars = [
+            ("event", "Exercice Mont-Blanc"),
+            ("channel", "evt-exercice-mont-blanc"),
+            ("host", "Alpha"),
+            ("team", "Bravo"),
+            ("start", "20/11/2026 à 14:05 UTC"),
+            ("end", "21/11/2026 à 18:00 UTC"),
+            ("url", "https://tak.example.org/teams/1"),
+        ];
+        let event_templates: Vec<Template> = Template::ALL.iter().copied().filter(|t| t.key().starts_with("event_")).collect();
+        assert_eq!(event_templates.len(), 8);
+        for template in event_templates {
+            for language in languages() {
+                let mail = render(template, language, &vars, "https://tak.example.org");
+                let all = format!("{}\n{}", mail.subject, mail.body);
+                assert!(!all.contains("{{"), "{language} {}: a placeholder was left: {all}", template.key());
+                assert!(mail.subject.contains("Exercice Mont-Blanc"), "{language} {}", template.key());
+                assert!(mail.body.contains("https://tak.example.org/teams/1"), "{language} {}", template.key());
+            }
+        }
+        let fr = render(Template::EventInvitation, "fr", &vars, "u");
+        assert!(fr.subject.contains("Alpha") && fr.body.contains("20/11/2026 à 14:05 UTC") && fr.body.contains("evt-exercice-mont-blanc"));
+        let en = render(Template::EventAccepted, "en", &vars, "u");
+        assert!(en.subject.contains("Bravo"), "{}", en.subject);
     }
 
     #[test]

@@ -6,8 +6,9 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
-import { ModeBadge, StatusBadge } from "@/components/badges";
+import { EventPhaseBadge, ModeBadge, StatusBadge } from "@/components/badges";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EventTeams } from "@/components/events-section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,9 +19,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { formatDate, formatDateTime, formatNumber, formatRelative } from "@/lib/format";
+import { formatDate, formatDateTime, formatDateTimeRange, formatNumber, formatRelative } from "@/lib/format";
 import { useErrorText, useNotifyError } from "@/lib/hooks";
-import type { AdminTeam, AdminTeams, Me } from "@/lib/types";
+import type { AdminTeam, AdminTeams, Me, TeamEvent } from "@/lib/types";
 
 function RequestCard({ team, defaults, reload }: { team: AdminTeam; defaults: AdminTeams; reload: () => Promise<unknown> }) {
   const { t } = useTranslation();
@@ -252,6 +253,100 @@ function TeamsTab() {
   );
 }
 
+function EventsTab() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const errorText = useErrorText();
+  const notifyError = useNotifyError();
+  const [cancelling, setCancelling] = useState<TeamEvent | null>(null);
+  const query = useQuery({ queryKey: ["admin", "events"], queryFn: api.adminEvents, refetchInterval: 30_000 });
+
+  async function cancel(event: TeamEvent) {
+    try {
+      const result = await api.adminCancelEvent(event.id);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "events"] });
+      if (result.synced) toast.success(t("events.cancel.done"));
+      else toast.warning(t("events.pendingSync"));
+    } catch (e) {
+      notifyError(e);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "events"] });
+    }
+  }
+
+  if (query.isPending) return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
+  if (query.isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{errorText(query.error)}</AlertDescription>
+      </Alert>
+    );
+  }
+  const events = query.data.events;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("admin.events.title", { count: events.length })}</CardTitle>
+        <CardDescription>{t("admin.events.description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("admin.events.none")}</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("admin.events.event")}</TableHead>
+                <TableHead>{t("admin.events.state")}</TableHead>
+                <TableHead>{t("admin.events.dates")}</TableHead>
+                <TableHead>{t("admin.events.teams")}</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell>
+                    <span className="font-medium">{event.name}</span>
+                    <div className="font-mono text-xs text-muted-foreground">{event.group_name}</div>
+                  </TableCell>
+                  <TableCell>
+                    <EventPhaseBadge phase={event.phase} />
+                    {event.phase === "cancelled" && event.cancel_reason && (
+                      <div className="mt-1 max-w-48 text-xs whitespace-normal text-muted-foreground">{t(`events.cancelReason.${event.cancel_reason}`)}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="whitespace-normal">{formatDateTimeRange(event.starts_at, event.ends_at)}</TableCell>
+                  <TableCell className="whitespace-normal">
+                    <EventTeams teams={event.teams} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {event.permissions.cancel && (
+                      <Button variant="ghost" size="sm" onClick={() => setCancelling(event)}>
+                        <XIcon />
+                        {t("events.cancel.action")}
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+      <ConfirmDialog
+        open={cancelling !== null}
+        onOpenChange={(open) => !open && setCancelling(null)}
+        title={t("events.cancel.title", { event: cancelling?.name ?? "" })}
+        description={<p>{t("events.cancel.text")}</p>}
+        confirmLabel={t("events.cancel.confirm")}
+        dismissLabel={t("events.cancel.keep")}
+        destructive
+        onConfirm={() => (cancelling ? cancel(cancelling) : Promise.resolve())}
+      />
+    </Card>
+  );
+}
+
 function AccountsTab({ me }: { me: Me }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -459,7 +554,7 @@ function SyncTab() {
   );
 }
 
-/** Administration: team requests, teams, accounts, and the directory's state. */
+/** Administration: team requests, teams, events, accounts, and the directory's state. */
 export function AdminPage({ me }: { me: Me }) {
   const { t } = useTranslation();
   return (
@@ -468,11 +563,15 @@ export function AdminPage({ me }: { me: Me }) {
       <Tabs defaultValue="teams">
         <TabsList>
           <TabsTrigger value="teams">{t("admin.tabs.teams")}</TabsTrigger>
+          <TabsTrigger value="events">{t("admin.tabs.events")}</TabsTrigger>
           <TabsTrigger value="accounts">{t("admin.tabs.accounts")}</TabsTrigger>
           <TabsTrigger value="sync">{t("admin.tabs.sync")}</TabsTrigger>
         </TabsList>
         <TabsContent value="teams" className="pt-4">
           <TeamsTab />
+        </TabsContent>
+        <TabsContent value="events" className="pt-4">
+          <EventsTab />
         </TabsContent>
         <TabsContent value="accounts" className="pt-4">
           <AccountsTab me={me} />

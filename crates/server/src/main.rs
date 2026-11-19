@@ -5,6 +5,7 @@ mod admin;
 mod auth;
 mod config;
 mod error;
+mod events;
 mod locale;
 mod mail;
 mod reconciler;
@@ -119,6 +120,15 @@ fn api_router(state: SharedState) -> Router {
         .route("/teams/{id}/invitations/{invitation_id}", delete(teams::cancel_invitation))
         .route("/teams/{id}/members/{account_id}", patch(teams::set_member_role).delete(teams::remove_member))
         .route("/teams/{id}/accesses", post(accesses::create_access))
+        .route("/teams/{id}/invitable-teams", get(events::invitable_teams))
+        .route("/teams/{id}/events", get(events::list_team_events).post(events::create_event))
+        .route("/teams/{id}/events/{event_id}", patch(events::update_event))
+        .route("/teams/{id}/events/{event_id}/end", post(events::end_event))
+        .route("/teams/{id}/events/{event_id}/cancel", post(events::cancel_event))
+        .route("/teams/{id}/events/{event_id}/teams", post(events::invite_team))
+        .route("/teams/{id}/events/{event_id}/teams/{other_team_id}", delete(events::remove_team))
+        .route("/teams/{id}/events/{event_id}/answer", post(events::answer_event))
+        .route("/teams/{id}/events/{event_id}/leave", post(events::leave_event))
         .route("/invitations/{id}/answer", post(teams::answer_invitation))
         .route("/accesses/{id}", get(accesses::access_detail).delete(accesses::delete_access))
         .route("/accesses/{id}/package/{form}", get(accesses::access_package))
@@ -126,6 +136,8 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/teams", get(admin::list_teams))
         .route("/admin/teams/{id}", patch(admin::update_team))
         .route("/admin/teams/{id}/decision", post(admin::decide_team))
+        .route("/admin/events", get(events::admin_list_events))
+        .route("/admin/events/{id}/cancel", post(events::admin_cancel_event))
         .route("/admin/accounts", get(admin::list_accounts))
         .route("/admin/accounts/{id}", patch(admin::update_account))
         .route("/admin/reconciliation", get(admin::reconciliation))

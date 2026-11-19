@@ -268,7 +268,8 @@ pub async fn update_team(
     Ok(Json(json!({ "removed_accesses": removed, "synced": synced })))
 }
 
-/// `DELETE /api/teams/{id}`: removes the team, its members and every TAK access of it.
+/// `DELETE /api/teams/{id}`: removes the team, its members and every TAK access of it. The
+/// events it hosts are cancelled, and it disappears from the events it took part in.
 pub async fn delete_team(
     State(state): State<SharedState>,
     CurrentAccount(account): CurrentAccount,
@@ -277,11 +278,19 @@ pub async fn delete_team(
     let ctx = team_context(&state, team_id, &account).await?;
     ctx.require(Action::ManageTeam)?;
     let mut tx = state.db.begin().await?;
+    let events = crate::events::before_team_deletion(&mut tx, team_id, &ctx.team.name).await?;
     let removed = retire_accesses(&mut tx, team_id, RetireScope::WholeTeam).await?;
     sqlx::query("DELETE FROM teams WHERE id = $1").bind(team_id).execute(&mut *tx).await?;
     tx.commit().await?;
     tracing::info!(team = %ctx.team.slug, removed, by = %account.email, "team deleted");
-    let synced = if removed > 0 { apply_change(&state).await } else { true };
+    let synced = if removed > 0 {
+        apply_change(&state).await
+    } else {
+        // Nothing to change in the directory, but the dates the scheduler waits for may be gone.
+        state.reconciler.schedule_changed();
+        true
+    };
+    crate::events::after_team_deletion(&state, events, &account).await?;
     Ok(Json(json!({ "removed_accesses": removed, "synced": synced })))
 }
 

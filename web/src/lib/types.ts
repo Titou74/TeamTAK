@@ -20,6 +20,8 @@ export interface MyTeam {
   mode: AccessKind;
   role: TeamRole;
   decision_note: string;
+  /** Invitations to events waiting for an answer; counted for the team's leaders only. */
+  event_invitations: number;
 }
 
 export interface MyInvitation {
@@ -101,6 +103,44 @@ export interface TeamDetail {
   };
 }
 
+export type EventPhase = "scheduled" | "running" | "ended" | "cancelled";
+/** Where a team stands in an event; "host" is the team that created it. */
+export type EventTeamStatus = "host" | "accepted" | "invited" | "declined" | "left" | "removed";
+
+export interface EventTeam {
+  /** Given only to those who run the event (leaders of the host) and to administrators. */
+  team_id: string | null;
+  name: string;
+  status: EventTeamStatus;
+}
+
+export interface TeamEvent {
+  id: string;
+  name: string;
+  /** Name of the TAK group: the channel shown in ATAK and iTAK while the event runs. */
+  group_name: string;
+  starts_at: string;
+  ends_at: string;
+  cancelled_at: string | null;
+  cancel_reason: "host" | "admin" | "host_deleted" | null;
+  phase: EventPhase;
+  host_team_name: string;
+  /** How the team the list was asked for relates to the event; null in the administration area. */
+  relation: "host" | "invited" | "accepted" | null;
+  teams: EventTeam[];
+  permissions: { manage: boolean; end: boolean; cancel: boolean; answer: boolean; leave: boolean };
+}
+
+export interface TeamEvents {
+  events: TeamEvent[];
+  permissions: { create: boolean };
+}
+
+export interface InvitableTeam {
+  id: string;
+  name: string;
+}
+
 export interface CertificateView {
   fingerprint: string;
   source: "package" | "device";
@@ -162,7 +202,7 @@ export interface AdminAccount {
 export interface ReconcileEvent {
   id: number;
   occurred_at: string;
-  trigger: "change" | "periodic" | "manual" | "startup";
+  trigger: "change" | "periodic" | "manual" | "startup" | "schedule";
   kind: string;
   subject: string;
   group_name: string | null;

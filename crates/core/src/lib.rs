@@ -5,6 +5,7 @@
 //! [`directory::Directory`] and [`tak::TakServer`] traits, so either backend can be replaced.
 
 pub mod directory;
+pub mod events;
 pub mod login;
 pub mod names;
 pub mod package;

@@ -3,10 +3,12 @@
 A self-service web platform for a TAK Server, centred on teams. A user asks for a team, an
 administrator approves it, the team leader invites the members and chooses how they connect to
 TAK Server; the platform creates the TAK accounts, groups and certificates and keeps them in line
-with its own database.
+with its own database. Teams never see each other, except for the duration of an event they agree
+to share.
 
 - Specification and decisions: [`docs/PLAN.md`](docs/PLAN.md)
-- What phase 1 delivers and what was verified: [`docs/phase-1-report.md`](docs/phase-1-report.md)
+- Cross-team events, what was verified and how: [`docs/phase-2-report.md`](docs/phase-2-report.md)
+- The core of the platform, what was verified: [`docs/phase-1-report.md`](docs/phase-1-report.md)
 - Technical validation of TAK Server 5.8 with OpenLDAP: [`docs/phase-0-report.md`](docs/phase-0-report.md)
 
 ## What is in the box
@@ -177,10 +179,18 @@ certificate is lost, including the certificate authority. `--images` also remove
   platform submits the signing request with the access's account. *Regenerate* revokes every
   certificate of the access, changes its password and enrolls again. *Remove* revokes, then deletes
   the account.
-- **Reconciliation.** PostgreSQL is the source of truth. After every change, and every minute, a
-  pass compares it with OpenLDAP and TAK Server and corrects the difference: accounts, group
-  memberships, passwords, certificates that should not work, sessions left with no group. What a
-  periodic pass corrects is reported as drift in the administration area.
+- **Cross-team events.** A team leader creates an event with a start and an end and invites other
+  teams; each invited team's leader accepts or declines. No administrator is involved. While the
+  event runs, every TAK account of the host and of the teams that accepted is also in a group
+  named `evt-<event name>`, which ATAK and iTAK show as one more channel: the teams see each
+  other. The group appears at the start and disappears at the end by itself, on devices that stay
+  connected; nothing is added to any zip. A team that leaves, is removed or is suspended loses it
+  at once. Dates are entered and shown in the browser's time zone and stored in UTC.
+- **Reconciliation.** PostgreSQL is the source of truth. After every change, every minute, and at
+  the instant an event starts or ends, a pass compares it with OpenLDAP and TAK Server and corrects
+  the difference: accounts, group memberships, passwords, certificates that should not work,
+  sessions left with no group. What a pass corrects without the platform having asked for it is
+  reported as drift in the administration area.
 
 ### QR codes and port 8446
 
@@ -235,9 +245,10 @@ same keys and placeholders and that every key used by the code exists.
 scripts/test-unit.sh
 ```
 
-Runs the Rust unit tests (domain rules, authorisation, login-code limits, reconciliation against
-in-memory backends, zip and PKCS#12 generation, e-mail texts, and the check that every API error
-code and reconciliation event is translated in every language) and the web checks (translation
+Runs the Rust unit tests (domain rules, authorisation, login-code limits, the rules of events and
+which groups an account gets at a given time, reconciliation against in-memory backends, zip and
+PKCS#12 generation, e-mail texts, and the check that every API error code and reconciliation
+event is translated in every language) and the web checks (translation
 files, lint rule against hard-coded text, type check). It needs no running service.
 
 ```bash
@@ -248,6 +259,8 @@ Runs the integration tests against the real stack, which must be up in local mod
 (`./install.sh --local`). They drive the platform through its HTTP API, read login codes in the
 mail catcher, read what was written to OpenLDAP, and connect scripted TAK clients to TAK Server on
 8089 and 8446. They prove, among other things, that two members of a team see each other, that
-another team does not see them, and that regenerating a shared identity cuts every old
-certificate. The tests use random names and can be replayed on the same stack. A word after the
-command runs only the tests whose name contains it.
+another team does not see them, that regenerating a shared identity cuts every old certificate,
+and that two teams see each other from the scheduled start of an event to its scheduled end and
+not a moment outside it, without reconnecting. The tests use random names and can be replayed on
+the same stack. A word after the command runs only the tests whose name contains it. The whole
+suite takes about five minutes; one of the event tests stops and restarts the `app` container.

@@ -95,6 +95,35 @@ pub fn compose_exec(service: &str, args: &[&str], stdin: Option<&str>) -> (bool,
     (output.status.success(), text)
 }
 
+/// Runs `docker compose <args>` on the stack and returns its output.
+pub fn compose(args: &[&str]) -> (bool, String) {
+    let output = Command::new("docker").current_dir(repo_root().join("deploy")).arg("compose").args(args).output().expect("docker compose");
+    let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    (output.status.success(), text)
+}
+
+/// Stops the platform's container. OpenLDAP, TAK Server and the connected TAK clients stay.
+pub fn stop_platform() {
+    let (ok, output) = compose(&["stop", "app"]);
+    assert!(ok, "stopping the platform failed: {output}");
+}
+
+/// Starts the platform's container again and waits until it answers through the proxy.
+pub async fn start_platform() {
+    let (ok, output) = compose(&["start", "app"]);
+    assert!(ok, "starting the platform failed: {output}");
+    let http = reqwest::Client::new();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let answer = http.get(format!("{}/api/health", base_url())).send().await;
+        if answer.is_ok_and(|r| r.status().is_success()) {
+            return;
+        }
+        assert!(Instant::now() < deadline, "the platform did not come back");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
 // ------------------------------------------------------------------------------- directory
 
 fn manager_dn() -> String {
@@ -206,6 +235,52 @@ pub async fn latest_mail(to: &str) -> Mail {
         assert!(Instant::now() < deadline, "no e-mail received by {to}");
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
+}
+
+/// The latest message received by `to` whose subject contains `needle`, waiting up to
+/// fifteen seconds for it. Notifications are sent in the background, so the latest message
+/// of an address is not always the one a test expects.
+pub async fn mail_about(to: &str, needle: &str) -> Mail {
+    let http = reqwest::Client::new();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let list: Value = http
+            .get(format!("{}/api/v1/search", mailpit_url()))
+            .query(&[("query", format!("to:{to}")), ("limit", "100".to_string())])
+            .send()
+            .await
+            .expect("mail catcher reachable")
+            .json()
+            .await
+            .unwrap();
+        let messages = list["messages"].as_array().cloned().unwrap_or_default();
+        if let Some(found) = messages.iter().find(|m| m["Subject"].as_str().unwrap_or_default().contains(needle)) {
+            let id = found["ID"].as_str().unwrap();
+            let message: Value =
+                http.get(format!("{}/api/v1/message/{id}", mailpit_url())).send().await.unwrap().json().await.unwrap();
+            return Mail {
+                subject: message["Subject"].as_str().unwrap_or_default().to_string(),
+                text: message["Text"].as_str().unwrap_or_default().to_string(),
+            };
+        }
+        let subjects: Vec<&str> = messages.iter().filter_map(|m| m["Subject"].as_str()).collect();
+        assert!(Instant::now() < deadline, "no e-mail about {needle:?} received by {to}; it has: {subjects:?}");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+/// Subjects of every message received by `to`, newest first.
+pub async fn mail_subjects(to: &str) -> Vec<String> {
+    let list: Value = reqwest::Client::new()
+        .get(format!("{}/api/v1/search", mailpit_url()))
+        .query(&[("query", format!("to:{to}")), ("limit", "100".to_string())])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    list["messages"].as_array().map(|m| m.iter().filter_map(|m| m["Subject"].as_str().map(str::to_string)).collect()).unwrap_or_default()
 }
 
 pub async fn mail_count(to: &str) -> u64 {
@@ -382,6 +457,110 @@ pub async fn create_access(session: &Session, team_id: &str, body: Value) -> Str
     created["id"].as_str().unwrap().to_string()
 }
 
+/// Creates an access, downloads its zip with certificate, and returns what a device needs
+/// to connect with it.
+pub async fn access_identity(session: &Session, team_id: &str, body: Value) -> Identity {
+    let access = create_access(session, team_id, body).await;
+    Package::open(&session.package(&access, "certificate").await).identity()
+}
+
+// ------------------------------------------------------------------------------- events
+
+pub fn iso(at: time::OffsetDateTime) -> String {
+    at.format(&time::format_description::well_known::Rfc3339).unwrap()
+}
+
+pub fn parse_time(value: &Value) -> time::OffsetDateTime {
+    let text = value.as_str().unwrap_or_else(|| panic!("not a date: {value}"));
+    time::OffsetDateTime::parse(text, &time::format_description::well_known::Rfc3339).unwrap()
+}
+
+pub fn utc_in(seconds: i64) -> time::OffsetDateTime {
+    time::OffsetDateTime::now_utc() + time::Duration::seconds(seconds)
+}
+
+/// The moment of this process's monotonic clock that corresponds to a date.
+pub fn instant_of(at: time::OffsetDateTime) -> Instant {
+    let delta = at - time::OffsetDateTime::now_utc();
+    let now = Instant::now();
+    if delta.is_negative() {
+        now.checked_sub(delta.unsigned_abs()).unwrap_or(now)
+    } else {
+        now + delta.unsigned_abs()
+    }
+}
+
+pub struct EventFixture {
+    pub id: String,
+    pub name: String,
+    /// Name of the TAK group, `evt-…`.
+    pub group: String,
+    pub starts_at: time::OffsetDateTime,
+    pub ends_at: time::OffsetDateTime,
+}
+
+/// A leader creates an event for their team. `starts_in` is `None` for an event that
+/// starts at once.
+pub async fn create_event(host: &TeamFixture, starts_in: Option<i64>, lasts: i64) -> EventFixture {
+    let name = unique("Exercise ");
+    let starts_at = starts_in.map(utc_in);
+    let ends_at = starts_at.unwrap_or_else(|| utc_in(0)) + time::Duration::seconds(lasts);
+    let created = host
+        .leader
+        .post(
+            &format!("/teams/{}/events", host.id),
+            json!({ "name": name, "starts_at": starts_at.map(iso), "ends_at": iso(ends_at) }),
+        )
+        .await
+        .ok();
+    assert_eq!(created["synced"], true);
+    EventFixture {
+        id: created["id"].as_str().unwrap().to_string(),
+        name,
+        group: created["group_name"].as_str().unwrap().to_string(),
+        starts_at: parse_time(&created["starts_at"]),
+        ends_at: parse_time(&created["ends_at"]),
+    }
+}
+
+pub async fn invite_to_event(host: &TeamFixture, event: &EventFixture, team: &TeamFixture) {
+    host.leader.post(&format!("/teams/{}/events/{}/teams", host.id, event.id), json!({ "team_id": team.id })).await.ok();
+}
+
+/// The leader of an invited team answers; on acceptance the change must be live at once.
+pub async fn answer_event(team: &TeamFixture, event: &EventFixture, accept: bool) {
+    let answer =
+        team.leader.post(&format!("/teams/{}/events/{}/answer", team.id, event.id), json!({ "accept": accept })).await.ok();
+    assert_eq!(answer["synced"], true, "an answer must be applied when the call returns");
+}
+
+/// An event as `session` sees it from the team `team_id`; `Null` when it is not listed.
+pub async fn event_seen_by(session: &Session, team_id: &str, event_id: &str) -> Value {
+    let list = session.get(&format!("/teams/{team_id}/events")).await.ok();
+    list["events"].as_array().unwrap().iter().find(|e| e["id"] == event_id).cloned().unwrap_or(Value::Null)
+}
+
+/// `name:status` of the teams listed in an event, sorted.
+pub fn event_teams(event: &Value) -> Vec<String> {
+    let mut teams: Vec<String> = event["teams"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no event: {event}"))
+        .iter()
+        .map(|t| format!("{}:{}", t["name"].as_str().unwrap(), t["status"].as_str().unwrap()))
+        .collect();
+    teams.sort();
+    teams
+}
+
+/// What the reconciliation journal holds about a group, oldest first.
+pub async fn journal_of_group(admin: &Session, group: &str) -> Vec<Value> {
+    let report = admin.get("/admin/reconciliation").await.ok();
+    let mut entries: Vec<Value> =
+        report["events"].as_array().unwrap().iter().filter(|e| e["group_name"] == group).cloned().collect();
+    entries.reverse();
+    entries
+}
+
 // ------------------------------------------------------------------------------- zips
 
 pub struct Package {
@@ -531,8 +710,9 @@ pub async fn device_enroll(
 
 // ------------------------------------------------------------------------------- TAK client
 
-/// A scripted TAK client: mutual TLS on 8089, one position (CoT XML) per second, every
-/// received event recorded. It does not negotiate the protobuf protocol, so the server
+/// A scripted TAK client: mutual TLS on 8089, one position (CoT XML) per second (or per
+/// `period`), every received event recorded. It never reconnects: a client that still
+/// receives after a change kept the same connection through it. It does not negotiate the protobuf protocol, so the server
 /// keeps talking XML, as it does with ATAK until negotiation.
 pub struct TakClient {
     pub uid: String,
@@ -561,6 +741,11 @@ fn position_event(uid: &str) -> String {
 impl TakClient {
     /// Opens a connection; an error means the server refused the handshake.
     pub async fn connect(identity: &Identity, label: &str) -> Result<Self, String> {
+        Self::connect_every(identity, label, Duration::from_secs(1)).await
+    }
+
+    /// Same, sending a position every `period`: a shorter one measures delays more finely.
+    pub async fn connect_every(identity: &Identity, label: &str, period: Duration) -> Result<Self, String> {
         install_crypto();
         let chain: Vec<CertificateDer<'static>> = identity.chain.iter().cloned().map(CertificateDer::from).collect();
         let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key.clone()));
@@ -589,7 +774,7 @@ impl TakClient {
                     closed_w.store(true, Ordering::SeqCst);
                     break;
                 }
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(period).await;
             }
             let _ = writer.shutdown().await;
         });
@@ -628,6 +813,30 @@ impl TakClient {
     /// True when a position of `other` arrived after `since`.
     pub fn saw_since(&self, other: &TakClient, since: Instant) -> bool {
         self.seen.lock().unwrap().iter().any(|(at, uid)| *at >= since && uid == &other.uid)
+    }
+
+    /// When the first position of `other` arrived at or after `since`.
+    pub fn first_seen_since(&self, other: &TakClient, since: Instant) -> Option<Instant> {
+        self.seen.lock().unwrap().iter().find(|(at, uid)| *at >= since && uid == &other.uid).map(|(at, _)| *at)
+    }
+
+    /// When the latest position of `other` arrived.
+    pub fn last_seen(&self, other: &TakClient) -> Option<Instant> {
+        self.seen.lock().unwrap().iter().rev().find(|(_, uid)| uid == &other.uid).map(|(at, _)| *at)
+    }
+
+    /// Waits until a position of `other` arrives at or after `since`, and returns when it did.
+    pub async fn wait_first_seen(&self, other: &TakClient, since: Instant, timeout: Duration) -> Option<Instant> {
+        let deadline = Instant::now().max(since) + timeout;
+        loop {
+            if let Some(at) = self.first_seen_since(other, since) {
+                return Some(at);
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     /// Waits until a position of `other` arrives; false after `timeout`.

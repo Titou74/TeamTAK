@@ -66,6 +66,23 @@ api_errors! {
     /// TAK Server could not be reached or refused; nothing was changed, try again.
     TakUnavailable => ("tak_unavailable", SERVICE_UNAVAILABLE),
     DirectoryUnavailable => ("directory_unavailable", SERVICE_UNAVAILABLE),
+    /// An event name that yields no usable TAK group name.
+    InvalidEventName => ("invalid_event_name", BAD_REQUEST),
+    /// End before the start, already past, too short, too long, or a start moved after the
+    /// event began.
+    InvalidEventDates => ("invalid_event_dates", BAD_REQUEST),
+    /// Another event that is not over has the same TAK group name.
+    EventNameTaken => ("event_name_taken", CONFLICT),
+    /// The team already hosts the maximum number of events that are not over.
+    TooManyEvents => ("too_many_events", CONFLICT),
+    /// The event has ended or was cancelled: nothing about it can change.
+    EventClosed => ("event_closed", CONFLICT),
+    /// Only a running event can be ended early.
+    EventNotRunning => ("event_not_running", CONFLICT),
+    /// The team is already invited to the event, or already takes part in it.
+    TeamAlreadyInEvent => ("team_already_in_event", CONFLICT),
+    /// No invitation to this event is waiting for the team's answer.
+    EventInvitationNotPending => ("event_invitation_not_pending", CONFLICT),
     Internal => ("internal", INTERNAL_SERVER_ERROR),
 }
 
@@ -105,6 +122,21 @@ impl From<tak_manager_core::tak::TakError> for ApiError {
     fn from(e: tak_manager_core::tak::TakError) -> Self {
         tracing::warn!(error = %e, "TAK Server call failed");
         ApiError::TakUnavailable
+    }
+}
+
+impl From<tak_manager_core::events::EventError> for ApiError {
+    fn from(e: tak_manager_core::events::EventError) -> Self {
+        use tak_manager_core::events::EventError;
+        match e {
+            EventError::Closed => ApiError::EventClosed,
+            EventError::InvalidDates => ApiError::InvalidEventDates,
+            EventError::NotRunning => ApiError::EventNotRunning,
+            EventError::AlreadyInEvent => ApiError::TeamAlreadyInEvent,
+            EventError::NotInvited => ApiError::EventInvitationNotPending,
+            // A team that does not take part is not in the event for the caller.
+            EventError::NotParticipating => ApiError::NotFound,
+        }
     }
 }
 
@@ -166,6 +198,12 @@ mod tests {
             for kind in tak_manager_core::reconcile::CHANGE_KINDS {
                 let text = json.pointer(&format!("/reconcile/kinds/{kind}")).and_then(|v| v.as_str());
                 assert!(text.is_some_and(|t| !t.trim().is_empty()), "reconcile.kinds.{kind} missing in {}", file.display());
+            }
+            // And for the origin of each pass, shown next to it.
+            for trigger in crate::reconciler::Trigger::ALL {
+                let name = trigger.as_str();
+                let text = json.pointer(&format!("/reconcile/triggers/{name}")).and_then(|v| v.as_str());
+                assert!(text.is_some_and(|t| !t.trim().is_empty()), "reconcile.triggers.{name} missing in {}", file.display());
             }
         }
     }

@@ -1,5 +1,6 @@
 {
   "signature": "TAK Manager — {{url}}",
+  "datetime_format": "[day]/[month]/[year] à [hour]:[minute] UTC",
   "login_code": {
     "subject": "Votre code de connexion : {{code}}",
     "body": "Bonjour,\n\nVotre code de connexion à TAK Manager est :\n\n    {{code}}\n\nIl est valable {{minutes}} minutes et ne sert qu'une fois. Si vous ne l'avez pas demandé, ignorez ce message : personne ne peut se connecter sans ce code."
@@ -19,5 +20,37 @@
   "team_rejected": {
     "subject": "Votre demande d'équipe {{team}} n'a pas été approuvée",
     "body": "Bonjour,\n\nVotre demande de création de l'équipe « {{team}} » n'a pas été approuvée.\n\nMotif indiqué : {{note}}"
+  },
+  "event_invitation": {
+    "subject": "{{host}} invite votre équipe à l'événement {{event}}",
+    "body": "Bonjour,\n\nL'équipe « {{host}} » invite votre équipe « {{team}} » à l'événement « {{event}} ».\n\n    Début : {{start}}\n    Fin :   {{end}}\n\nSi vous acceptez, les membres de votre équipe et ceux des autres équipes participantes se voient sur le serveur TAK pendant la durée de l'événement, par un canal nommé {{channel}} qui apparaît tout seul dans ATAK et iTAK et disparaît à la fin. Il n'y a rien à installer ni à configurer sur les appareils.\n\nEn tant que chef d'équipe, acceptez ou refusez sur la page de votre équipe (les dates y sont affichées dans votre fuseau horaire) :\n\n    {{url}}"
+  },
+  "event_accepted": {
+    "subject": "{{team}} rejoint votre événement {{event}}",
+    "body": "Bonjour,\n\nL'équipe « {{team}} » a accepté votre invitation à l'événement « {{event}} » (du {{start}} au {{end}}).\n\nSes membres partagent le canal {{channel}} avec les vôtres pendant la durée de l'événement.\n\n    {{url}}"
+  },
+  "event_declined": {
+    "subject": "{{team}} a refusé votre événement {{event}}",
+    "body": "Bonjour,\n\nL'équipe « {{team}} » a refusé votre invitation à l'événement « {{event}} » (du {{start}} au {{end}}).\n\nVous pouvez l'inviter de nouveau depuis la page de votre équipe :\n\n    {{url}}"
+  },
+  "event_left": {
+    "subject": "{{team}} a quitté votre événement {{event}}",
+    "body": "Bonjour,\n\nL'équipe « {{team}} » ne participe plus à votre événement « {{event}} ». Ses membres ont immédiatement cessé de voir les autres équipes et d'être vus par elles.\n\n    {{url}}"
+  },
+  "event_cancelled": {
+    "subject": "L'événement {{event}} est annulé",
+    "body": "Bonjour,\n\nL'événement « {{event}} » organisé par l'équipe « {{host}} » (du {{start}} au {{end}}) a été annulé.\n\nSon canal {{channel}} n'existe plus : les équipes qui y participaient ne se voient plus sur le serveur TAK.\n\n    {{url}}"
+  },
+  "event_rescheduled": {
+    "subject": "Nouvelles dates pour l'événement {{event}}",
+    "body": "Bonjour,\n\nL'équipe « {{host}} » a modifié les dates de l'événement « {{event}} ». Il se déroule désormais :\n\n    Début : {{start}}\n    Fin :   {{end}}\n\nLe canal {{channel}} apparaît et disparaît tout seul à ces dates. La page de votre équipe les affiche dans votre fuseau horaire :\n\n    {{url}}"
+  },
+  "event_ended_early": {
+    "subject": "L'événement {{event}} est terminé",
+    "body": "Bonjour,\n\nL'équipe « {{host}} » a mis fin à l'événement « {{event}} » avant la fin prévue.\n\nSon canal {{channel}} n'existe plus : les équipes qui y participaient ne se voient plus sur le serveur TAK.\n\n    {{url}}"
+  },
+  "event_team_removed": {
+    "subject": "Votre équipe ne fait plus partie de l'événement {{event}}",
+    "body": "Bonjour,\n\nL'équipe « {{host}} » a retiré votre équipe « {{team}} » de l'événement « {{event}} » (du {{start}} au {{end}}).\n\nSi votre équipe y participait, ses membres ont immédiatement cessé de voir les autres équipes et d'être vus par elles.\n\n    {{url}}"
   }
 }

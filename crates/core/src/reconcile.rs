@@ -328,6 +328,9 @@ pub async fn run_pass_with(
     // 1. Directory: everything except account deletions.
     let mut deletions: Vec<String> = Vec::new();
     let mut touched: BTreeSet<String> = BTreeSet::new();
+    // Set when an account that was in no group is given one: its open sessions, which TAK
+    // Server lists without a username, will never receive it.
+    let mut gave_a_first_group = false;
     match directory.snapshot().await {
         Err(e) => report.errors.push(format!("reading the directory: {e}")),
         Ok(snapshot) => {
@@ -340,6 +343,8 @@ pub async fn run_pass_with(
                 ));
                 return report;
             }
+            let had_a_group: BTreeSet<&str> =
+                snapshot.groups.values().flat_map(|g| g.members.iter().map(String::as_str)).collect();
             for action in plan_directory(desired, &snapshot) {
                 let (result, change) = match &action {
                     DirectoryAction::CreateUser { username } => {
@@ -377,6 +382,9 @@ pub async fn run_pass_with(
                     Ok(()) => {
                         if matches!(change, Change::MemberAdded { .. } | Change::MemberRemoved { .. }) {
                             touched.insert(change.subject().to_string());
+                        }
+                        if matches!(change, Change::MemberAdded { .. }) && !had_a_group.contains(change.subject()) {
+                            gave_a_first_group = true;
                         }
                         report.changes.push(change);
                     }
@@ -438,7 +446,13 @@ pub async fn run_pass_with(
     }
 
     // 5. Sessions that still hold groups they should not, or miss the ones they should have.
-    let changed_something = !report.changes.is_empty();
+    // Group-less sessions are cut when one of them may be waiting for a group it will never
+    // receive, or may belong to an access that was just withdrawn. A pass that only moved
+    // accounts in and out of additional groups (an event starting or ending) leaves them
+    // alone: every account concerned already had a group, so none of them is group-less.
+    let only_extra_groups_moved = !gave_a_first_group
+        && report.changes.iter().all(|c| matches!(c, Change::MemberAdded { .. } | Change::MemberRemoved { .. }));
+    let changed_something = !report.changes.is_empty() && !only_extra_groups_moved;
     match tak.subscriptions().await {
         Err(e) => report.errors.push(format!("listing sessions: {e}")),
         Ok(subscriptions) => {
@@ -677,6 +691,70 @@ mod tests {
         assert!(report.errors.is_empty(), "{:?}", report.errors);
         assert!(report.changes.iter().any(|c| c.kind() == "session_cut"));
         assert_eq!(tak.subscription_uids(), vec!["tls:8".to_string()], "sessions that have their groups are untouched");
+    }
+
+    #[tokio::test]
+    async fn an_event_group_comes_and_goes_without_cutting_anyone() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        let outside = two_teams();
+        run_pass(&outside, &dir, &tak).await;
+        tak.add_subscription("tls:1", "alpha-shared", &["alpha"]);
+        tak.add_subscription("tls:2", "bravo-ann", &["bravo"]);
+        // A device of a suspended team, as TAK Server lists it: no username, no group.
+        tak.add_subscription("tls:9", "", &[]);
+        tak.clear_calls();
+        dir.clear_writes();
+
+        // The event starts: both teams get one more group.
+        let during = desired(vec![
+            account("alpha-shared", &["alpha", "evt-exercise"]),
+            account("bravo-ann", &["bravo", "evt-exercise"]),
+            account("bravo-bob", &["bravo", "evt-exercise"]),
+        ]);
+        let report = run_pass(&during, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.changes.len(), 3, "three memberships and nothing else: {:?}", report.changes);
+        assert!(report.changes.iter().all(|c| c.kind() == "member_added" && c.group() == Some("evt-exercise")));
+        assert_eq!(dir.state().groups["evt-exercise"].members.len(), 3);
+        // Connected clients are told at once, and nobody is disconnected: every session
+        // keeps a group before and after, so TAK Server applies the change by itself.
+        for user in ["alpha-shared", "bravo-ann", "bravo-bob"] {
+            assert!(tak.calls().contains(&format!("refresh_groups {user}")), "{user}");
+        }
+        assert_eq!(tak.subscription_uids().len(), 3, "no session is cut, not even the group-less one");
+        assert!(!tak.calls().iter().any(|c| c.starts_with("cut_subscription")), "{:?}", tak.calls());
+
+        // The event ends: the group empties and disappears; again nobody is cut.
+        tak.clear_calls();
+        let report = run_pass(&outside, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(report.changes.iter().all(|c| c.kind() == "member_removed" && c.group() == Some("evt-exercise")));
+        assert_eq!(report.changes.len(), 3);
+        assert!(!dir.state().groups.contains_key("evt-exercise"), "no group and no member left behind");
+        assert_eq!(dir.state().groups["bravo"].members.len(), 2, "team groups are untouched");
+        assert_eq!(tak.subscription_uids().len(), 3);
+        assert!(run_pass(&outside, &dir, &tak).await.is_clean());
+    }
+
+    #[tokio::test]
+    async fn a_suspended_participant_loses_the_event_group_with_its_own() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        let during = desired(vec![
+            account("alpha-shared", &["alpha", "evt-exercise"]),
+            account("bravo-ann", &["bravo", "evt-exercise"]),
+        ]);
+        run_pass(&during, &dir, &tak).await;
+        tak.add_subscription("tls:1", "alpha-shared", &["alpha", "evt-exercise"]);
+        tak.add_subscription("tls:2", "bravo-ann", &["bravo", "evt-exercise"]);
+
+        // Bravo is suspended during the event: no group at all, so its session is cut.
+        let suspended =
+            desired(vec![account("alpha-shared", &["alpha", "evt-exercise"]), account("bravo-ann", &[])]);
+        let report = run_pass(&suspended, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(dir.state().groups["evt-exercise"].members, ["alpha-shared".to_string()].into());
+        assert!(report.changes.contains(&Change::SessionCut { username: "bravo-ann".into(), subscription_uid: "tls:2".into() }));
+        assert_eq!(tak.subscription_uids(), vec!["tls:1".to_string()], "the host stays connected");
     }
 
     #[tokio::test]

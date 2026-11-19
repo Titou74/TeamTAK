@@ -301,6 +301,8 @@ struct MyTeam {
     mode: String,
     role: String,
     decision_note: String,
+    /// Invitations to events waiting for an answer; counted for the team's leaders only.
+    event_invitations: i64,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -316,7 +318,11 @@ struct MyInvitation {
 /// The account with its teams and the invitations waiting for it.
 pub async fn me_payload(state: &SharedState, account: &Account) -> ApiResult<Value> {
     let teams: Vec<MyTeam> = sqlx::query_as(
-        "SELECT t.id, t.name, t.slug, t.status, t.mode, m.role, t.decision_note
+        "SELECT t.id, t.name, t.slug, t.status, t.mode, m.role, t.decision_note,
+                CASE WHEN m.role = 'leader' THEN
+                     (SELECT count(*) FROM event_teams p JOIN events e ON e.id = p.event_id
+                       WHERE p.team_id = t.id AND p.status = 'invited' AND e.cancelled_at IS NULL AND e.ends_at > now())
+                     ELSE 0 END AS event_invitations
            FROM team_members m JOIN teams t ON t.id = m.team_id
           WHERE m.account_id = $1
           ORDER BY t.created_at",

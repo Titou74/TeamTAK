@@ -257,7 +257,15 @@ async fn reconciliation_payload(state: &SharedState) -> ApiResult<Value> {
             .await?;
     let (accounts, groups): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM tak_accesses),
-                (SELECT count(DISTINCT t.id) FROM teams t JOIN tak_accesses a ON a.team_id = t.id WHERE t.status = 'active')",
+                (SELECT count(DISTINCT t.id) FROM teams t JOIN tak_accesses a ON a.team_id = t.id WHERE t.status = 'active')
+                -- plus the group of each running event that has at least one account in it
+                + (SELECT count(*) FROM events e
+                    WHERE e.cancelled_at IS NULL AND e.starts_at <= now() AND e.ends_at > now()
+                      AND EXISTS (SELECT 1 FROM teams t JOIN tak_accesses a ON a.team_id = t.id
+                                   WHERE t.status = 'active'
+                                     AND (t.id = e.host_team_id
+                                          OR t.id IN (SELECT p.team_id FROM event_teams p
+                                                       WHERE p.event_id = e.id AND p.status = 'accepted'))))",
     )
     .fetch_one(&state.db)
     .await?;

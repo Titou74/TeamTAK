@@ -5,8 +5,11 @@ pub const MAX_SLUG_LEN: usize = 32;
 /// Longest TAK username; it is also the CN of the client certificate (64 characters at most).
 pub const MAX_USERNAME_LEN: usize = 48;
 
-/// Group name prefixes kept for later phases (`evt-` is used by cross-team events).
-pub const RESERVED_SLUG_PREFIXES: &[&str] = &["evt-"];
+/// Prefix of the TAK group of a cross-team event. No team slug can start with it, so an event
+/// group never collides with a team group.
+pub const EVENT_GROUP_PREFIX: &str = "evt-";
+/// Group name prefixes a team cannot use.
+pub const RESERVED_SLUG_PREFIXES: &[&str] = &[EVENT_GROUP_PREFIX];
 /// Group names TAK Server gives a meaning to.
 pub const RESERVED_SLUGS: &[&str] = &["anon", "tak-admins", "admin", "administrators"];
 
@@ -66,6 +69,26 @@ pub fn is_valid_slug(slug: &str) -> bool {
         && !slug.ends_with('-')
         && !slug.contains("--");
     shape && !RESERVED_SLUGS.contains(&slug) && !RESERVED_SLUG_PREFIXES.iter().any(|p| slug.starts_with(p))
+}
+
+/// Name of the TAK group of an event: `evt-` followed by the slug of the event's name, within
+/// the same length as a team's group. It is the channel shown in ATAK for the duration of the
+/// event. `None` when the name leaves fewer than two usable characters.
+pub fn event_group_name(event_name: &str) -> Option<String> {
+    let slug = slugify(event_name, MAX_SLUG_LEN - EVENT_GROUP_PREFIX.len());
+    let group = format!("{EVENT_GROUP_PREFIX}{slug}");
+    is_valid_event_group(&group).then_some(group)
+}
+
+/// True for a well-formed event group name.
+pub fn is_valid_event_group(group: &str) -> bool {
+    let Some(slug) = group.strip_prefix(EVENT_GROUP_PREFIX) else { return false };
+    group.len() <= MAX_SLUG_LEN
+        && slug.len() >= 2
+        && slug.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        && !slug.starts_with('-')
+        && !slug.ends_with('-')
+        && !slug.contains("--")
 }
 
 /// The three ways a team hands out TAK access.
@@ -180,6 +203,41 @@ mod tests {
         assert!(!is_valid_slug("evt-exercise"), "prefix kept for events");
         assert!(!is_valid_slug("tak-admins"));
         assert!(!is_valid_slug(&"a".repeat(33)));
+    }
+
+    #[test]
+    fn event_groups_are_prefixed_slugs() {
+        assert_eq!(event_group_name("Exercice Mont-Blanc 2026").as_deref(), Some("evt-exercice-mont-blanc-2026"));
+        assert_eq!(event_group_name("  Fête de l'Été  ").as_deref(), Some("evt-fete-de-l-ete"));
+        assert_eq!(event_group_name("A"), None, "one character is not a name");
+        assert_eq!(event_group_name("日本"), None);
+        assert_eq!(event_group_name("!!!"), None);
+        // Same length limit as a team group, prefix included, without a trailing dash.
+        let long = event_group_name("abcdefghij klmnopqrst uvwxyz-abcdef ghij").unwrap();
+        assert_eq!(long, "evt-abcdefghij-klmnopqrst-uvwxyz");
+        assert!(long.len() <= MAX_SLUG_LEN);
+        let cut_on_a_dash = event_group_name("abcdefghij klmnopqrst uvwxy zzz").unwrap();
+        assert_eq!(cut_on_a_dash, "evt-abcdefghij-klmnopqrst-uvwxy");
+        assert!(!event_group_name(&"x ".repeat(40)).unwrap().ends_with('-'));
+    }
+
+    #[test]
+    fn event_groups_and_team_groups_never_collide() {
+        // A team cannot take an event's name...
+        for name in ["Exercise", "evt", "Evt Exercise", "EVT-exercise"] {
+            let group = event_group_name(name).unwrap();
+            assert!(is_valid_event_group(&group), "{group}");
+            assert!(!is_valid_slug(&group), "{group} must not be a valid team slug");
+        }
+        assert!(!is_valid_slug(&slugify("Evt Exercise", MAX_SLUG_LEN)), "a team named like an event group is refused");
+        // ...and an event group is never a team's slug.
+        for slug in ["alpha", "team-42", "event", "evtx"] {
+            assert!(is_valid_slug(slug));
+            assert!(!is_valid_event_group(slug), "{slug}");
+        }
+        for bad in ["evt-", "evt-a", "evt--ab", "evt-ab-", "evt-Ab", "evt-ab cd", &format!("evt-{}", "a".repeat(29))] {
+            assert!(!is_valid_event_group(bad), "{bad}");
+        }
     }
 
     #[test]

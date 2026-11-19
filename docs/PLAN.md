@@ -43,7 +43,8 @@ Docker Compose services: `caddy`, `app` (Rust API + static UI), `postgres` (plat
 - **Groups**: written to OpenLDAP by the platform; TAK Server re-reads them by itself (`updateinterval`
   on the `<ldap>` element) and pushes them to already-connected clients. No group is ever baked into a
   zip. After each write the platform calls `GET /Marti/api/groups/update/{username}`: the change then
-  applies in under a second and `updateinterval` is only a safety net.
+  applies in under a second and `updateinterval` is only a safety net. The group of a cross-team
+  event is handled the same way: it exists only between the event's start and its end.
 - **Certificates**: issued and revoked by TAK Server (enrollment on 8446, TAK Server's own CA), on the
   platform's request. The platform does not hold the CA key. For a zip that carries a client
   certificate, the platform submits the CSR itself with the LDAP account concerned, then packs key and
@@ -140,6 +141,31 @@ Decided or established in phase 1 (details and evidence in `docs/phase-1-report.
 - **Usernames** of TAK accesses are derived from the team (`<team>-shared`, `<team>-<member>`,
   `<team>-x-<label>`) and are never reused once an access is removed.
 
+Decided or established in phase 2 (details and evidence in `docs/phase-2-report.md`):
+
+- **An event has no stored state.** It has a start, an end and a cancellation date; whether it is
+  upcoming, running, ended or cancelled follows from the clock. Every reconciliation pass computes
+  the groups of each account for the instant it runs at: its team's group, plus the group of each
+  running event its team takes part in. Starting and ending an event is therefore only a matter of
+  running a pass at the right moment, and a pass run late gives the right result.
+- **Scheduler.** Besides the periodic pass, the platform sleeps until the next start or end of an
+  event and runs a pass then (origin `schedule` in the journal). Measured on the development
+  machine: about 0.2 s between the scheduled time and the change reaching connected clients.
+- **Drift and events.** A membership that a pass adds or removes for a group whose event started
+  or ended since the last complete pass is the schedule at work, not drift, whatever triggered the
+  pass (including the first pass after a restart). `reconcile_status.desired_at` holds the time
+  the last complete pass computed its desired state for.
+- **TAK Server applies an added or removed event group to open sessions**, without reconnection,
+  as phase 0 predicted: the account keeps its team group throughout. This now holds for the
+  platform as a whole and is asserted by the integration tests.
+- **Group-less sessions are cut less often.** A pass that only moved accounts in or out of
+  additional groups (an event starting or ending) no longer cuts the sessions TAK Server lists
+  without a username; they are still cut when an account receives its first group.
+- **If the platform is down when an event ends, its group stays** until the platform is back:
+  nothing else writes to the directory. The first pass after the restart removes it.
+- **Dates in e-mails are in UTC**, written in the recipient's language: the server does not know
+  where the reader is. The web UI shows and reads dates in the browser's time zone.
+
 ## 4. Functional scope
 
 ### Accounts and approval
@@ -184,6 +210,26 @@ A team creates a dated event (start, end) and invites other teams. On acceptance
 a dedicated TAK group and adds the members of all participating teams to it; the group is removed at
 the end. Outside events, teams do not see each other.
 
+- **Who does what.** A leader of an active team creates an event for their team (the host), invites
+  other teams, changes the dates, ends the event early, cancels it, and removes a participating
+  team. A leader of an invited team accepts or declines, and can make the team leave later. Members
+  see the events their team takes part in (name, dates, participating teams, state) and manage
+  nothing. An administrator sees every event and can cancel one; **events need no approval**.
+- **Finding a team to invite.** A leader of an active team can list the names of the other active
+  teams, for that purpose only. Nothing else about them is given out.
+- **The group** is named `evt-<slug of the event's name>` (32 characters at most, prefix included),
+  unique among events that are not over. It holds every TAK account (shared, individual, external)
+  of the host and of each team that accepted, from the start to the end, and only while the team is
+  active. An access created during the event gets it; a team that accepts while the event runs
+  joins at once; a team that leaves, is removed, is suspended or is deleted loses it at once.
+  Deleting the host team cancels the event. A finished event leaves nothing in the directory.
+- **Dates** are stored in UTC and entered and shown in the browser's time zone. An event may start
+  at once, lasts between one minute and 366 days, and once it runs only its end can move.
+- **E-mails**, to team leaders, in their saved language: invitation; answer (accepted, declined,
+  left) to the host; cancellation, new dates and early end to every team concerned; removal to the
+  team removed.
+- **Shared identity.** The event applies to the whole team, since the team is one account.
+
 ### Monitoring (administrator)
 - VPS: CPU, RAM, disk, pending system updates, reboot required.
 - Containers: state, versions, images to update.
@@ -220,7 +266,10 @@ from the ZIP, e-mail code login, team requests and approval, invitations, the th
 generation of QR codes/credentials/zips, revocation and regeneration, reconciliation with OpenLDAP,
 i18n set up from the first screen (English and French), automated tests.
 
-### Phase 2 — cross-team events (report `docs/phase-2-report.md`)
+### Phase 2 — cross-team events (report `docs/phase-2-report.md`) — done
+Still to be done by the user: how an event's channel appears and disappears on real ATAK and iTAK
+phones (procedure in the report).
+
 Creation, team invitations, acceptance, temporary TAK group, automatic activation and removal at the
 scheduled dates.
 

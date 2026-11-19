@@ -39,7 +39,10 @@
   },
   "home": {
     "title": "Mes équipes",
-    "description": "Une équipe est un groupe sur le serveur TAK : ses membres se voient entre eux, et personne d'autre ne les voit.",
+    "description": "Une équipe est un groupe sur le serveur TAK : ses membres se voient entre eux, et personne d'autre ne les voit, sauf les équipes avec lesquelles elle partage un événement, le temps de cet événement.",
+    "eventInvitations_one": "{{count}} invitation à un événement",
+    "eventInvitations_many": "{{count}} invitations à des événements",
+    "eventInvitations_other": "{{count}} invitations à des événements",
     "empty": {
       "title": "Vous n'êtes dans aucune équipe",
       "description": "Sans équipe, un compte n'a aucun accès au serveur TAK. Il y a deux façons d'en rejoindre une :",
@@ -234,6 +237,118 @@
       "pending": "Accès supprimé. Le serveur TAK est injoignable : la révocation sera appliquée automatiquement dès qu'il répondra."
     }
   },
+  "events": {
+    "title": "Événements inter-équipes",
+    "description": "Pendant un événement, votre équipe et les autres équipes participantes se voient sur le serveur TAK par un canal dédié. Il apparaît sur les appareils au début et disparaît à la fin, tout seul. En dehors des événements, les équipes ne se voient jamais.",
+    "descriptionOutside": "Pendant un événement, les équipes participantes se voient sur le serveur TAK par un canal dédié. Il apparaît sur les appareils au début et disparaît à la fin, tout seul. En dehors des événements, les équipes ne se voient jamais.",
+    "sharedNote": "Votre équipe utilise une identité partagée : un événement s'applique à tous ses appareils à la fois, et un canal désactivé sur un appareil l'est pour tous.",
+    "none": "Aucun événement en ce moment.",
+    "noneLeader": "Créez-en un, puis invitez les équipes avec lesquelles vous voulez travailler.",
+    "noneMember": "Ce sont les chefs d'équipe qui créent les événements et répondent aux invitations des autres équipes.",
+    "past_one": "{{count}} événement passé",
+    "past_many": "{{count}} événements passés",
+    "past_other": "{{count}} événements passés",
+    "hostedByUs": "Organisé par votre équipe",
+    "hostedBy": "Organisé par {{team}}",
+    "channel": "Canal dans ATAK et iTAK pendant l'événement :",
+    "pendingSync": "Enregistré, mais le serveur TAK est injoignable : la modification sera appliquée automatiquement dans la minute.",
+    "phase": {
+      "scheduled": "À venir",
+      "running": "En cours",
+      "ended": "Terminé",
+      "cancelled": "Annulé"
+    },
+    "when": {
+      "scheduled": "commence {{relative}}",
+      "running": "se termine {{relative}}",
+      "ended": "terminé {{relative}}",
+      "cancelled": "annulé {{relative}}"
+    },
+    "cancelReason": {
+      "host": "Annulé par l'équipe organisatrice.",
+      "admin": "Annulé par un administrateur.",
+      "host_deleted": "Annulé parce que l'équipe organisatrice a été supprimée."
+    },
+    "teamStatus": {
+      "host": "organisatrice",
+      "accepted": "participe",
+      "invited": "invitée, sans réponse",
+      "declined": "a refusé",
+      "left": "est partie",
+      "removed": "retirée"
+    },
+    "form": {
+      "start": "Début",
+      "end": "Fin",
+      "timeZone": "Les dates et heures sont dans votre fuseau horaire ({{zone}}). Chacun les voit dans le sien.",
+      "endBeforeStart": "La fin doit être postérieure au début."
+    },
+    "create": {
+      "open": "Nouvel événement",
+      "title": "Nouvel événement",
+      "description": "{{team}} organise l'événement. Vous invitez ensuite les autres équipes ; chaque chef d'équipe accepte ou refuse. Aucun administrateur n'intervient.",
+      "name": "Nom de l'événement",
+      "nameHelp": "Il donne aussi son nom au canal affiché dans ATAK et iTAK pendant l'événement.",
+      "startNow": "Commencer maintenant",
+      "submit": "Créer l'événement",
+      "created": "Événement créé. Invitez les équipes qui y participent."
+    },
+    "invitation": {
+      "title": "Invitations à des événements",
+      "text": "{{host}} invite votre équipe à l'événement « {{event}} ».",
+      "others": "Participent aussi : {{teams}}.",
+      "first": "Aucune autre équipe n'a encore accepté.",
+      "effect": "Si vous acceptez, vos membres et les leurs se voient sur le serveur TAK pendant la durée de l'événement.",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "accepted": "Votre équipe participe à l'événement « {{event}} ».",
+      "declined": "Invitation refusée."
+    },
+    "invite": {
+      "label": "Inviter une équipe",
+      "placeholder": "Choisir une équipe…",
+      "noTeam": "Aucune autre équipe à inviter",
+      "submit": "Inviter",
+      "done": "{{team}} est invitée. Ses chefs d'équipe reçoivent un e-mail."
+    },
+    "removeTeam": {
+      "action": "Retirer {{team}} de l'événement",
+      "title": "Retirer {{team}} de l'événement ?",
+      "text": "Si l'équipe participe, ses membres cessent immédiatement de voir les autres équipes et d'être vus par elles. Ses chefs d'équipe sont prévenus par e-mail. Vous pourrez l'inviter de nouveau.",
+      "confirm": "Retirer l'équipe",
+      "done": "{{team}} ne fait plus partie de l'événement."
+    },
+    "dates": {
+      "action": "Modifier les dates",
+      "title": "Modifier les dates de l'événement « {{event}} »",
+      "description": "Le canal apparaît et disparaît aux nouvelles dates. Les chefs des équipes participantes sont prévenus par e-mail.",
+      "running": "L'événement a commencé : seule sa fin peut changer. Les chefs des équipes participantes sont prévenus par e-mail.",
+      "submit": "Enregistrer les dates",
+      "done": "Dates modifiées."
+    },
+    "end": {
+      "action": "Terminer maintenant",
+      "title": "Terminer l'événement « {{event}} » maintenant ?",
+      "text": "Le canal de l'événement disparaît immédiatement de tous les appareils et les équipes cessent de se voir. Cette action est irréversible.",
+      "confirm": "Terminer l'événement",
+      "done": "Événement terminé."
+    },
+    "cancel": {
+      "action": "Annuler l'événement",
+      "title": "Annuler l'événement « {{event}} » ?",
+      "text": "L'événement n'aura pas lieu. S'il est en cours, son canal disparaît immédiatement de tous les appareils et les équipes cessent de se voir. Les chefs des équipes concernées sont prévenus par e-mail. Cette action est irréversible.",
+      "confirm": "Annuler l'événement",
+      "keep": "Garder l'événement",
+      "done": "Événement annulé."
+    },
+    "leave": {
+      "action": "Quitter l'événement",
+      "title": "Quitter l'événement « {{event}} » ?",
+      "text": "Vos membres cessent immédiatement de voir les autres équipes et d'être vus par elles. L'équipe organisatrice est prévenue par e-mail et pourra vous inviter de nouveau.",
+      "confirm": "Quitter l'événement",
+      "done": "Votre équipe a quitté l'événement."
+    }
+  },
   "profile": {
     "title": "Profil",
     "description": "La façon dont vous apparaissez aux membres de vos équipes, et la langue de ce site et des e-mails que vous recevez.",
@@ -245,11 +360,12 @@
   },
   "admin": {
     "title": "Administration",
-    "description": "Approuvez les demandes d'équipe, fixez les limites de membres, et vérifiez que le serveur TAK correspond à cette plateforme.",
+    "description": "Approuvez les demandes d'équipe, fixez les limites de membres, gardez un œil sur les événements, et vérifiez que le serveur TAK correspond à cette plateforme.",
     "memberCap": "Limite de membres",
     "memberCapFor": "Limite de membres de {{team}}",
     "tabs": {
       "teams": "Équipes",
+      "events": "Événements",
       "accounts": "Comptes",
       "sync": "Synchronisation TAK"
     },
@@ -285,6 +401,17 @@
       "resumed": "{{team}} est de nouveau active.",
       "deleteFor": "Supprimer {{team}}"
     },
+    "events": {
+      "title_one": "{{count}} événement",
+      "title_many": "{{count}} événements",
+      "title_other": "{{count}} événements",
+      "description": "Les équipes créent et gèrent elles-mêmes leurs événements ; rien ici ne demande d'approbation. Vous pouvez annuler un événement : son canal disparaît alors immédiatement du serveur TAK.",
+      "none": "Aucun événement pour l'instant.",
+      "event": "Événement",
+      "state": "État",
+      "dates": "Dates",
+      "teams": "Équipes"
+    },
     "accounts": {
       "title_one": "{{count}} compte",
       "title_many": "{{count}} comptes",
@@ -299,7 +426,7 @@
     },
     "sync": {
       "title": "Synchronisation avec le serveur TAK",
-      "description": "La base de données de cette plateforme fait référence. Toutes les {{seconds}} secondes, et après chaque modification, l'annuaire lu par le serveur TAK lui est comparé puis corrigé.",
+      "description": "La base de données de cette plateforme fait référence. Toutes les {{seconds}} secondes, après chaque modification, ainsi qu'au début et à la fin de chaque événement, l'annuaire lu par le serveur TAK lui est comparé puis corrigé.",
       "directory": "Annuaire (OpenLDAP)",
       "takServer": "Serveur TAK",
       "reachable": "joignable",
@@ -340,7 +467,8 @@
       "change": "Modification sur la plateforme",
       "periodic": "Vérification périodique",
       "manual": "Vérification manuelle",
-      "startup": "Démarrage"
+      "startup": "Démarrage",
+      "schedule": "Début ou fin d'un événement"
     }
   },
   "errors": {
@@ -368,6 +496,14 @@
     "access_kind_not_allowed": "Ce type d'accès ne correspond pas au mode de connexion de l'équipe.",
     "tak_unavailable": "Le serveur TAK est injoignable pour le moment. Rien n'est perdu : réessayez dans un instant.",
     "directory_unavailable": "L'annuaire du serveur TAK est injoignable pour le moment. Réessayez dans un instant.",
+    "invalid_event_name": "Ce nom ne peut pas être utilisé pour un événement. Utilisez au moins deux lettres ou chiffres.",
+    "invalid_event_dates": "Ces dates ne sont pas valides : un événement se termine après son début, dans le futur, dure entre une minute et un an, et son début ne peut plus changer une fois qu'il a commencé.",
+    "event_name_taken": "Un autre événement qui n'est pas terminé porte le même nom. Choisissez-en un autre.",
+    "too_many_events": "Votre équipe organise déjà trop d'événements. Terminez-en ou annulez-en un d'abord.",
+    "event_closed": "Cet événement est terminé ou annulé : il ne peut plus être modifié.",
+    "event_not_running": "Cet événement n'a pas encore commencé. Vous pouvez l'annuler.",
+    "team_already_in_event": "Cette équipe est déjà invitée à l'événement, ou y participe déjà.",
+    "event_invitation_not_pending": "Cette invitation n'attend plus de réponse.",
     "internal": "Le serveur a rencontré un problème inattendu. Veuillez réessayer."
   }
 }
