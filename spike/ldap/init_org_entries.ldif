@@ -1,0 +1,101 @@
+version: 1
+
+# Sample data for the spike. Passwords come from spike/work/.env.
+
+##############################
+# Service accounts
+##############################
+dn: cn=takserver,ou=Services,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: takserver
+description: Read-only account used by TAK Server (serviceAccountDN)
+userPassword: ${SPIKE_LDAP_TAKSERVER_PW}
+
+dn: cn=tak-manager,ou=Services,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: tak-manager
+description: Read-write account of the platform
+userPassword: ${SPIKE_LDAP_MANAGER_PW}
+
+##############################
+# TAK users
+##############################
+dn: uid=alice,ou=People,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: alice
+cn: alice
+sn: alice
+userPassword: ${SPIKE_USER_PW}
+
+dn: uid=bob,ou=People,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: bob
+cn: bob
+sn: bob
+userPassword: ${SPIKE_USER_PW}
+
+dn: uid=charlie,ou=People,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: charlie
+cn: charlie
+sn: charlie
+userPassword: ${SPIKE_USER_PW}
+
+# Shared identity: a single account for a whole team
+dn: uid=team-bravo-shared,ou=People,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: team-bravo-shared
+cn: team-bravo-shared
+sn: team-bravo-shared
+userPassword: ${SPIKE_USER_PW}
+
+# Technical account, member of tak-admins: used to show that adminGroup grants nothing
+dn: uid=svc-tak-manager,ou=People,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: svc-tak-manager
+cn: svc-tak-manager
+sn: svc-tak-manager
+userPassword: ${SPIKE_USER_PW}
+
+##############################
+# TAK groups (groupOfNames requires at least one member)
+##############################
+dn: cn=team-alpha,ou=Group,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: groupOfNames
+cn: team-alpha
+member: uid=alice,ou=People,${LDAP_INIT_ORG_DN}
+member: uid=charlie,ou=People,${LDAP_INIT_ORG_DN}
+
+dn: cn=team-bravo,ou=Group,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: groupOfNames
+cn: team-bravo
+member: uid=bob,ou=People,${LDAP_INIT_ORG_DN}
+member: uid=team-bravo-shared,ou=People,${LDAP_INIT_ORG_DN}
+
+dn: cn=tak-admins,ou=Group,${LDAP_INIT_ORG_DN}
+objectClass: top
+objectClass: groupOfNames
+cn: tak-admins
+description: Referenced by the adminGroup attribute of CoreConfig.xml
+member: uid=svc-tak-manager,ou=People,${LDAP_INIT_ORG_DN}

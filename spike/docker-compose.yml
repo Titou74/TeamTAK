@@ -1,0 +1,89 @@
+# Phase 0 spike: TAK Server 5.8 + its database + OpenLDAP.
+# Prerequisites (see README.md): scripts/00-extract.sh, 01-build-images.sh, 02-init.sh.
+# Variables come from spike/.env, a link to spike/work/.env created by 02-init.sh.
+name: tak-spike
+
+services:
+  openldap:
+    # Community image rebuilt weekly on debian:trixie-slim (slapd 2.6), amd64 + arm64.
+    # In production: pin it by digest.
+    image: vegardit/openldap:2.6.10
+    environment:
+      LDAP_INIT_ORG_DN: ${LDAP_BASE_DN}
+      LDAP_INIT_ORG_NAME: TAK Manager (spike)
+      LDAP_INIT_ROOT_USER_DN: cn=admin,${LDAP_BASE_DN}
+      LDAP_INIT_ROOT_USER_PW: ${LDAP_ROOT_PW}
+      LDAP_INIT_PPOLICY_DEFAULT_DN: cn=DefaultPasswordPolicy,ou=Policies,${LDAP_BASE_DN}
+      LDAP_INIT_ALLOW_CONFIG_ACCESS: "false"
+      # No password-quality module: passwords are generated, never chosen.
+      LDAP_PPOLICY_PPM_CONFIG: ""
+      # Used by ldap/init_org_entries.ldif
+      SPIKE_LDAP_TAKSERVER_PW: ${LDAP_TAKSERVER_PW}
+      SPIKE_LDAP_MANAGER_PW: ${LDAP_MANAGER_PW}
+      SPIKE_USER_PW: ${TAK_USER_PW}
+    volumes:
+      # Mount points supported by the image
+      - ./ldap/init_org_tree.ldif:/opt/ldifs/init_org_tree.ldif:ro
+      - ./ldap/init_org_entries.ldif:/opt/ldifs/init_org_entries.ldif:ro
+      - ./ldap/init_org_ppolicy.ldif:/opt/ldifs/init_org_ppolicy.ldif:ro
+      # Overrides the image does not document (memberOf on groupOfNames, ACLs)
+      - ./ldap/init_module_memberof.ldif:/opt/ldifs/init_module_memberof.ldif:ro
+      - ./ldap/init_mdb_acls.ldif:/opt/ldifs/init_mdb_acls.ldif:ro
+      - ldap-config:/etc/ldap/slapd.d
+      - ldap-data:/var/lib/ldap
+    ports:
+      - "127.0.0.1:${LDAP_HOST_PORT:-3890}:389"   # for the tests only
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost:389 -b '' -s base namingContexts >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  tak-database:
+    image: tak-spike/takserver-db:5.8-RELEASE-103
+    environment:
+      # Read by db-utils/takserver-setup-db.sh of the ZIP: password of martiuser
+      envpass: ${TAK_DB_PASSWORD}
+    volumes:
+      - tak-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # The image's own healthcheck passes as soon as PostgreSQL listens; here we also
+      # wait for the "cot" database and the martiuser role to exist.
+      test: ["CMD-SHELL", "psql -U postgres -d cot -tAc \"select 1 from pg_roles where rolname='martiuser'\" | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  takserver:
+    image: tak-spike/takserver:5.8-RELEASE-103
+    depends_on:
+      tak-database:
+        condition: service_healthy
+      openldap:
+        condition: service_healthy
+    environment:
+      ADMIN_CERT_NAME: admin
+      ADMIN_CERT_PASS: ${TAK_CERT_PASSWORD}
+    volumes:
+      - ./work/tak/CoreConfig.xml:/opt/tak/CoreConfig.xml
+      # Provided up front to avoid a race on first start (see 02-init.sh)
+      - ./work/tak/TAKIgniteConfig.xml:/opt/tak/TAKIgniteConfig.xml
+      - ./work/tak/certs:/opt/tak/certs/files
+      - ./work/tak/logs:/opt/tak/logs
+    ports:
+      - "127.0.0.1:8089:8089"   # TAK clients (mutual TLS)
+      - "127.0.0.1:8443:8443"   # API and admin UI (client certificate)
+      - "127.0.0.1:8446:8446"   # enrollment (username + password)
+    healthcheck:
+      # 401 on the enrollment endpoint without credentials = Tomcat is up; 8089 open = messaging is up.
+      test: ["CMD-SHELL", "[ \"$(curl -sk -o /dev/null -w '%{http_code}' https://localhost:8446/Marti/api/tls/config)\" = 401 ] && nc -z localhost 8089"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+volumes:
+  ldap-config:
+  ldap-data:
+  tak-db-data:

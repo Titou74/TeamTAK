@@ -1,0 +1,39 @@
+version: 1
+
+# Replaces /opt/ldifs/init_module_memberof.ldif of the vegardit/openldap image.
+# Only difference from the original: the memberOf overlay tracks groupOfNames /
+# member groups (what TAK Server creates and reads) instead of
+# groupOfUniqueNames / uniqueMember.
+#
+# TAK Server (style="DS") does not search groups: it reads the memberOf attribute
+# of the user's entry. Without this overlay it sees no group at all.
+
+dn: cn=module{0},cn=config
+changetype: modify
+add: olcModuleLoad
+olcModuleLoad: memberof
+olcModuleLoad: refint
+
+dn: olcOverlay=memberof,olcDatabase={1}mdb,cn=config
+objectClass: top
+objectClass: olcConfig
+objectClass: olcOverlayConfig
+objectClass: olcMemberOf
+olcOverlay: memberof
+olcMemberOfDangling: ignore
+olcMemberOfRefInt: TRUE
+olcMemberOfGroupOC: groupOfNames
+olcMemberOfMemberAD: member
+olcMemberOfMemberOfAD: memberOf
+
+dn: olcOverlay=refint,olcDatabase={1}mdb,cn=config
+objectClass: top
+objectClass: olcConfig
+objectClass: olcOverlayConfig
+objectClass: olcRefintConfig
+olcOverlay: refint
+olcRefintAttribute: owner
+olcRefintAttribute: manager
+olcRefintAttribute: member
+olcRefintAttribute: memberOf
+olcRefintAttribute: uniqueMember

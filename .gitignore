@@ -1,0 +1,22 @@
+# Archives TAK Server (licence tak.gov, ne pas versionner)
+*.zip
+takserver-docker-*/
+
+# Secrets et certificats générés
+.env
+.env.*
+!.env.example
+*.p12
+*.jks
+*.pem
+*.key
+spike/work/
+
+# Build
+target/
+node_modules/
+dist/
+.DS_Store
+
+# Python
+__pycache__/

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CoreConfig.xml of the phase 0 spike. Template: the __XXX__ values are replaced by
+  scripts/02-init.sh and the result goes to spike/work/tak/CoreConfig.xml.
+  Written for TAK Server 5.8-RELEASE-103 from CoreConfig.xsd and the configuration
+  guide (sections 9.6, 9.7, 22 and 23).
+-->
+<Configuration xmlns="http://bbn.com/marti/xml/config"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="CoreConfig.xsd">
+    <network tomcatMaxPool="300" esyncEnableCache="1" multicastTTL="5">
+        <!-- TAK clients: mutual TLS, groups looked up from the certificate CN (auth="x509") -->
+        <input _name="stdssl" protocol="tls" port="8089" coreVersion="2" auth="x509"/>
+
+        <!-- API and admin UI: client certificate required -->
+        <connector port="8443" _name="https"/>
+        <!-- Enrollment: username + password (HTTP Basic), no client certificate -->
+        <connector port="8446" clientAuth="false" _name="cert_https"/>
+    </network>
+
+    <!--
+      x509groups                              groups looked up from the certificate CN
+      x509addAnonymous=false                  no __ANON__ group: teams stay isolated
+      x509useGroupCache                       channels (clients switch groups on and off)
+      x509useGroupCacheDefaultActive          channels active on first login
+      x509useGroupCacheDefaultUpdatesActive   channels added later are active by default
+      x509useGroupCacheRequiresExtKeyUsage    __REQUIRES_EKU__ (default true), see question 4
+      x509checkRevocation                     revocation applied without a restart
+    -->
+    <auth default="ldap"
+          x509groups="true"
+          x509addAnonymous="false"
+          x509useGroupCache="true"
+          x509useGroupCacheDefaultActive="true"
+          x509useGroupCacheDefaultUpdatesActive="true"
+          x509useGroupCacheRequiresExtKeyUsage="__REQUIRES_EKU__"
+          x509checkRevocation="true">
+        <!--
+          style="DS": TAK Server reads the memberOf attribute of the entry
+          uid={username},ou=People,... (OpenLDAP needs the memberOf overlay).
+          The URL carries no base DN: every DN is a full DN.
+          updateinterval is in SECONDS (the guide wrongly says milliseconds).
+          adminGroup has no observed effect (see question 2 in the report).
+        -->
+        <ldap url="ldap://openldap:389"
+              userstring="uid={username},ou=People,__LDAP_BASE_DN__"
+              updateinterval="__LDAP_UPDATE_INTERVAL__"
+              style="DS"
+              ldapSecurityType="simple"
+              serviceAccountDN="cn=takserver,ou=Services,__LDAP_BASE_DN__"
+              serviceAccountCredential="__LDAP_TAKSERVER_PW__"
+              userObjectClass="inetOrgPerson"
+              groupObjectClass="groupOfNames"
+              userBaseRDN="ou=People,__LDAP_BASE_DN__"
+              groupBaseRDN="ou=Group,__LDAP_BASE_DN__"
+              adminGroup="tak-admins"/>
+        <File location="UserAuthenticationFile.xml"/>
+    </auth>
+
+    <submission ignoreStaleMessages="false" validateXml="false"/>
+
+    <subscription reloadPersistent="false"/>
+
+    <repository enable="true" numDbConnections="16" primaryKeyBatchSize="500" insertionBatchSize="500">
+        <connection url="jdbc:postgresql://tak-database:5432/cot" username="martiuser" password="__DB_PASSWORD__"/>
+    </repository>
+
+    <repeater enable="true" periodMillis="3000" staleDelayMillis="15000">
+        <repeatableType initiate-test="/event/detail/emergency[@type='911 Alert']" cancel-test="/event/detail/emergency[@cancel='true']" _name="911"/>
+        <repeatableType initiate-test="/event/detail/emergency[@type='Ring The Bell']" cancel-test="/event/detail/emergency[@cancel='true']" _name="RingTheBell"/>
+        <repeatableType initiate-test="/event/detail/emergency[@type='Geo-fence Breached']" cancel-test="/event/detail/emergency[@cancel='true']" _name="GeoFenceBreach"/>
+        <repeatableType initiate-test="/event/detail/emergency[@type='Troops In Contact']" cancel-test="/event/detail/emergency[@cancel='true']" _name="TroopsInContact"/>
+    </repeater>
+
+    <dissemination smartRetry="false"/>
+
+    <filter>
+        <flowtag enable="false" text=""/>
+        <streamingbroker enable="true"/>
+        <scrubber enable="false" action="overwrite"/>
+    </filter>
+
+    <buffer>
+        <latestSA enable="true"/>
+        <queue/>
+    </buffer>
+
+    <security>
+        <!-- Truststore: root + intermediate (the intermediate signs enrollment certificates) -->
+        <tls context="TLSv1.2"
+             keymanager="SunX509"
+             keystore="JKS" keystoreFile="/opt/tak/certs/files/takserver.jks" keystorePass="__CERT_PASSWORD__"
+             truststore="JKS" truststoreFile="/opt/tak/certs/files/truststore-__INT_CA_NAME__.jks" truststorePass="__CERT_PASSWORD__">
+        </tls>
+    </security>
+
+    <!-- Enrollment (guide, appendix C): TAK Server signs CSRs itself with the intermediate CA -->
+    <certificateSigning CA="TAKServer">
+        <certificateConfig>
+            <nameEntries>
+                <nameEntry name="O" value="TAK"/>
+                <nameEntry name="OU" value="TAKManager"/>
+            </nameEntries>
+        </certificateConfig>
+        <TAKServerCAConfig
+            keystore="JKS"
+            keystoreFile="/opt/tak/certs/files/__INT_CA_NAME__-signing.jks"
+            keystorePass="__CERT_PASSWORD__"
+            validityDays="30"
+            signatureAlg="SHA256WithRSA"/>
+    </certificateSigning>
+</Configuration>
