@@ -6,6 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { adoptAccountLanguage } from "@/i18n";
 import { useErrorText, useMe } from "@/lib/hooks";
+import { applyTheme, isTheme } from "@/lib/theme";
 import { AdminPage } from "@/pages/admin";
 import { HomePage } from "@/pages/home";
 import { LoginPage } from "@/pages/login";
@@ -18,11 +19,18 @@ export function App() {
   const me = useMe();
   const errorText = useErrorText();
   const language = me.data?.account.language;
+  // Undefined while the account loads: the theme remembered on this device stays until then.
+  const theme = me.data === undefined ? undefined : (me.data?.account.theme ?? "auto");
 
   // The preference saved on the account wins over the browser's language.
   useEffect(() => {
     if (language) adoptAccountLanguage(language);
   }, [language]);
+
+  // The theme saved on the account; signed out, the device's setting.
+  useEffect(() => {
+    if (theme !== undefined) applyTheme(isTheme(theme) ? theme : "auto");
+  }, [theme]);
 
   useEffect(() => {
     document.title = t("app.name");

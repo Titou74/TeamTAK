@@ -31,6 +31,8 @@ pub struct Account {
     pub email: String,
     pub display_name: String,
     pub language: String,
+    /// Colour theme of the web UI: `auto` (the device's setting), `light` or `dark`.
+    pub theme: String,
     pub is_admin: bool,
 }
 
@@ -86,7 +88,7 @@ impl FromRequestParts<SharedState> for CurrentAccount {
         let jar = CookieJar::from_headers(&parts.headers);
         let token = jar.get(SESSION_COOKIE).map(|c| c.value().to_string()).ok_or(ApiError::Unauthenticated)?;
         let account: Option<Account> = sqlx::query_as(
-            "SELECT a.id, a.email, a.display_name, a.language, a.is_admin
+            "SELECT a.id, a.email, a.display_name, a.language, a.theme, a.is_admin
                FROM sessions s JOIN accounts a ON a.id = s.account_id
               WHERE s.token_hash = $1 AND s.expires_at > now()",
         )
@@ -316,7 +318,7 @@ pub async fn verify(
     let account: Account = sqlx::query_as(
         "INSERT INTO accounts (id, email, language, last_login_at) VALUES ($1, $2, $3, now())
          ON CONFLICT (email) DO UPDATE SET last_login_at = now()
-         RETURNING id, email, display_name, language, is_admin",
+         RETURNING id, email, display_name, language, theme, is_admin",
     )
     .bind(Uuid::new_v4())
     .bind(&email)
@@ -436,9 +438,13 @@ pub async fn me(State(state): State<SharedState>, CurrentAccount(account): Curre
 pub struct UpdateMeBody {
     display_name: Option<String>,
     language: Option<String>,
+    theme: Option<String>,
 }
 
-/// `PATCH /api/me`: display name and language.
+/// Colour themes an account may choose.
+const THEMES: [&str; 3] = ["auto", "light", "dark"];
+
+/// `PATCH /api/me`: display name, language and colour theme.
 pub async fn update_me(
     State(state): State<SharedState>,
     CurrentAccount(account): CurrentAccount,
@@ -449,17 +455,22 @@ pub async fn update_me(
             return Err(ApiError::InvalidInput);
         }
     }
+    if body.theme.as_deref().is_some_and(|t| !THEMES.contains(&t)) {
+        return Err(ApiError::InvalidInput);
+    }
     let display_name = body.display_name.map(|n| n.trim().to_string());
     if display_name.as_ref().is_some_and(|n| n.chars().count() > 80 || n.chars().any(char::is_control)) {
         return Err(ApiError::InvalidInput);
     }
     let updated: Account = sqlx::query_as(
-        "UPDATE accounts SET display_name = COALESCE($2, display_name), language = COALESCE($3, language)
-          WHERE id = $1 RETURNING id, email, display_name, language, is_admin",
+        "UPDATE accounts SET display_name = COALESCE($2, display_name), language = COALESCE($3, language),
+                theme = COALESCE($4, theme)
+          WHERE id = $1 RETURNING id, email, display_name, language, theme, is_admin",
     )
     .bind(account.id)
     .bind(display_name)
     .bind(body.language)
+    .bind(body.theme)
     .fetch_one(&state.db)
     .await?;
     Ok(Json(me_payload(&state, &updated).await?))

@@ -354,11 +354,18 @@
   },
   "profile": {
     "title": "Profile",
-    "description": "How you appear to the members of your teams, and the language of this site and of the e-mails you receive.",
+    "description": "How you appear to the members of your teams, the language of this site and of the e-mails you receive, and whether this site is light or dark.",
     "email": "E-mail address",
     "displayName": "Display name",
     "displayNameHelp": "Shown to the members of your teams instead of your e-mail address.",
     "languageHelp": "Also used for the e-mails sent to you.",
+    "theme": "Appearance",
+    "themeHelp": "Auto follows the light or dark setting of your device. Saved as soon as you pick it.",
+    "themes": {
+      "auto": "Auto",
+      "light": "Light",
+      "dark": "Dark"
+    },
     "saved": "Profile saved."
   },
   "admin": {

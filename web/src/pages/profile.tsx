@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemePicker } from "@/components/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,8 @@ import { api } from "@/lib/api";
 import { useNotifyError } from "@/lib/hooks";
 import type { Me } from "@/lib/types";
 
-/** The account's own settings: display name and language. */
+/** The account's own settings: display name, language and colour theme. The language and the
+ *  theme are saved as soon as they are picked; the button saves the display name. */
 export function ProfilePage({ me }: { me: Me }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -55,6 +57,13 @@ export function ProfilePage({ me }: { me: Me }) {
                 <LanguageSwitcher />
               </div>
               <p className="text-xs text-muted-foreground">{t("profile.languageHelp")}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>{t("profile.theme")}</Label>
+              <div>
+                <ThemePicker />
+              </div>
+              <p className="text-xs text-muted-foreground">{t("profile.themeHelp")}</p>
             </div>
             <Button type="submit" disabled={pending}>
               {pending ? t("common.working") : t("common.save")}

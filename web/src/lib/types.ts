@@ -1,5 +1,7 @@
 // Shapes of the API's JSON answers (crates/server).
 
+import type { Theme } from "./theme";
+
 export type AccessKind = "shared" | "individual" | "external";
 /** How a team connects to TAK Server. External accesses can be added in either mode. */
 export type TeamMode = Exclude<AccessKind, "external">;
@@ -11,6 +13,7 @@ export interface Account {
   email: string;
   display_name: string;
   language: string;
+  theme: Theme;
   is_admin: boolean;
 }
 
