@@ -26,6 +26,11 @@
     "openAlerts_one": "{{count}} open alert",
     "openAlerts_other": "{{count}} open alerts"
   },
+  "footer": {
+    "poweredBy": "Powered by TeamTAK",
+    "licence": "AGPL-3.0 licence",
+    "source": "Source code"
+  },
   "login": {
     "title": "Sign in",
     "intro": "Enter your e-mail address and we will send you a one-time code. There is no password to remember.",

@@ -24,5 +24,7 @@ RUN apt-get update \
 COPY --from=build /usr/local/bin/teamtak-agent /usr/local/bin/teamtak-agent
 ENV AGENT_LISTEN=0.0.0.0:9300
 EXPOSE 9300
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/Titou74/TeamTAK"
 ENTRYPOINT ["/usr/local/bin/teamtak-agent"]
 CMD ["serve"]

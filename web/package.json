@@ -2,6 +2,7 @@
   "name": "teamtak-web",
   "private": true,
   "version": "1.0.6",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",

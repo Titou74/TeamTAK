@@ -1,0 +1,44 @@
+TeamTAK
+Copyright (C) 2026 Titou74 and the TeamTAK contributors
+https://github.com/Titou74/TeamTAK
+
+This program is free software: you can redistribute it and/or modify it under the terms of
+the GNU Affero General Public License, version 3 only (AGPL-3.0-only), as published by the
+Free Software Foundation, together with the additional terms below. The text of the licence
+is in the LICENSE file.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU Affero General Public License for more details.
+
+
+Additional terms (section 7 of the licence)
+-------------------------------------------
+
+These terms apply to every file of this program. They are permitted by section 7 of the
+GNU Affero General Public License and stay attached to the program and to every work
+based on it.
+
+1. Attribution (section 7(b)). Every copy of TeamTAK, modified or not, that is conveyed
+   or that users interact with remotely through a computer network must keep:
+
+   a. this NOTICE file, with its copyright line, next to the licence;
+
+   b. in its web interface, a visible attribution reading "Powered by TeamTAK" (or its
+      translation into the language the interface is shown in), linking to
+      https://github.com/Titou74/TeamTAK, in the footer of every page or in another
+      place that is visible from every page.
+
+2. Modified versions (section 7(c)). A modified version must not be presented as the
+   original TeamTAK. It says that it is modified, and by whom, next to the attribution:
+   for example "Powered by TeamTAK, modified by Example Ltd".
+
+
+Source code of the version you run (section 13 of the licence)
+--------------------------------------------------------------
+
+If you modify TeamTAK and let users reach it over a network, you must offer those users
+the complete source code of the version you run, under this same licence. The footer of
+the web interface links to the source code: point that link (SOURCE_CODE_URL in
+web/src/lib/project.ts) at your own source code. The attribution link (TEAMTAK_URL) keeps
+pointing at the original repository.

@@ -370,3 +370,17 @@ Everything else is in [`docs/`](docs/README.md):
 - [Backups and restore](docs/backups.md)
 - [Development](docs/development.md) and [testing](docs/testing.md)
 - The [specification](docs/PLAN.md) and the reports of each development phase
+
+## Licence
+
+TeamTAK is free software under the [GNU Affero General Public License v3.0](LICENSE)
+(AGPL-3.0-only), with the additional terms of [`NOTICE`](NOTICE):
+
+- **Credit**: every copy, modified or not, keeps the `NOTICE` file and a visible "Powered by
+  TeamTAK" link to this repository in its web interface. A modified version says that it is
+  modified, and by whom.
+- **Source code**: whoever runs a modified version that users reach over a network must
+  give those users its complete source code, under the same licence. This applies to paid
+  and commercial deployments too.
+
+TAK Server is not part of TeamTAK: its ZIP comes from tak.gov under its own licence.
