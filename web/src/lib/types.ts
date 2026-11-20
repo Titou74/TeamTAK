@@ -53,6 +53,10 @@ export interface PublicConfig {
   resend_cooldown_seconds: number;
   /** Name an administrator gave this server, to tell it from others; empty for none. */
   server_name: string;
+  /** An address gets an account only with an invitation waiting for it. */
+  invitation_only: boolean;
+  /** False: a team asked for is active at once, without an administrator. */
+  team_approval: boolean;
   /** A code made by the rescue command waits to be used: the sign-in page offers to type it. */
   rescue_code_pending: boolean;
 }

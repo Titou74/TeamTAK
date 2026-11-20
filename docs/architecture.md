@@ -34,13 +34,14 @@ container: TAK Server itself has a single input, and the monitoring watches that
 ## How it works
 
 - **Accounts.** Sign-in is passwordless: a six-digit code sent by e-mail, valid ten minutes, usable
-  once, rate-limited per address and per IP. Anyone can sign in; an account without a team can do
-  nothing and has no TAK access. Before a code is sent, the sign-in page passes an invisible
-  anti-bot check, and a new code for the same address waits for a countdown (see
-  [Login protections](#login-protections)).
-- **Teams.** One team is one TAK group (its name is the channel shown in ATAK). An administrator
-  approves team requests and sets the member cap; that is the only approval step. A team leader
-  invites members by e-mail, up to the cap.
+  once, rate-limited per address and per IP. The first sign-in of an address creates its account;
+  an account without a team can do nothing and has no TAK access. Before a code is sent, the
+  sign-in page passes an invisible anti-bot check, and a new code for the same address waits for a
+  countdown (see [Login protections](#login-protections)). Who may sign up is a setting (see
+  [Sign-ups and team approval](#sign-ups-and-team-approval)).
+- **Teams.** One team is one TAK group (its name is the channel shown in ATAK). By default an
+  administrator approves team requests and sets the member cap; that is the only approval step,
+  and it can be turned off. A team leader invites members by e-mail, up to the cap.
 - **TAK accesses.** The leader picks the mode: one shared identity for the team (the default), or
   one account per member. In either mode the leader can add named external accesses for people
   outside the platform. Each access can be handed over as a QR code, as a username and password, or as a
@@ -69,6 +70,32 @@ container: TAK Server itself has a single input, and the monitoring watches that
   sessions left with no group. What a pass corrects without the platform having asked for it is
   reported as drift in the administration area.
 
+## Sign-ups and team approval
+
+Two settings, in **Monitoring, Settings, Sign-ups and teams** (`invitation_only` and
+`team_approval` in the `settings` row), let an administrator run anything from a server open to
+all to one where they decide who comes in and which teams exist. Both read the same way: checked
+(`true`), an administrator controls the step; unchecked, it is open to everyone. By default
+sign-ups are open and new teams wait for approval, which is how the platform always worked.
+
+- **Sign-ups by invitation only** (`invitation_only`). Checked, an address gets an account only
+  when an invitation waits for it in an active team, or when an administrator invited it from **Administration,
+  Accounts** (`POST /api/admin/accounts`, which creates the account at once and e-mails it an
+  invitation; `account_invited` in the audit log). Accounts that exist keep signing in. To any
+  other address, `request-code` sends an e-mail saying that sign-ups are by invitation only
+  instead of a code, and answers the page exactly as when a code goes out, so the page does not
+  learn who has an account or an invitation; that e-mail counts for the countdown and the hourly
+  limits like a code. The sign-in page warns that new accounts are by invitation. A code sent
+  while the address could sign up is refused with `signups_closed` if its invitation was
+  withdrawn, or sign-ups closed, before it was used.
+- **New teams wait for an administrator's approval** (`team_approval`). Unchecked, `POST /api/teams`
+  creates the team active at once, with `DEFAULT_MEMBER_CAP`, its requester as leader;
+  administrators are not e-mailed, the audit log says `team_created`, and the limit of three
+  requests waiting per account does not apply. The home page then says "Create a team". Requests
+  waiting when approval is unchecked stay for an administrator to decide.
+
+The administration's **Teams** tab shows both settings with a link to change them.
+
 ## Login protections
 
 Asking for a login code sends an e-mail, so `POST /api/auth/request-code` is what a script would
@@ -92,10 +119,11 @@ hammer. Four layers stand in front of the mail server, checked in this order:
 4. **Wrong codes** burn the code after five tries, and an IP that submits too many wrong codes is
    blocked for the hour (`LOGIN_MAX_FAILURES_PER_IP`).
 
-Codes made by the rescue command (`teamtak grant-admin`) go through none of these. The sign-in
-page offers "I already have a code" only while one of them waits to be used, not consumed, not
-expired and not burnt (`rescue_code_pending` in `GET /api/config`): the first administrator sees
-it right after the install, and once they are in nobody does until the command is run again.
+Codes made by the rescue command (`teamtak grant-admin`) go through none of these, nor through
+[invitation-only sign-ups](#sign-ups-and-team-approval): the command creates the account. The
+sign-in page offers "I already have a code" only while one of them waits to be used, not consumed,
+not expired and not burnt (`rescue_code_pending` in `GET /api/config`): the first administrator
+sees it right after the install, and once they are in nobody does until the command is run again.
 
 ## QR codes and port 8446
 

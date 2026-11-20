@@ -222,16 +222,23 @@ pub async fn request_code(
         }
     }
 
+    // With sign-ups by invitation only, an address that may not get an account is told so
+    // by e-mail instead of getting a code. The page gets the same answer either way, so it
+    // does not learn who has an account or an invitation.
+    let allowed = may_sign_in(&state, &email).await?;
     let code = login::generate_code();
+    // The row of a refused address is used up from the start: it only counts for the limits,
+    // so the e-mail saying no cannot be sent more often than a code.
     sqlx::query(
-        "INSERT INTO login_codes (id, email, code_hash, ip, expires_at)
-         VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))",
+        "INSERT INTO login_codes (id, email, code_hash, ip, expires_at, consumed_at)
+         VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5), CASE WHEN $6 THEN NULL ELSE now() END)",
     )
     .bind(Uuid::new_v4())
     .bind(&email)
     .bind(login::hash_code(state.secrets.mac_key(), &email, &code))
     .bind(&ip)
     .bind(policy.code_ttl_secs as f64)
+    .bind(allowed)
     .execute(&state.db)
     .await?;
 
@@ -240,11 +247,34 @@ pub async fn request_code(
         sqlx::query_as("SELECT language FROM accounts WHERE email = $1").bind(&email).fetch_optional(&state.db).await?;
     let language = saved.map(|(l,)| l).or(body.language).unwrap_or_default();
     let minutes = (policy.code_ttl_secs / 60).to_string();
-    state.mailer.send(&email, &language, Template::LoginCode, &[("code", &code), ("minutes", &minutes)]).await.map_err(|e| {
+    let sent = if allowed {
+        state.mailer.send(&email, &language, Template::LoginCode, &[("code", &code), ("minutes", &minutes)]).await
+    } else {
+        tracing::info!(email, ip, "login code refused: sign-ups are by invitation only");
+        state.mailer.send(&email, &language, Template::SignupsClosed, &[("url", state.config.public_url.as_str())]).await
+    };
+    sent.map_err(|e| {
         tracing::error!(email, error = %format!("{e:#}"), "login code not sent");
         Refusal::from(ApiError::MailUnavailable)
     })?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Whether `email` may sign in: always when sign-ups are open; otherwise only when it has an
+/// account, or an invitation waiting for it in an active team.
+async fn may_sign_in(state: &SharedState, email: &str) -> ApiResult<bool> {
+    if !settings::load(&state.db).await?.values.invitation_only {
+        return Ok(true);
+    }
+    let (allowed,): (bool,) = sqlx::query_as(
+        "SELECT EXISTS (SELECT 1 FROM accounts WHERE email = $1)
+             OR EXISTS (SELECT 1 FROM invitations i JOIN teams t ON t.id = i.team_id
+                         WHERE i.email = $1 AND i.status = 'pending' AND t.status = 'active')",
+    )
+    .bind(email)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(allowed)
 }
 
 #[derive(Deserialize)]
@@ -256,7 +286,7 @@ pub struct VerifyBody {
 }
 
 /// `POST /api/auth/verify`: exchanges a code for a session. The first successful login of an
-/// address creates its account.
+/// address creates its account, when sign-ups are open or an invitation waits for it.
 pub async fn verify(
     State(state): State<SharedState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -300,6 +330,13 @@ pub async fn verify(
         sqlx::query("INSERT INTO login_failures (ip, email) VALUES ($1, $2)").bind(&ip).bind(&email).execute(&state.db).await?;
         return Err(ApiError::InvalidCode);
     };
+
+    // The code was sent while the address could sign in; sign-ups may have closed since, or
+    // its invitation been withdrawn.
+    if !may_sign_in(&state, &email).await? {
+        tracing::info!(email, ip, "login refused: sign-ups are by invitation only");
+        return Err(ApiError::SignupsClosed);
+    }
 
     let mut tx = state.db.begin().await?;
     // Consumed exactly once, even if two requests race.
@@ -497,6 +534,10 @@ pub async fn public_config(State(state): State<SharedState>) -> ApiResult<Json<V
         "resend_cooldown_seconds": state.config.login.resend_cooldown_secs,
         // Shown on the sign-in page, so it is no secret.
         "server_name": settings.values.server_name,
+        // The sign-in page says when new accounts need an invitation; the home page asks
+        // for a team or creates one.
+        "invitation_only": settings.values.invitation_only,
+        "team_approval": settings.values.team_approval,
         "rescue_code_pending": rescue_code_pending,
     })))
 }

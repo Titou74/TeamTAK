@@ -1,17 +1,19 @@
-//! Administration: team requests, teams, accounts, and the state of the reconciliation.
+//! Administration: team requests, teams, accounts and invitations to the platform, and the
+//! state of the reconciliation.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use teamtak_core::names::normalize_email;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};
 use crate::auth::AdminAccount;
 use crate::error::{ApiError, ApiResult};
-use crate::locale::Template;
+use crate::locale::{self, Template};
 use crate::reconciler::Trigger;
 use crate::state::SharedState;
 use crate::teams::{apply_change, team_columns, Team};
@@ -206,6 +208,43 @@ pub async fn list_accounts(State(state): State<SharedState>, AdminAccount(_): Ad
     .fetch_all(&state.db)
     .await?;
     Ok(Json(json!({ "accounts": accounts })))
+}
+
+#[derive(Deserialize)]
+pub struct InviteAccountBody {
+    email: String,
+    /// Language of the account and of the e-mail (the administrator's choice).
+    #[serde(default)]
+    language: Option<String>,
+}
+
+/// `POST /api/admin/accounts`: creates an account for an address and e-mails it an
+/// invitation. With sign-ups by invitation only, it is how an administrator lets in someone
+/// no team has invited yet, a future team leader for instance.
+pub async fn invite_account(
+    State(state): State<SharedState>,
+    AdminAccount(admin): AdminAccount,
+    Json(body): Json<InviteAccountBody>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let email = normalize_email(&body.email).ok_or(ApiError::InvalidEmail)?;
+    let language = body.language.as_deref().map(locale::resolve).unwrap_or(locale::DEFAULT_LANGUAGE);
+    let created: Option<(Uuid,)> =
+        sqlx::query_as("INSERT INTO accounts (id, email, language) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING id")
+            .bind(Uuid::new_v4())
+            .bind(&email)
+            .bind(language)
+            .fetch_optional(&state.db)
+            .await?;
+    let (id,) = created.ok_or(ApiError::AccountExists)?;
+    tracing::info!(account = %email, by = %admin.email, "account created by an administrator");
+    audit::record(&state.db, Actor::Account(&admin), AuditAction::AccountInvited, Target::object(&email), Details::new()).await;
+
+    let vars = [("inviter", admin.label()), ("email", email.as_str()), ("url", state.config.public_url.as_str())];
+    let email_sent = state.mailer.send(&email, language, Template::PlatformInvitation, &vars).await.is_ok();
+    if !email_sent {
+        tracing::warn!(account = %email, "invitation e-mail not sent; the account exists and can sign in");
+    }
+    Ok((StatusCode::CREATED, Json(json!({ "id": id, "email": email, "email_sent": email_sent }))))
 }
 
 #[derive(Deserialize)]

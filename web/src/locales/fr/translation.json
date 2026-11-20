@@ -35,6 +35,7 @@
   "login": {
     "title": "Connexion",
     "intro": "Saisissez votre adresse e-mail : nous vous envoyons un code à usage unique. Il n'y a aucun mot de passe à retenir.",
+    "invitationOnly": "Sur ce serveur, les nouveaux comptes se font uniquement sur invitation : un chef d'équipe ou un administrateur doit d'abord inviter votre adresse.",
     "email": "Adresse e-mail",
     "emailPlaceholder": "vous@exemple.org",
     "send": "Recevoir un code",
@@ -42,6 +43,7 @@
     "haveCodeIntro": "Saisissez le code à 6 chiffres qui vous a été remis pour {{email}}.",
     "codeTitle": "Saisissez votre code",
     "codeIntro": "Nous avons envoyé un code à 6 chiffres à {{email}}. Il est valable {{minutes}} minutes.",
+    "codeIntroInvitationOnly": "Si {{email}} a un compte ou une invitation, nous lui avons envoyé un code à 6 chiffres, valable {{minutes}} minutes. Sinon, un e-mail vous explique comment obtenir une invitation.",
     "code": "Code",
     "verify": "Se connecter",
     "resend": "Envoyer un nouveau code",
@@ -60,7 +62,8 @@
       "title": "Vous n'êtes dans aucune équipe",
       "description": "Sans équipe, un compte n'a aucun accès au serveur TAK. Il y a deux façons d'en rejoindre une :",
       "invited": "Un chef d'équipe vous invite avec cette adresse e-mail : l'invitation apparaît alors sur cette page.",
-      "request": "Vous demandez une nouvelle équipe : un administrateur examine la demande, et vous en devenez le chef."
+      "request": "Vous demandez une nouvelle équipe : un administrateur examine la demande, et vous en devenez le chef.",
+      "create": "Vous créez une nouvelle équipe : elle est active tout de suite, et vous en devenez le chef."
     },
     "invitations": {
       "title": "Invitations",
@@ -79,6 +82,13 @@
       "message": "Message pour l'administrateur",
       "submit": "Envoyer la demande",
       "sent": "Demande envoyée. Vous recevrez un e-mail quand elle aura été examinée."
+    },
+    "create": {
+      "open": "Créer une équipe",
+      "title": "Créer une équipe",
+      "description": "Votre équipe est active tout de suite et vous en êtes le chef : vous invitez vous-même ses membres.",
+      "submit": "Créer l'équipe",
+      "created": "{{team}} est créée."
     }
   },
   "status": {
@@ -417,6 +427,13 @@
       "approved": "{{team}} est approuvée.",
       "rejected": "La demande pour {{team}} est refusée."
     },
+    "policy": {
+      "signupsOpen": "Inscriptions : ouvertes à tous",
+      "signupsInvitation": "Inscriptions : sur invitation uniquement",
+      "approvalOn": "Nouvelles équipes : validées par un administrateur",
+      "approvalOff": "Nouvelles équipes : actives tout de suite, sans validation",
+      "change": "Modifier dans les réglages"
+    },
     "teams": {
       "title": "Équipes",
       "none": "Aucune équipe pour l'instant.",
@@ -453,6 +470,14 @@
       "title_many": "{{count}} comptes",
       "title_other": "{{count}} comptes",
       "description": "Tout le monde peut se connecter, mais un compte sans équipe ne peut rien faire et n'a aucun accès au serveur TAK.",
+      "descriptionInvitationOnly": "Seules les adresses invitées peuvent obtenir un compte. Un compte sans équipe ne peut rien faire et n'a aucun accès au serveur TAK.",
+      "invite": {
+        "label": "Inviter quelqu'un sur la plateforme",
+        "hint": "Crée un compte pour cette adresse et lui envoie une invitation par e-mail : pour un futur chef d'équipe qu'aucune équipe n'a encore invité, quand les inscriptions sont sur invitation.",
+        "submit": "Inviter",
+        "sent": "Invitation envoyée à {{email}}.",
+        "notSent": "Le compte de {{email}} est créé, mais l'e-mail n'a pas pu partir : dites-lui de se connecter avec cette adresse."
+      },
       "account": "Compte",
       "teams": "Équipes",
       "lastLogin": "Dernière connexion",
@@ -1026,7 +1051,9 @@
       "tak_admin_opened": "Ouverture de l'administration de TAK Server par un administrateur",
       "admin_granted": "Rôle d'administrateur accordé",
       "admin_revoked": "Rôle d'administrateur retiré",
+      "account_invited": "Compte créé et invité par un administrateur",
       "team_requested": "Équipe demandée",
+      "team_created": "Équipe créée (sans validation)",
       "team_approved": "Demande d'équipe approuvée",
       "team_rejected": "Demande d'équipe refusée",
       "team_cap_changed": "Plafond de membres modifié",
@@ -1057,7 +1084,7 @@
       "event_ended_early": "Événement terminé avant l'heure",
       "event_cancelled": "Événement annulé",
       "reconciliation_requested": "Vérification du serveur TAK demandée",
-      "settings_changed": "Réglages de supervision modifiés",
+      "settings_changed": "Réglages modifiés",
       "service_restarted": "Service redémarré",
       "backup_run": "Sauvegarde lancée",
       "letsencrypt_synced": "Certificat Let's Encrypt remis à TAK Server",
@@ -1115,6 +1142,14 @@
       "name": "Nom de ce serveur",
       "nameHint": "Par exemple l'événement ou le nom de domaine (tak.example.org). 60 caractères au plus ; laissez vide pour aucun.",
       "namePlaceholder": "Exercice Nord"
+    },
+    "access": {
+      "title": "Inscriptions et équipes",
+      "description": "Deux étapes que vous pouvez garder en main. Cochée, un administrateur contrôle l'étape ; décochée, elle est ouverte à tous.",
+      "invitationOnly": "Inscriptions sur invitation uniquement",
+      "invitationOnlyHint": "Coché : une adresse n'obtient un compte que si un chef d'équipe l'a invitée dans son équipe, ou si un administrateur l'a invitée depuis Administration, Comptes ; les comptes existants se connectent toujours. Décoché : tout le monde peut s'inscrire.",
+      "teamApproval": "Les nouvelles équipes attendent la validation d'un administrateur",
+      "teamApprovalHint": "Coché : une équipe demandée attend qu'un administrateur l'approuve, et les administrateurs sont prévenus par e-mail. Décoché : elle est active tout de suite, avec le plafond de membres par défaut, et la personne qui l'a demandée en est le chef ; les demandes déjà en attente restent à votre décision."
     },
     "alerts": {
       "title": "Alertes",
@@ -1180,6 +1215,8 @@
     "challenge_failed": "La vérification de sécurité de la page n'a pas abouti. Veuillez réessayer.",
     "invalid_code": "Ce code est incorrect ou a expiré. Vérifiez-le, ou demandez-en un nouveau.",
     "mail_unavailable": "L'e-mail n'a pas pu être envoyé. Veuillez réessayer dans un instant.",
+    "signups_closed": "Ce serveur n'accepte de nouveaux comptes que sur invitation, et aucune invitation n'attend cette adresse. Demandez à un chef d'équipe ou à un administrateur de vous inviter.",
+    "account_exists": "Cette adresse a déjà un compte : elle peut se connecter.",
     "team_name_taken": "Une équipe porte déjà ce nom.",
     "too_many_pending_requests": "Vous avez déjà plusieurs demandes en attente. Attendez une réponse avant d'en envoyer une autre.",
     "team_not_active": "Cette équipe n'est pas active.",

@@ -167,6 +167,9 @@ export const api = {
     json<Synced & { team: AdminTeam }>("PATCH", `/admin/teams/${id}`, changes),
   adminAccounts: () => json<{ accounts: AdminAccount[] }>("GET", "/admin/accounts"),
   setAdmin: (id: string, isAdmin: boolean) => json<void>("PATCH", `/admin/accounts/${id}`, { is_admin: isAdmin }),
+  /** Creates an account for the address and e-mails it an invitation, in `language`. */
+  inviteAccount: (email: string, language: string) =>
+    json<{ id: string; email: string; email_sent: boolean }>("POST", "/admin/accounts", { email, language }),
   reconciliation: () => json<Reconciliation>("GET", "/admin/reconciliation"),
   runReconciliation: () => json<Reconciliation>("POST", "/admin/reconciliation/run"),
 

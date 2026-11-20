@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { MailIcon, ServerIcon } from "lucide-react";
+import { MailCheckIcon, MailIcon, ServerIcon } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -31,6 +31,8 @@ export function LoginPage() {
   const errorText = useErrorText();
   const config = usePublicConfig({ refetchOnFocus: true });
   const serverName = config.data?.server_name;
+  // Unknown until the configuration is in: the page then says nothing about sign-ups.
+  const invitationOnly = config.data?.invitation_only === true;
   const proofs = useLoginProofs();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -134,13 +136,21 @@ export function LoginPage() {
               {step === "email"
                 ? t("login.intro")
                 : codeSent
-                  ? t("login.codeIntro", { email, minutes: config.data?.code_ttl_minutes ?? 10 })
+                  ? invitationOnly
+                    ? t("login.codeIntroInvitationOnly", { email, minutes: config.data?.code_ttl_minutes ?? 10 })
+                    : t("login.codeIntro", { email, minutes: config.data?.code_ttl_minutes ?? 10 })
                   : t("login.haveCodeIntro", { email })}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {step === "email" ? (
               <form key="email" onSubmit={(e) => void sendCode(e)} className="space-y-4">
+                {invitationOnly && (
+                  <Alert>
+                    <MailCheckIcon />
+                    <AlertDescription>{t("login.invitationOnly")}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="email">{t("login.email")}</Label>
                   <Input

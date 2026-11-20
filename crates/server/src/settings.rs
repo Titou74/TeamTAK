@@ -1,7 +1,8 @@
-//! Settings an administrator changes from the web UI: the name of the server, alert
-//! thresholds, where alerts go, the backup schedule, retention periods, and the latest TAK
-//! Server version they saw on tak.gov. Stored as one row; a field missing from the stored JSON takes its default, so a
-//! new setting needs no migration.
+//! Settings an administrator changes from the web UI: the name of the server, who may sign
+//! up and whether new teams wait for approval, alert thresholds, where alerts go, the backup
+//! schedule, retention periods, and the latest TAK Server version they saw on tak.gov.
+//! Stored as one row; a field missing from the stored JSON takes its default, so a new
+//! setting needs no migration.
 
 use axum::extract::State;
 use axum::Json;
@@ -27,6 +28,13 @@ pub struct Settings {
     /// Shown on the sign-in page, under the brand and in the subject of the e-mails, to tell
     /// this server from the others an organisation runs. Empty for none.
     pub server_name: String,
+    /// An address without an account gets one only with an invitation waiting for it: to an
+    /// active team, or from an administrator. When false, anyone may create an account by
+    /// signing in. Like `team_approval`, true is the administrator keeping control.
+    pub invitation_only: bool,
+    /// A team asked for waits for an administrator's approval. When false, it is active at
+    /// once and its requester is its leader.
+    pub team_approval: bool,
     pub thresholds: Thresholds,
     /// Alerts are e-mailed to every administrator.
     pub alert_emails: bool,
@@ -51,6 +59,9 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             server_name: String::new(),
+            // What the platform did before these settings existed.
+            invitation_only: false,
+            team_approval: true,
             thresholds: Thresholds::default(),
             alert_emails: true,
             webhook_url: String::new(),
@@ -235,6 +246,7 @@ mod tests {
     fn defaults_are_sensible_and_valid() {
         let d = Settings::default();
         assert!(d.backup_enabled && d.alert_emails);
+        assert!(!d.invitation_only && d.team_approval, "open sign-ups, approved teams: what the platform did before");
         assert_eq!((d.backup_hour_utc, d.backup_keep, d.audit_retention_days, d.reminder_hours), (3, 14, 365, 24));
         assert_eq!(d.clone().validated().unwrap(), d);
         // An empty stored document is the defaults.
@@ -266,6 +278,8 @@ mod tests {
             json!({ "server_name": "x".repeat(61) }),
             json!({ "server_name": "two\u{0}parts" }),
             json!({ "server_name": 12 }),
+            json!({ "invitation_only": "yes" }),
+            json!({ "team_approval": null }),
             json!([1, 2]),
         ] {
             assert_eq!(merged(&base, &patch), Err(ApiError::InvalidInput), "{patch}");
@@ -297,6 +311,20 @@ mod tests {
         assert_eq!(merged(&base, &json!({ "server_name": "é".repeat(60) })).unwrap().server_name.chars().count(), 60);
         assert_eq!(merged(&after, &json!({ "server_name": "   " })).unwrap().server_name, "");
         assert_eq!(changed_fields(&base, &after), vec!["server_name".to_string()]);
+    }
+
+    #[test]
+    fn sign_ups_and_team_approval_change_on_their_own() {
+        let base = Settings::default();
+        let locked = merged(&base, &json!({ "invitation_only": true })).unwrap();
+        assert!(locked.invitation_only && locked.team_approval);
+        assert_eq!(changed_fields(&base, &locked), vec!["invitation_only".to_string()]);
+        let free = merged(&base, &json!({ "team_approval": false })).unwrap();
+        assert!(!free.invitation_only && !free.team_approval);
+        assert_eq!(changed_fields(&base, &free), vec!["team_approval".to_string()]);
+        // Settings stored before these existed keep the platform as it was.
+        let stored: Settings = serde_json::from_value(json!({ "server_name": "North", "backup_keep": 7 })).unwrap();
+        assert!(!stored.invitation_only && stored.team_approval);
     }
 
     #[test]

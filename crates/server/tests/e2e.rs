@@ -224,7 +224,109 @@ async fn an_account_without_a_team_can_do_nothing() {
     assert!(!ldap_group_members(pending["slug"].as_str().unwrap()).iter().any(|_| true), "a pending team has no group");
 }
 
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn sign_ups_by_invitation_only() {
+    let admin = Session::admin().await;
+    let team = approved_team(&admin, "shared", 5).await;
+    let outsider = Session::new_account("outsider").await;
+    let closed = SettingsChanged::apply(&admin, json!({ "invitation_only": true })).await;
+    assert_eq!(Session::anonymous().get("/config").await.ok()["invitation_only"], true, "the sign-in page says so");
+
+    // An address without an account or an invitation: the same answer to the page, but the
+    // e-mail says no instead of carrying a code.
+    let stranger = email("stranger");
+    let browser = Session::anonymous();
+    browser.request_code(&stranger, Some("en")).await.ok();
+    let mail = latest_mail(&stranger).await;
+    assert_eq!(mail.subject, "Sign-up by invitation only");
+    assert!(mail.text.contains("by invitation only"), "{}", mail.text);
+    browser.post("/auth/verify", json!({ "email": stranger, "code": "123456" })).await.expect_error(400, "invalid_code");
+    // The e-mail saying no waits for the countdown, like a code.
+    browser.request_code_once(&stranger, Some("en")).await.expect_error(429, "resend_too_soon");
+
+    // An address a team leader invited gets a code, an account, and finds the invitation.
+    let invited = email("invited");
+    team.leader.post(&format!("/teams/{}/invitations", team.id), json!({ "email": invited })).await.ok();
+    let member = Session::login(&invited, "en").await;
+    assert_eq!(member.get("/me").await.ok()["invitations"][0]["team_id"], team.id.as_str());
+
+    // A withdrawn invitation closes the way again, even for the code sent before.
+    let withdrawn = email("withdrawn");
+    let invitation = team.leader.post(&format!("/teams/{}/invitations", team.id), json!({ "email": withdrawn })).await.ok();
+    let browser = Session::anonymous();
+    browser.request_code(&withdrawn, Some("en")).await.ok();
+    let code = code_in(&latest_mail(&withdrawn).await);
+    team.leader.delete(&format!("/teams/{}/invitations/{}", team.id, invitation["id"].as_str().unwrap())).await.ok();
+    browser.post("/auth/verify", json!({ "email": withdrawn, "code": code })).await.expect_error(403, "signups_closed");
+    browser.get("/me").await.expect_error(401, "unauthenticated");
+
+    // An administrator invites someone to the platform: an account at once, and an e-mail in
+    // the language the administrator chose.
+    let future_leader = email("future-leader");
+    outsider.post("/admin/accounts", json!({ "email": future_leader })).await.expect_error(403, "forbidden");
+    let created = admin.post("/admin/accounts", json!({ "email": future_leader, "language": "fr" })).await.ok();
+    assert_eq!(created["email_sent"], true);
+    let mail = latest_mail(&future_leader).await;
+    assert!(mail.subject.ends_with("vous invite sur TeamTAK"), "{}", mail.subject);
+    assert!(mail.text.contains(&future_leader), "{}", mail.text);
+    admin.post("/admin/accounts", json!({ "email": future_leader.to_uppercase() })).await.expect_error(409, "account_exists");
+    let listed = admin.get("/admin/accounts").await.ok();
+    let row = listed["accounts"].as_array().unwrap().iter().find(|a| a["email"] == future_leader.as_str()).expect("account listed").clone();
+    assert!(row["last_login_at"].is_null(), "never signed in yet: {row}");
+    let newcomer = Session::login(&future_leader, "en").await;
+    assert_eq!(newcomer.get("/me").await.ok()["account"]["language"], "fr");
+    let log = admin.get("/admin/audit?action=account_invited&page_size=200").await.ok();
+    assert!(log["entries"].as_array().unwrap().iter().any(|e| e["object"] == future_leader.as_str() && e["actor_email"] == admin.email.as_str()));
+
+    // Accounts made before still sign in.
+    Session::login(&outsider.email, "en").await.get("/me").await.ok();
+
+    // Open again: anyone signs up.
+    drop(closed);
+    Session::new_account("open-again").await.get("/me").await.ok();
+}
+
 // ------------------------------------------------------------------------------ teams
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn teams_are_active_at_once_without_approval() {
+    let admin = Session::admin().await;
+    let free = SettingsChanged::apply(&admin, json!({ "team_approval": false })).await;
+    assert_eq!(Session::anonymous().get("/config").await.ok()["team_approval"], false, "the home page says so");
+
+    let leader = Session::new_account("leader").await;
+    let name = unique("Free ");
+    let team = leader.post("/teams", json!({ "name": name, "mode": "shared" })).await.ok();
+    let id = team["id"].as_str().unwrap().to_string();
+    assert_eq!(team["status"], "active");
+    // Nothing waits for an administrator: no decision to take, no e-mail.
+    admin.post(&format!("/admin/teams/{id}/decision"), json!({ "approve": true })).await.expect_error(409, "team_already_decided");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let subjects = mail_subjects(&admin.email).await;
+    assert!(!subjects.iter().any(|s| s.contains(&name)), "{subjects:?}");
+
+    // The team works at once, with the default member cap.
+    let fixture = TeamFixture { id: id.clone(), slug: team["slug"].as_str().unwrap().to_string(), name: name.clone(), leader };
+    add_member(&fixture).await;
+    create_access(&fixture.leader, &id, json!({ "kind": "shared" })).await;
+    let detail = fixture.leader.get(&format!("/teams/{id}")).await.ok();
+    assert_eq!(detail["members"].as_array().unwrap().len(), 2);
+    let log = admin.get("/admin/audit?action=team_created&page_size=200").await.ok();
+    assert!(log["entries"].as_array().unwrap().iter().any(|e| e["team_name"] == name.as_str() && e["actor_email"] == fixture.leader.email.as_str()));
+
+    // No limit of pending requests either.
+    for _ in 0..4 {
+        let more = fixture.leader.post("/teams", json!({ "name": unique("Free "), "mode": "individual" })).await.ok();
+        assert_eq!(more["status"], "active");
+    }
+
+    // Approval on again: a new team waits.
+    drop(free);
+    let waiting = fixture.leader.post("/teams", json!({ "name": unique("Waits "), "mode": "shared" })).await.ok();
+    assert_eq!(waiting["status"], "pending");
+}
 
 #[tokio::test]
 #[ignore = "needs the running stack"]
