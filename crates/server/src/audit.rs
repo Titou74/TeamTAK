@@ -69,8 +69,12 @@ audit_actions! {
     TakAdminOpened => "tak_admin_opened",
     AdminGranted => "admin_granted",
     AdminRevoked => "admin_revoked",
+    /// An administrator created an account for an address and e-mailed it an invitation.
+    AccountInvited => "account_invited",
 
     TeamRequested => "team_requested",
+    /// A team was created active at once: team approval is off.
+    TeamCreated => "team_created",
     TeamApproved => "team_approved",
     TeamRejected => "team_rejected",
     TeamCapChanged => "team_cap_changed",

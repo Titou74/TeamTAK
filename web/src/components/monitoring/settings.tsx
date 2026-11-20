@@ -70,7 +70,8 @@ function SettingsForm({ view }: { view: SettingsView }) {
       setDraft(saved.settings);
       setPassphrase("");
       toast.success(done);
-      // The server's name is shown in the header and on the sign-in page.
+      // The server's name is shown in the header and on the sign-in page; whether sign-ups are
+      // open and teams approved changes the sign-in page, the home page and the administration.
       void queryClient.invalidateQueries({ queryKey: ["config"] });
       // The platform looks again with the new settings, so the other tabs show their effect.
       queryClient.setQueryData(["admin", "monitoring"], await api.monitoring(true));
@@ -134,6 +135,17 @@ function SettingsForm({ view }: { view: SettingsView }) {
           <Label htmlFor="set-server-name">{t("settings.server.name")}</Label>
           <Input id="set-server-name" maxLength={60} value={draft.server_name} placeholder={t("settings.server.namePlaceholder")} onChange={(e) => set("server_name", e.target.value)} className="max-w-md" />
           <p className="text-xs text-muted-foreground">{t("settings.server.nameHint")}</p>
+        </CardContent>
+      </Card>
+
+      <Card id="sign-ups">
+        <CardHeader>
+          <CardTitle>{t("settings.access.title")}</CardTitle>
+          <CardDescription>{t("settings.access.description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Toggle id="set-invitation-only" label={t("settings.access.invitationOnly")} hint={t("settings.access.invitationOnlyHint")} checked={draft.invitation_only} onChange={(v) => set("invitation_only", v)} />
+          <Toggle id="set-approval" label={t("settings.access.teamApproval")} hint={t("settings.access.teamApprovalHint")} checked={draft.team_approval} onChange={(v) => set("team_approval", v)} />
         </CardContent>
       </Card>
 
@@ -259,7 +271,7 @@ function SettingsForm({ view }: { view: SettingsView }) {
   );
 }
 
-/** The server's name, thresholds, where alerts go, the backup schedule, retention. */
+/** The server's name, sign-ups and team approval, thresholds, where alerts go, the backup schedule, retention. */
 export function SettingsTab() {
   const query = useQuery({ queryKey: ["admin", "settings"], queryFn: api.settings });
   if (!query.data) return <QueryState pending={query.isPending} error={query.error} />;

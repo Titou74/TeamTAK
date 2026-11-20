@@ -138,8 +138,10 @@ versions are removed once the stack runs on the new one.
 
 ## Set from the web UI
 
-The name of the server, the thresholds of the alerts, the backup schedule and passphrase, and the
-webhook are not in this file: they are set from the web UI, in **Monitoring, Settings** (see
+The name of the server, who may sign up and whether new teams wait for approval, the thresholds
+of the alerts, the backup schedule and passphrase, and the webhook are not in this file: they are
+set from the web UI, in **Monitoring, Settings** (see
+[sign-ups and team approval](architecture.md#sign-ups-and-team-approval),
 [monitoring](monitoring.md) and [backups](backups.md)).
 
 The name of the server tells it from the others an organisation runs (one per event, or per

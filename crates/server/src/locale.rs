@@ -89,7 +89,12 @@ fn fill(template: &str, vars: &[(&str, &str)]) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Template {
     LoginCode,
+    /// Instead of a code, to an address that may not sign up: sign-ups are by invitation
+    /// only and none waits for it.
+    SignupsClosed,
     Invitation,
+    /// From an administrator who created an account for the address.
+    PlatformInvitation,
     TeamRequest,
     TeamApproved,
     TeamRejected,
@@ -122,7 +127,9 @@ impl Template {
     #[cfg_attr(not(test), allow(dead_code))]
     pub const ALL: &'static [Template] = &[
         Template::LoginCode,
+        Template::SignupsClosed,
         Template::Invitation,
+        Template::PlatformInvitation,
         Template::TeamRequest,
         Template::TeamApproved,
         Template::TeamRejected,
@@ -143,7 +150,9 @@ impl Template {
     pub fn key(self) -> &'static str {
         match self {
             Template::LoginCode => "login_code",
+            Template::SignupsClosed => "signups_closed",
             Template::Invitation => "invitation",
+            Template::PlatformInvitation => "platform_invitation",
             Template::TeamRequest => "team_request",
             Template::TeamApproved => "team_approved",
             Template::TeamRejected => "team_rejected",

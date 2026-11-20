@@ -157,7 +157,7 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/events/{id}/cancel", post(events::admin_cancel_event))
         .route("/admin/events/{id}/teams", post(events::admin_assign_team))
         .route("/admin/events/{id}/teams/{team_id}", delete(events::admin_remove_team))
-        .route("/admin/accounts", get(admin::list_accounts))
+        .route("/admin/accounts", get(admin::list_accounts).post(admin::invite_account))
         .route("/admin/accounts/{id}", patch(admin::update_account))
         .route("/admin/reconciliation", get(admin::reconciliation))
         .route("/admin/reconciliation/run", post(admin::run_reconciliation))

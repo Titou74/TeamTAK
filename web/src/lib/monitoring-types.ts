@@ -307,6 +307,10 @@ export interface Thresholds {
 export interface Settings {
   /** Shown on the sign-in page, under the brand and in e-mail subjects; empty for none. */
   server_name: string;
+  /** New accounts by invitation only; false: anyone may create one by signing in. */
+  invitation_only: boolean;
+  /** New teams wait for an administrator's approval; false: active at once. */
+  team_approval: boolean;
   thresholds: Thresholds;
   alert_emails: boolean;
   webhook_url: string;

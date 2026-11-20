@@ -16,10 +16,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { useNotifyError } from "@/lib/hooks";
+import { useNotifyError, usePublicConfig } from "@/lib/hooks";
 import type { Me, MyInvitation, TeamMode } from "@/lib/types";
 
-function RequestTeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/**
+ * Asks for a team, which waits for an administrator; or, when team approval is off, creates
+ * it at once (`approval` false): nothing then goes to an administrator, so no message either.
+ */
+function RequestTeamDialog({ open, onOpenChange, approval }: { open: boolean; onOpenChange: (open: boolean) => void; approval: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -33,9 +37,10 @@ function RequestTeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange
     event.preventDefault();
     setPending(true);
     try {
-      const team = await api.requestTeam(name, mode, message);
+      const team = await api.requestTeam(name, mode, approval ? message : "");
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      toast.success(t("home.request.sent"));
+      // What the server did, whatever the page believed when it opened.
+      toast.success(team.status === "active" ? t("home.create.created", { team: team.name }) : t("home.request.sent"));
       onOpenChange(false);
       setName("");
       setMessage("");
@@ -52,8 +57,8 @@ function RequestTeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange
       <DialogContent className="sm:max-w-2xl" closeLabel={t("common.close")}>
         <form onSubmit={(e) => void submit(e)} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>{t("home.request.title")}</DialogTitle>
-            <DialogDescription>{t("home.request.description")}</DialogDescription>
+            <DialogTitle>{approval ? t("home.request.title") : t("home.create.title")}</DialogTitle>
+            <DialogDescription>{approval ? t("home.request.description") : t("home.create.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="team-name">{t("home.request.name")}</Label>
@@ -65,18 +70,20 @@ function RequestTeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <ModePicker value={mode} onChange={setMode} />
             <p className="text-xs text-muted-foreground">{t("home.request.modeHelp")}</p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="team-message">
-              {t("home.request.message")} <span className="font-normal text-muted-foreground">({t("common.optional")})</span>
-            </Label>
-            <Textarea id="team-message" maxLength={500} rows={3} value={message} onChange={(e) => setMessage(e.target.value)} />
-          </div>
+          {approval && (
+            <div className="space-y-2">
+              <Label htmlFor="team-message">
+                {t("home.request.message")} <span className="font-normal text-muted-foreground">({t("common.optional")})</span>
+              </Label>
+              <Textarea id="team-message" maxLength={500} rows={3} value={message} onChange={(e) => setMessage(e.target.value)} />
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={pending || name.trim().length < 2}>
-              {pending ? t("common.working") : t("home.request.submit")}
+              {pending ? t("common.working") : approval ? t("home.request.submit") : t("home.create.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -131,6 +138,8 @@ export function HomePage({ me }: { me: Me }) {
   const { t } = useTranslation();
   const [requestOpen, setRequestOpen] = useState(false);
   const hasNothing = me.teams.length === 0 && me.invitations.length === 0;
+  // Approval is assumed until the configuration says otherwise.
+  const approval = usePublicConfig().data?.team_approval ?? true;
 
   return (
     <>
@@ -140,7 +149,7 @@ export function HomePage({ me }: { me: Me }) {
         actions={
           <Button onClick={() => setRequestOpen(true)}>
             <PlusIcon />
-            {t("home.request.open")}
+            {approval ? t("home.request.open") : t("home.create.open")}
           </Button>
         }
       />
@@ -162,7 +171,7 @@ export function HomePage({ me }: { me: Me }) {
           <CardContent>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               <li>{t("home.empty.invited")}</li>
-              <li>{t("home.empty.request")}</li>
+              <li>{approval ? t("home.empty.request") : t("home.empty.create")}</li>
             </ul>
           </CardContent>
         </Card>
@@ -197,7 +206,7 @@ export function HomePage({ me }: { me: Me }) {
         </ul>
       )}
 
-      <RequestTeamDialog open={requestOpen} onOpenChange={setRequestOpen} />
+      <RequestTeamDialog open={requestOpen} onOpenChange={setRequestOpen} approval={approval} />
     </>
   );
 }

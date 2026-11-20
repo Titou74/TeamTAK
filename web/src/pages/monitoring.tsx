@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/app-shell";
 import { AuditTab } from "@/components/monitoring/audit";
@@ -16,6 +17,8 @@ import { api } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
 import { useNotifyError } from "@/lib/hooks";
 
+const TABS = ["overview", "devices", "backups", "audit", "settings"] as const;
+
 /**
  * Monitoring, for administrators: the server, the services, TAK Server, certificates,
  * backups, the audit log and their settings. Everything shown is what the platform last saw
@@ -27,6 +30,9 @@ export function MonitoringPage() {
   const notifyError = useNotifyError();
   const [looking, setLooking] = useState(false);
   const query = useQuery({ queryKey: ["admin", "monitoring"], queryFn: () => api.monitoring(), refetchInterval: 15_000 });
+  // `?tab=settings` opens a tab directly: the administration links to the settings.
+  const [params] = useSearchParams();
+  const tab = TABS.find((name) => name === params.get("tab")) ?? "overview";
 
   async function lookNow() {
     setLooking(true);
@@ -56,7 +62,7 @@ export function MonitoringPage() {
           </>
         }
       />
-      <Tabs defaultValue="overview">
+      <Tabs key={tab} defaultValue={tab}>
         <TabsList>
           <TabsTrigger value="overview">{t("monitoring.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="devices">{t("monitoring.tabs.devices")}</TabsTrigger>

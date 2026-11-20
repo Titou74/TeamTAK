@@ -16,6 +16,7 @@ use crate::auth::{Account, CurrentAccount};
 use crate::error::{is_unique_violation, ApiError, ApiResult};
 use crate::locale::{self, Template};
 use crate::reconciler::Trigger;
+use crate::settings;
 use crate::state::SharedState;
 
 /// Requests one account may have waiting for approval at the same time.
@@ -116,7 +117,8 @@ pub struct TeamRequestBody {
     message: String,
 }
 
-/// `POST /api/teams`: asks for a team. It does nothing until an administrator approves it.
+/// `POST /api/teams`: asks for a team. It does nothing until an administrator approves it,
+/// unless team approval is off in the settings: then it is active at once.
 pub async fn request_team(
     State(state): State<SharedState>,
     CurrentAccount(account): CurrentAccount,
@@ -131,18 +133,23 @@ pub async fn request_team(
     if !is_valid_slug(&slug) {
         return Err(ApiError::InvalidTeamName);
     }
-    let (pending,): (i64,) = sqlx::query_as("SELECT count(*) FROM teams WHERE requested_by = $1 AND status = 'pending'")
-        .bind(account.id)
-        .fetch_one(&state.db)
-        .await?;
-    if pending >= MAX_PENDING_REQUESTS {
-        return Err(ApiError::TooManyPendingRequests);
+    let approval = settings::load(&state.db).await?.values.team_approval;
+    if approval {
+        let (pending,): (i64,) = sqlx::query_as("SELECT count(*) FROM teams WHERE requested_by = $1 AND status = 'pending'")
+            .bind(account.id)
+            .fetch_one(&state.db)
+            .await?;
+        if pending >= MAX_PENDING_REQUESTS {
+            return Err(ApiError::TooManyPendingRequests);
+        }
     }
 
     let mut tx = state.db.begin().await?;
+    // Without approval, the team is decided when it is created, by nobody.
     let team: Team = sqlx::query_as(concat!(
-        "INSERT INTO teams (id, name, slug, status, mode, member_cap, request_message, requested_by)
-         VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7) RETURNING ",
+        "INSERT INTO teams (id, name, slug, status, mode, member_cap, request_message, requested_by, decided_at)
+         VALUES ($1, $2, $3, CASE WHEN $8 THEN 'pending' ELSE 'active' END, $4, $5, $6, $7,
+                 CASE WHEN $8 THEN NULL ELSE now() END) RETURNING ",
         team_columns!()
     ))
     .bind(Uuid::new_v4())
@@ -152,6 +159,7 @@ pub async fn request_team(
     .bind(state.config.default_member_cap)
     .bind(&message)
     .bind(account.id)
+    .bind(approval)
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| if is_unique_violation(&e, "teams_slug_idx") { ApiError::TeamNameTaken } else { e.into() })?;
@@ -161,8 +169,14 @@ pub async fn request_team(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    tracing::info!(team = %team.slug, by = %account.email, "team requested");
     let details = Details::new().text(Detail::Mode, body.mode.as_str());
+    if !approval {
+        tracing::info!(team = %team.slug, by = %account.email, "team created without approval");
+        audit::record(&state.db, audit::Actor::Account(&account), AuditAction::TeamCreated, Target::team(&team), details).await;
+        // Nothing waits for the administrators: they are not e-mailed.
+        return Ok((StatusCode::CREATED, Json(team)));
+    }
+    tracing::info!(team = %team.slug, by = %account.email, "team requested");
     audit::record(&state.db, audit::Actor::Account(&account), AuditAction::TeamRequested, Target::team(&team), details).await;
 
     let admins: Vec<(String, String)> =
