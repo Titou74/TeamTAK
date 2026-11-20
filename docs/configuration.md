@@ -1,13 +1,16 @@
 # Configuration
 
 `install.sh` generates `deploy/.env`; [`deploy/.env.example`](../deploy/.env.example) documents
-every variable. After editing it, run `./install.sh` again to apply the change.
+every variable. After editing it, run `./install.sh` again (`sudo ./install.sh` on Linux) to apply
+the change. It re-creates the containers whose settings changed, and restarts TAK Server when its
+`CoreConfig.xml` changed (`CERT_VALIDITY_DAYS`, `LDAP_UPDATE_INTERVAL`): the TAK clients are then
+disconnected for about a minute. `docker compose restart` does not read `deploy/.env` again.
 
 The settings worth knowing:
 
 | Variable | Meaning |
 |---|---|
-| `CERT_VALIDITY_DAYS` | Validity of client certificates issued by enrollment. A certificate inside a zip stops working when it expires and nothing renews it; the platform records each expiry |
+| `CERT_VALIDITY_DAYS` | Validity of client certificates issued by enrollment. A certificate inside a zip stops working when it expires and nothing renews it; the platform records each expiry. A change applies to the certificates issued afterwards |
 | `DEFAULT_MEMBER_CAP` | Member cap given to a new team (the administrator can change it per team) |
 | `LOGIN_MAX_CODES_PER_EMAIL`, `LOGIN_MAX_CODES_PER_IP`, `LOGIN_MAX_FAILURES_PER_IP` | Hourly limits of the login codes |
 | `RECONCILE_INTERVAL_SECONDS` | Period of the reconciliation loop |
@@ -57,6 +60,22 @@ What is refused:
 Port 8443 is free on the machine (TAK Server's API is not published), so it can be one of the
 client ports. Enrollment stays on 8446 only: a device on a network that also blocks 8446 needs
 the zip with certificate, which connects without enrolling.
+
+## Settings fixed at install
+
+Some values are written into the data on the first run: changing them in `deploy/.env` afterwards
+is not enough, and for the secrets and the names it breaks the installation:
+
+- the secrets (`APP_SECRET`, `POSTGRES_PASSWORD`, `LDAP_ROOT_PW`, `LDAP_TAKSERVER_PW`,
+  `LDAP_MANAGER_PW`, `TAK_DB_PASSWORD`, `TAK_CERT_PASSWORD`): the databases, the directory and the
+  keystores were created with them, and without `APP_SECRET` the stored TAK passwords and zip
+  certificates cannot be read;
+- `LDAP_BASE_DN` and the certificate names (`ROOT_CA_NAME`, `INT_CA_NAME`, `SERVER_CERT_NAME`,
+  `TAK_API_CERT_NAME`);
+- `PUBLIC_HOST`: TAK Server's certificate names the host given at install, and `install.sh` does
+  not issue a new one;
+- `TAK_VERSION`, `TAK_IMAGE` and `TAK_DB_IMAGE`: `./install.sh --upgrade-tak` changes them (README,
+  "Upgrading TAK Server").
 
 ## Monitoring, backups and the webhook
 

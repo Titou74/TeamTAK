@@ -214,9 +214,29 @@ fix_ownership() {
   "
 }
 
+# Copies the file $1 to deploy/data/tak/$2, in place: a bind-mounted file must keep its
+# inode. As root in a container when it cannot be written from here (it may already belong
+# to uid 1001).
+write_tak_file() {
+  local src="$1" out="$DATA_DIR/tak/$2"
+  if [ -f "$out" ] && cmp -s "$src" "$out"; then
+    :
+  elif [ -w "$out" ] || { [ ! -e "$out" ] && [ -w "$DATA_DIR/tak" ]; }; then
+    cat "$src" > "$out"
+  else
+    docker run --rm -u 0 --entrypoint sh -v "$DATA_DIR/tak:/t" -v "$src:/new:ro" "$TAK_IMAGE" -c "cat /new > '/t/$2'"
+  fi
+}
+
 # Writes deploy/data/tak/CoreConfig.xml from the template and deploy/.env.
 # The 8446 connector presents the Let's Encrypt certificate once it has been handed over
 # (deploy/scripts/sync-letsencrypt.sh), the private CA's otherwise.
+#
+# Sets CORE_CONFIG_CHANGED to true when the rendered configuration differs from the one
+# rendered last time. TAK Server reads the file only when it starts, and rewrites it then
+# (comments dropped, a serverId added): the file itself cannot tell whether the settings
+# changed, so a checksum of the last rendering is kept next to it.
+CORE_CONFIG_CHANGED=false
 render_core_config() {
   local attrs="" note="Certificate: TAK Server's own, signed by the private CA."
   if [ "${TAK_ENROLL_LETSENCRYPT:-false}" = true ] && [ -f "$DATA_DIR/tak/certs/letsencrypt.jks" ]; then
@@ -236,15 +256,15 @@ render_core_config() {
       -e "s|__ENROLL_CONNECTOR_NOTE__|$note|g" \
       -e "s|__ENROLL_KEYSTORE_ATTRS__|$attrs|g" \
       "$DEPLOY_DIR/takserver/CoreConfig.tpl.xml" > "$tmp"
-  # Rewritten in place: the file is bind-mounted into the container (its inode must not
-  # change), and it may already belong to uid 1001.
-  if [ -f "$out" ] && cmp -s "$tmp" "$out"; then
-    :
-  elif [ -f "$out" ] && ! [ -w "$out" ]; then
-    docker run --rm -u 0 --entrypoint sh -v "$DATA_DIR/tak:/t" -v "$tmp:/new.xml:ro" "$TAK_IMAGE" -c 'cat /new.xml > /t/CoreConfig.xml'
-  else
-    cat "$tmp" > "$out"
+  local stamp="$DATA_DIR/tak/CoreConfig.rendered.cksum" sum
+  sum="$(cksum < "$tmp")"
+  CORE_CONFIG_CHANGED=true
+  if [ -f "$out" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$sum" ]; then
+    CORE_CONFIG_CHANGED=false
   fi
+  write_tak_file "$tmp" CoreConfig.xml
+  printf '%s\n' "$sum" > "$tmp"
+  write_tak_file "$tmp" CoreConfig.rendered.cksum
   rm -f "$tmp"
 }
 

@@ -725,8 +725,20 @@ compose build app agent > "$DATA_DIR/build-app.log" 2>&1 || { tail -n 40 "$DATA_
 rm -f "$DATA_DIR/build-app.log"
 info "teamtak/app:local and teamtak/agent:local built"
 
+# TAK Server reads CoreConfig.xml only when it starts. Compose re-creates its container when
+# the image or the environment changed, not when that file did: a TAK Server already running,
+# and left as it is by Compose, must be restarted to load a new CoreConfig.xml.
+tak_running=""
+if [ "$CORE_CONFIG_CHANGED" = true ]; then
+  tak_id="$(svc_container takserver)"
+  if [ -n "$tak_id" ] && [ "$(docker inspect -f '{{.State.Running}}' "$tak_id" 2>/dev/null)" = true ]; then
+    tak_running="$tak_id"
+  fi
+fi
+
 if [ "$NO_START" = 1 ]; then
   log "Prepared. Start with: cd deploy && docker compose up -d"
+  [ -z "$tak_running" ] || info "TAK Server still runs the previous CoreConfig.xml: also run docker compose restart takserver"
   exit 0
 fi
 
@@ -734,6 +746,10 @@ fi
 
 log "Starting the stack"
 compose up -d --remove-orphans 2>&1 | grep -v -E '^\s*$' | sed 's/^/   /' || true
+if [ -n "$tak_running" ] && [ "$(svc_container takserver)" = "$tak_running" ]; then
+  info "CoreConfig.xml changed: restarting TAK Server to load it (clients disconnected for about a minute)"
+  docker restart --time 30 "$tak_running" > /dev/null
+fi
 
 info "waiting for TAK Server (about a minute)"
 wait_healthy takserver 420 || { compose logs --tail 40 takserver >&2; die "TAK Server did not become healthy"; }
