@@ -206,6 +206,42 @@ pub fn plan_sessions(desired: &DesiredState, subscriptions: &[Subscription], cut
     actions
 }
 
+/// A cut of a session with an account that TAK Server did not confirm.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailedCut {
+    pub subscription_uid: String,
+    pub username: String,
+    pub error: String,
+}
+
+impl FailedCut {
+    fn message(&self) -> String {
+        format!("cutting session {}: {}", self.subscription_uid, self.error)
+    }
+}
+
+/// What became of the cuts TAK Server did not confirm, given the sessions it lists afterwards.
+///
+/// TAK Server 5.8 sometimes answers 400 to a cut it has just carried out: the call closes the
+/// connection, the handler of the closed connection removes the session, and when it does so
+/// first, the call finds nothing left to remove (seen in the integration tests). A session can
+/// also close by itself between the listing and the cut. Either way a session that is no longer
+/// listed is gone, which is what the cut was for: it counts as cut. One still listed was not
+/// cut, and that stays an error.
+pub fn settle_failed_cuts(failed: Vec<FailedCut>, listed: &[Subscription]) -> (Vec<Change>, Vec<String>) {
+    let open: BTreeSet<&str> = listed.iter().map(|s| s.subscription_uid.as_str()).collect();
+    let mut changes = Vec::new();
+    let mut errors = Vec::new();
+    for cut in failed {
+        if open.contains(cut.subscription_uid.as_str()) {
+            errors.push(cut.message());
+        } else {
+            changes.push(Change::SessionCut { username: cut.username, subscription_uid: cut.subscription_uid });
+        }
+    }
+    (changes, errors)
+}
+
 /// Something a pass changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
@@ -456,13 +492,17 @@ pub async fn run_pass_with(
     match tak.subscriptions().await {
         Err(e) => report.errors.push(format!("listing sessions: {e}")),
         Ok(subscriptions) => {
+            let mut failed_cuts = Vec::new();
             for action in plan_sessions(desired, &subscriptions, changed_something) {
                 match action {
                     SessionAction::Cut { subscription_uid, username, best_effort } => {
                         match tak.cut_subscription(&subscription_uid).await {
                             Ok(()) => report.changes.push(Change::SessionCut { username, subscription_uid }),
                             Err(e) if best_effort => tracing::debug!(subscription_uid, error = %e, "group-less session not cut"),
-                            Err(e) => report.errors.push(format!("cutting session {subscription_uid}: {e}")),
+                            Err(e) => {
+                                tracing::debug!(subscription_uid, error = %e, "cut not confirmed, checking whether the session is gone");
+                                failed_cuts.push(FailedCut { subscription_uid, username, error: e.to_string() });
+                            }
                         }
                     }
                     // Already refreshed above; the session will follow within a second.
@@ -471,6 +511,17 @@ pub async fn run_pass_with(
                         Ok(()) => report.changes.push(Change::GroupsRefreshed { username }),
                         Err(e) => report.errors.push(format!("refreshing the groups of {username}: {e}")),
                     },
+                }
+            }
+            if !failed_cuts.is_empty() {
+                // A refused cut may still have closed the session: see [`settle_failed_cuts`].
+                match tak.subscriptions().await {
+                    Ok(listed) => {
+                        let (changes, errors) = settle_failed_cuts(failed_cuts, &listed);
+                        report.changes.extend(changes);
+                        report.errors.extend(errors);
+                    }
+                    Err(_) => report.errors.extend(failed_cuts.iter().map(FailedCut::message)),
                 }
             }
         }
@@ -667,6 +718,70 @@ mod tests {
         assert!(report.changes.contains(&Change::SessionCut { username: "bravo-ann".into(), subscription_uid: "tls:3".into() }));
         assert_eq!(tak.subscription_uids(), vec!["tls:2".to_string()], "alpha is untouched");
         assert!(dir.state().groups["bravo"].members.contains("bravo-ann"));
+    }
+
+    #[tokio::test]
+    async fn a_session_gone_when_its_cut_fails_counts_as_cut() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        run_pass(&two_teams(), &dir, &tak).await;
+        tak.add_subscription("tls:1", "bravo-ann", &["bravo"]);
+        tak.add_subscription("tls:2", "bravo-bob", &["bravo"]);
+        tak.add_subscription("tls:3", "alpha-shared", &["alpha"]);
+        // Team bravo is suspended. Ann's device disconnects by itself right after the pass
+        // has listed the sessions, so its cut is answered 400; Bob's session is cut, but TAK
+        // Server answers 400 all the same, as it sometimes does.
+        tak.close_after_next_listing("tls:1");
+        tak.fail_next_cut("tls:2", 400, true);
+        tak.clear_calls();
+
+        let suspended = desired(vec![account("alpha-shared", &["alpha"]), account("bravo-ann", &[]), account("bravo-bob", &[])]);
+        let report = run_pass(&suspended, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        for (username, uid) in [("bravo-ann", "tls:1"), ("bravo-bob", "tls:2")] {
+            let cut = Change::SessionCut { username: username.into(), subscription_uid: uid.into() };
+            assert!(report.changes.contains(&cut), "{:?}", report.changes);
+        }
+        assert_eq!(tak.subscription_uids(), vec!["tls:3".to_string()]);
+        let listings = tak.calls().iter().filter(|c| *c == "subscriptions").count();
+        assert_eq!(listings, 2, "listed once more to see what became of the two cuts: {:?}", tak.calls());
+
+        // Nothing left to do: no session is listed again.
+        tak.clear_calls();
+        assert!(run_pass(&suspended, &dir, &tak).await.is_clean());
+        assert_eq!(tak.calls().iter().filter(|c| *c == "subscriptions").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_cut_refused_on_a_session_still_open_stays_an_error() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        run_pass(&two_teams(), &dir, &tak).await;
+        tak.add_subscription("tls:1", "bravo-ann", &["bravo"]);
+        tak.add_subscription("tls:2", "alpha-shared", &["alpha"]);
+        tak.fail_next_cut("tls:1", 500, false);
+
+        let suspended = desired(vec![account("alpha-shared", &["alpha"]), account("bravo-ann", &[]), account("bravo-bob", &[])]);
+        let report = run_pass(&suspended, &dir, &tak).await;
+        assert_eq!(
+            report.errors,
+            vec!["cutting session tls:1: TAK Server answered 500 to DELETE /Marti/api/subscriptions/delete/tls:1".to_string()]
+        );
+        assert!(!report.changes.iter().any(|c| c.kind() == "session_cut"), "{:?}", report.changes);
+        assert_eq!(tak.subscription_uids(), vec!["tls:1".to_string(), "tls:2".to_string()]);
+
+        // The next pass cuts it.
+        let report = run_pass(&suspended, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.changes, vec![Change::SessionCut { username: "bravo-ann".into(), subscription_uid: "tls:1".into() }]);
+        assert_eq!(tak.subscription_uids(), vec!["tls:2".to_string()]);
+    }
+
+    #[test]
+    fn a_refused_cut_is_an_error_only_while_the_session_is_listed() {
+        let failed = |uid: &str| FailedCut { subscription_uid: uid.into(), username: "u".into(), error: "boom".into() };
+        let listed = [Subscription { subscription_uid: "tls:2".into(), username: "u".into(), ..Default::default() }];
+        let (changes, errors) = settle_failed_cuts(vec![failed("tls:1"), failed("tls:2")], &listed);
+        assert_eq!(changes, vec![Change::SessionCut { username: "u".into(), subscription_uid: "tls:1".into() }]);
+        assert_eq!(errors, vec!["cutting session tls:2: boom".to_string()]);
     }
 
     #[tokio::test]

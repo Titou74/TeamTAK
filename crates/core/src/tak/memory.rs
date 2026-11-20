@@ -1,6 +1,7 @@
 //! In-memory TAK Server for unit tests: it records what it is asked and keeps a list of
 //! certificates and sessions that tests can prepare.
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -15,6 +16,11 @@ struct State {
     calls: Vec<String>,
     next_id: i64,
     down: bool,
+    /// Sessions that close right after the next listing.
+    closing: Vec<String>,
+    /// Sessions whose next cut answers an error: its status, and whether the session is
+    /// closed anyway.
+    faulty_cuts: BTreeMap<String, (u16, bool)>,
 }
 
 #[derive(Default)]
@@ -59,6 +65,18 @@ impl MemoryTakServer {
         });
     }
 
+    /// The next listing still shows this session, which closes right after it, as when a
+    /// device disconnects while a pass runs.
+    pub fn close_after_next_listing(&self, uid: &str) {
+        self.state.lock().unwrap().closing.push(uid.into());
+    }
+
+    /// The next cut of this session answers `status`. With `closes`, the session is closed
+    /// anyway, as TAK Server 5.8 sometimes does with a 400.
+    pub fn fail_next_cut(&self, uid: &str, status: u16, closes: bool) {
+        self.state.lock().unwrap().faulty_cuts.insert(uid.into(), (status, closes));
+    }
+
     pub fn certificates(&self) -> Vec<IssuedCertificate> {
         self.state.lock().unwrap().certificates.clone()
     }
@@ -98,13 +116,28 @@ impl TakServer for MemoryTakServer {
     }
 
     async fn subscriptions(&self) -> Result<Vec<Subscription>, TakError> {
-        Ok(self.enter("subscriptions".into())?.subscriptions.clone())
+        let mut s = self.enter("subscriptions".into())?;
+        let listed = s.subscriptions.clone();
+        let closing = std::mem::take(&mut s.closing);
+        s.subscriptions.retain(|x| !closing.contains(&x.subscription_uid));
+        Ok(listed)
     }
 
     async fn cut_subscription(&self, subscription_uid: &str) -> Result<(), TakError> {
         let mut s = self.enter(format!("cut_subscription {subscription_uid}"))?;
-        s.subscriptions.retain(|x| x.subscription_uid != subscription_uid);
-        Ok(())
+        let answered =
+            |status| TakError::Status { call: format!("DELETE /Marti/api/subscriptions/delete/{subscription_uid}"), status };
+        let listed = s.subscriptions.iter().any(|x| x.subscription_uid == subscription_uid);
+        let fault = s.faulty_cuts.remove(subscription_uid);
+        if listed && fault.is_none_or(|(_, closes)| closes) {
+            s.subscriptions.retain(|x| x.subscription_uid != subscription_uid);
+        }
+        match fault {
+            Some((status, _)) => Err(answered(status)),
+            // What TAK Server answers for a session it does not list.
+            None if !listed => Err(answered(400)),
+            None => Ok(()),
+        }
     }
 
     async fn active_certificates(&self) -> Result<Vec<IssuedCertificate>, TakError> {
