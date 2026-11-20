@@ -351,6 +351,48 @@ Host agent, administrator dashboard, alerts, updates, backup and restore, audit 
 CloudTAK wired to the same accounts, MediaMTX video, per-team distribution of maps and plugins,
 federation.
 
+CloudTAK, checked 2026-11-20 on v13.124.0 (licence, then accounts). Licence: AGPL-3.0-only,
+standard text with no added terms. Its production dependencies (MIT, Apache-2.0, BSD, ISC,
+LGPL-3.0, MPL-2.0, AGPL) and its side services (media-infra and Garage under AGPL-3.0, PostGIS under
+GPL-2.0) are all compatible. It holds no TAK Server code and only talks to it over the network, so
+the tak.gov licence is not involved. What follows for TeamTAK:
+- **Run it unmodified, as its own service**: its own containers, built on the server from an
+  official CloudTAK release tag, the way the install already builds the platform's images. TeamTAK
+  talks to it over the network only. This is an aggregate in the AGPL's sense: no obligation on
+  TeamTAK's code or licence, and TeamTAK does not redistribute CloudTAK.
+- **Never copy CloudTAK code into TeamTAK** (`web/`, the crates): TeamTAK would become a derivative
+  work and would have to be released entirely under AGPL-3.0.
+- **If a CloudTAK image is published** (ghcr.io or elsewhere): ship the licence, keep the copyright
+  notices and point to the exact corresponding source (the upstream tag, if unmodified).
+- **If CloudTAK is modified** (a fork): the fork stays under AGPL-3.0, and every install running it
+  must offer the modified source to all its users (section 13): a "Source" link in the UI to the
+  public fork.
+- **Same accounts**: CloudTAK checks the username and password with TAK Server (its OAuth endpoint),
+  and TAK Server reads OpenLDAP, so an unmodified CloudTAK already accepts TeamTAK accesses that
+  have a password, then enrolls its own certificate for that username. One CloudTAK profile per
+  person needs the "one account per member" mode: CloudTAK keys profiles by TAK username, so a
+  shared identity means one shared profile. The reconciliation leaves CloudTAK's certificate alone
+  (it only revokes certificates of usernames with no access, or those asked for), and
+  *Regenerate* or *Remove* revoke it too, which cuts CloudTAK off as well.
+- **CloudTAK's admin certificate**: if TAK Server issues it under a username that is not an access,
+  the reconciliation revokes it as an orphan. Its username must join the protected ones (today the
+  platform's certificate and the administration pages' one, in `crates/server/src/state.rs`).
+- **No real SSO yet** ("Sign in with TeamTAK" in CloudTAK), as of v13.124.0:
+  - CloudTAK's OIDC is half there: admin settings (discovery URL, client ID and secret, redirect,
+    scopes) marked "Beta", and a login button to `/api/login/oidc`, but no route in the public code
+    handles that URL or the callback.
+  - CloudTAK only obtains a user's TAK certificate with that user's TAK password, at first login
+    (its SCIM provisioning says so too), and an SSO login carries no password.
+  - TeamTAK is not an identity provider: the e-mail code login exposes no OIDC.
+
+  Real SSO would take TeamTAK acting as an OIDC provider (the e-mail code login unchanged), and in
+  CloudTAK the OIDC route and callback plus a way to issue the TAK certificate without the user's
+  password (with its admin certificate, say). The CloudTAK part is a modification under the AGPL:
+  better contributed upstream, which has started the feature, than kept as a fork.
+- **Not covered by the licence**: CloudTAK's name and logo (no trademark grant: say "includes
+  CloudTAK", never present a fork as the official one), and the Google basemaps shipped in its data,
+  which call Google's tile servers directly and may break Google's terms: leave them off by default.
+
 Dropped: a Data Sync mission created automatically for each event. Users create their own missions
 (decided by the user).
 
