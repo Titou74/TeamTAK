@@ -22,7 +22,7 @@ import { LANGUAGES } from "@/i18n/languages";
 import { api, ApiError } from "@/lib/api";
 import { formatDate, formatRelative } from "@/lib/format";
 import { useErrorText, useNotifyError } from "@/lib/hooks";
-import type { AccessKind, AccessSummary, Me, Member, TeamDetail } from "@/lib/types";
+import type { AccessKind, AccessSummary, Me, Member, TeamDetail, TeamMode } from "@/lib/types";
 
 type Reload = () => Promise<unknown>;
 
@@ -177,9 +177,6 @@ function AccessSection({ detail, me, reload }: { detail: TeamDetail; me: Me; rel
             />
           ))}
         </ul>
-        {team.mode === "external" && externals.length === 0 && !permissions.create_external_access && (
-          <p className="text-sm text-muted-foreground">{t("team.access.externalOnly")}</p>
-        )}
         {permissions.create_external_access && (
           <form onSubmit={(e) => void addExternal(e)} className="flex flex-wrap items-end gap-2 border-t pt-4">
             <div className="min-w-52 flex-1 space-y-1.5">
@@ -389,7 +386,7 @@ function SettingsSection({ detail, reload }: { detail: TeamDetail; reload: Reloa
   const notifyError = useNotifyError();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [pendingMode, setPendingMode] = useState<AccessKind | null>(null);
+  const [pendingMode, setPendingMode] = useState<TeamMode | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { team, accesses, my_role: myRole, permissions } = detail;
   const isLeader = myRole === "leader";

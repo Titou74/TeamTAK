@@ -66,7 +66,7 @@
       "description": "An administrator reviews each request. Once it is approved, you invite the members yourself.",
       "name": "Team name",
       "nameHelp": "It also names the team's channel in ATAK and iTAK.",
-      "modeHelp": "You can change this later in the team's settings.",
+      "modeHelp": "You can change this later in the team's settings. In either mode, the team leader can also add external accesses for people who have no account here.",
       "message": "Message to the administrator",
       "submit": "Send the request",
       "sent": "Request sent. You will receive an e-mail when it is reviewed."
@@ -92,10 +92,6 @@
     "individual": {
       "name": "Individual accounts",
       "description": "One TAK account per member, created and revoked one by one. Each member sets up their own devices."
-    },
-    "external": {
-      "name": "External accounts only",
-      "description": "The team leader creates a named TAK account for each person; these people need no account on this platform."
     }
   },
   "team": {
@@ -122,7 +118,6 @@
       "sharedNotReady": "The team leader has not created the team access yet.",
       "mine": "My access",
       "externalTitle": "External — {{label}}",
-      "externalOnly": "In this team, the team leader hands out the accesses.",
       "notCreated": "No access yet",
       "create": "Create the access",
       "connect": "Connect a device",
@@ -162,7 +157,7 @@
     },
     "settings": {
       "title": "Settings",
-      "modeHelp": "External accesses can be added in every mode.",
+      "modeHelp": "External accesses can be added in either mode.",
       "modeTitle": "Switch to “{{mode}}”?",
       "modeLoss_one": "{{count}} existing access does not fit this mode: it will be revoked and its devices disconnected.",
       "modeLoss_other": "{{count}} existing accesses do not fit this mode: they will be revoked and their devices disconnected.",

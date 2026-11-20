@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { useNotifyError } from "@/lib/hooks";
-import type { AccessKind, Me, MyInvitation } from "@/lib/types";
+import type { Me, MyInvitation, TeamMode } from "@/lib/types";
 
 function RequestTeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation();
@@ -25,7 +25,7 @@ function RequestTeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const navigate = useNavigate();
   const notifyError = useNotifyError();
   const [name, setName] = useState("");
-  const [mode, setMode] = useState<AccessKind>("individual");
+  const [mode, setMode] = useState<TeamMode>("shared");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
 

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
-import type { AccessKind, EventPhase, TeamRole, TeamStatus } from "@/lib/types";
+import type { EventPhase, TeamMode, TeamRole, TeamStatus } from "@/lib/types";
 
 export function StatusBadge({ status }: { status: TeamStatus }) {
   const { t } = useTranslation();
@@ -20,7 +20,7 @@ export function RoleBadge({ role }: { role: TeamRole }) {
   return <Badge variant={role === "leader" ? "default" : "secondary"}>{t(`role.${role}`)}</Badge>;
 }
 
-export function ModeBadge({ mode }: { mode: AccessKind }) {
+export function ModeBadge({ mode }: { mode: TeamMode }) {
   const { t } = useTranslation();
   return <Badge variant="outline">{t(`mode.${mode}.name`)}</Badge>;
 }

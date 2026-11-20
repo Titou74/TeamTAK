@@ -167,6 +167,12 @@ pub fn can(actor: Actor, action: Action) -> bool {
     }
 }
 
+/// A team connects with a shared identity or with individual accounts. External accesses are
+/// not a mode of their own: they can be added in either mode.
+pub fn is_team_mode(kind: AccessKind) -> bool {
+    kind != AccessKind::External
+}
+
 /// Which kinds of access a team may hold, given its connection mode. External accesses are
 /// allowed in both modes: a guest never shares the team's identity.
 pub fn kind_allowed_in_mode(mode: AccessKind, kind: AccessKind) -> bool {
@@ -319,6 +325,13 @@ mod tests {
         assert!(!can(MEMBER, Action::UseAccess(access(AccessKind::Individual, false))), "another member's access");
         assert!(!can(MEMBER, Action::UseAccess(access(AccessKind::External, false))));
         assert!(!can(MEMBER, Action::CreateAccess(access(AccessKind::External, false))));
+    }
+
+    #[test]
+    fn external_is_not_a_team_mode() {
+        assert!(is_team_mode(AccessKind::Shared));
+        assert!(is_team_mode(AccessKind::Individual));
+        assert!(!is_team_mode(AccessKind::External));
     }
 
     #[test]

@@ -6,7 +6,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use teamtak_core::names::{is_valid_slug, normalize_email, slugify, AccessKind, MAX_SLUG_LEN};
-use teamtak_core::policy::{can, seats_left, AccessRef, Action, Actor, TeamRole, TeamStatus};
+use teamtak_core::policy::{can, is_team_mode, seats_left, AccessRef, Action, Actor, TeamRole, TeamStatus};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -124,7 +124,7 @@ pub async fn request_team(
 ) -> ApiResult<(StatusCode, Json<Team>)> {
     let name = body.name.split_whitespace().collect::<Vec<_>>().join(" ");
     let message = body.message.trim().to_string();
-    if !(2..=60).contains(&name.chars().count()) || message.chars().count() > 500 {
+    if !(2..=60).contains(&name.chars().count()) || message.chars().count() > 500 || !is_team_mode(body.mode) {
         return Err(ApiError::InvalidInput);
     }
     let slug = slugify(&name, MAX_SLUG_LEN);
@@ -258,6 +258,9 @@ pub async fn update_team(
     let ctx = team_context(&state, team_id, &account).await?;
     if ctx.actor.team_role != Some(TeamRole::Leader) {
         return Err(ApiError::Forbidden);
+    }
+    if !is_team_mode(body.mode) {
+        return Err(ApiError::InvalidInput);
     }
     if ctx.team.status() == TeamStatus::Rejected {
         return Err(ApiError::TeamNotActive);

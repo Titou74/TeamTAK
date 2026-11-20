@@ -39,9 +39,9 @@ container: TAK Server itself has a single input, and the monitoring watches that
 - **Teams.** One team is one TAK group (its name is the channel shown in ATAK). An administrator
   approves team requests and sets the member cap; that is the only approval step. A team leader
   invites members by e-mail, up to the cap.
-- **TAK accesses.** The leader picks the mode: one shared identity for the team, one account per
-  member, or named accounts for people outside the platform (external accesses can be added in
-  every mode). Each access can be handed over as a QR code, as a username and password, or as a
+- **TAK accesses.** The leader picks the mode: one shared identity for the team (the default), or
+  one account per member. In either mode the leader can add named external accesses for people
+  outside the platform. Each access can be handed over as a QR code, as a username and password, or as a
   zip (with or without a client certificate). No zip ever holds a callsign, a team colour, a role
   or a group.
 - **Certificates** are issued by TAK Server's own enrollment, including those shipped in zips: the

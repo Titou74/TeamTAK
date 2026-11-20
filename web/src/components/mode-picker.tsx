@@ -1,20 +1,19 @@
-import { KeyRoundIcon, UserPlusIcon, UsersIcon } from "lucide-react";
+import { KeyRoundIcon, UsersIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { AccessKind } from "@/lib/types";
+import type { TeamMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const MODES: { mode: AccessKind; icon: typeof UsersIcon }[] = [
+const MODES: { mode: TeamMode; icon: typeof UsersIcon }[] = [
   { mode: "shared", icon: UsersIcon },
   { mode: "individual", icon: KeyRoundIcon },
-  { mode: "external", icon: UserPlusIcon },
 ];
 
-/** The three ways a team connects to TAK Server, with what each one implies. */
-export function ModePicker({ value, onChange, disabled }: { value: AccessKind; onChange: (mode: AccessKind) => void; disabled?: boolean }) {
+/** The two ways a team connects to TAK Server, with what each one implies. */
+export function ModePicker({ value, onChange, disabled }: { value: TeamMode; onChange: (mode: TeamMode) => void; disabled?: boolean }) {
   const { t } = useTranslation();
   return (
-    <div role="radiogroup" aria-label={t("mode.label")} className="grid gap-2 sm:grid-cols-3">
+    <div role="radiogroup" aria-label={t("mode.label")} className="grid gap-2 sm:grid-cols-2">
       {MODES.map(({ mode, icon: Icon }) => (
         <button
           key={mode}

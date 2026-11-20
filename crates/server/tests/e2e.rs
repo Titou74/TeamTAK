@@ -163,6 +163,9 @@ async fn team_request_approval_and_invitations_within_the_cap() {
     let leader = Session::new_account("leader").await;
     let name = unique("Équipe Montagne ");
 
+    // External accesses are not a connection mode: they fit both modes.
+    leader.post("/teams", json!({ "name": name, "mode": "external" })).await.expect_error(400, "invalid_input");
+
     // Request: nothing but a pending row, and a notification to the administrators.
     let team = leader.post("/teams", json!({ "name": name, "mode": "individual", "message": "Secours en montagne" })).await.ok();
     let (id, slug) = (team["id"].as_str().unwrap(), team["slug"].as_str().unwrap());
@@ -585,6 +588,7 @@ async fn changing_the_mode_removes_the_accesses_that_do_not_fit() {
     let phone = TakClient::connect(&shared_identity, "shared").await.unwrap();
     let phone2 = TakClient::connect(&shared_identity, "shared2").await.unwrap();
     assert!(phone.sees(&phone2, SEES).await, "both devices are up before the change");
+    team.leader.patch(&format!("/teams/{}", team.id), json!({ "mode": "external" })).await.expect_error(400, "invalid_input");
 
     let changed = team.leader.patch(&format!("/teams/{}", team.id), json!({ "mode": "individual" })).await.ok();
     assert_eq!(changed["removed_accesses"], 1);
@@ -603,7 +607,7 @@ async fn changing_the_mode_removes_the_accesses_that_do_not_fit() {
 async fn reconciliation_repairs_drift_and_reports_it() {
     let admin = Session::admin().await;
     let team = approved_team(&admin, "shared", 5).await;
-    let guest_team = approved_team(&admin, "external", 5).await;
+    let guest_team = approved_team(&admin, "individual", 5).await;
     let access = create_access(&team.leader, &team.id, json!({ "kind": "shared" })).await;
     create_access(&guest_team.leader, &guest_team.id, json!({ "kind": "external", "label": "Partner" })).await;
     let username = format!("{}-shared", team.slug);

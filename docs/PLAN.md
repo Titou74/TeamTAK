@@ -237,15 +237,16 @@ Decided or established in phase 3 (details and evidence in `docs/phase-3-report.
 
 ### Teams and connecting to TAK Server
 One team = one TAK group, named after the team (lowercase, accents folded; the `evt-` prefix is
-kept for events). The team leader picks the mode, and can change it later (accesses that do not fit
-the new mode are revoked):
+kept for events). The team leader picks the mode (shared identity by default), and can change it
+later (accesses that do not fit the new mode are revoked):
 - **Shared identity**: a single TAK account and a single zip for the whole team. "Regenerate" revokes
   the certificate and produces a new zip. The risk (lost phone, departing member) is accepted by the
   team. Limit found in phase 0: channel state belongs to the account, so one device switching a channel
   off switches it off for the whole team.
 - **Individual accounts**: one access per person, revocable one by one.
-- **External accounts**: TAK access for a person who has no account on the platform. As a mode, the
-  team hands out external accesses only; external accesses can also be added in the two other modes.
+- **External accounts**: TAK access for a person who has no account on the platform, added by the
+  leader in either mode. Until version 1.0.4 "external accounts only" was a third mode; it added
+  nothing, so it was dropped and the teams in it moved to the shared identity, keeping their accesses.
 
 An access is created explicitly (by the leader, or by a member for their own individual access), not
 automatically, so that no TAK account exists before it is needed.

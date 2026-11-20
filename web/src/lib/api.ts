@@ -26,6 +26,7 @@ import type {
   TeamDetail,
   TeamEvent,
   TeamEvents,
+  TeamMode,
   TeamRole,
 } from "./types";
 
@@ -88,9 +89,9 @@ export const api = {
   logout: () => json<void>("POST", "/auth/logout"),
   updateMe: (changes: { display_name?: string; language?: string }) => json<Me>("PATCH", "/me", changes),
 
-  requestTeam: (name: string, mode: AccessKind, message: string) => json<Team>("POST", "/teams", { name, mode, message }),
+  requestTeam: (name: string, mode: TeamMode, message: string) => json<Team>("POST", "/teams", { name, mode, message }),
   team: (id: string) => json<TeamDetail>("GET", `/teams/${id}`),
-  setTeamMode: (id: string, mode: AccessKind) =>
+  setTeamMode: (id: string, mode: TeamMode) =>
     json<Synced & { removed_accesses: number }>("PATCH", `/teams/${id}`, { mode }),
   deleteTeam: (id: string) => json<Synced>("DELETE", `/teams/${id}`),
   invite: (teamId: string, email: string, language: string) =>

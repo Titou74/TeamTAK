@@ -1,6 +1,8 @@
 // Shapes of the API's JSON answers (crates/server).
 
 export type AccessKind = "shared" | "individual" | "external";
+/** How a team connects to TAK Server. External accesses can be added in either mode. */
+export type TeamMode = Exclude<AccessKind, "external">;
 export type TeamStatus = "pending" | "active" | "rejected" | "suspended";
 export type TeamRole = "leader" | "member";
 
@@ -17,7 +19,7 @@ export interface MyTeam {
   name: string;
   slug: string;
   status: TeamStatus;
-  mode: AccessKind;
+  mode: TeamMode;
   role: TeamRole;
   decision_note: string;
   /** Invitations to events waiting for an answer; counted for the team's leaders only. */
@@ -51,7 +53,7 @@ export interface Team {
   name: string;
   slug: string;
   status: TeamStatus;
-  mode: AccessKind;
+  mode: TeamMode;
   member_cap: number;
   request_message: string;
   decision_note: string;
@@ -176,7 +178,7 @@ export interface AdminTeam {
   name: string;
   slug: string;
   status: TeamStatus;
-  mode: AccessKind;
+  mode: TeamMode;
   member_cap: number;
   request_message: string;
   decision_note: string;

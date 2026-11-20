@@ -68,7 +68,7 @@
       "description": "Un administrateur examine chaque demande. Une fois l'équipe approuvée, vous invitez vous-même ses membres.",
       "name": "Nom de l'équipe",
       "nameHelp": "Il donne aussi son nom au canal de l'équipe dans ATAK et iTAK.",
-      "modeHelp": "Vous pourrez le changer plus tard dans les réglages de l'équipe.",
+      "modeHelp": "Vous pourrez le changer plus tard dans les réglages de l'équipe. Dans les deux modes, le chef d'équipe peut aussi ajouter des accès externes pour des personnes sans compte ici.",
       "message": "Message pour l'administrateur",
       "submit": "Envoyer la demande",
       "sent": "Demande envoyée. Vous recevrez un e-mail quand elle aura été examinée."
@@ -94,10 +94,6 @@
     "individual": {
       "name": "Comptes individuels",
       "description": "Un compte TAK par membre, créé et révoqué un par un. Chaque membre configure ses propres appareils."
-    },
-    "external": {
-      "name": "Comptes externes uniquement",
-      "description": "Le chef d'équipe crée un compte TAK nominatif pour chaque personne ; ces personnes n'ont pas besoin de compte sur cette plateforme."
     }
   },
   "team": {
@@ -124,7 +120,6 @@
       "sharedNotReady": "Le chef d'équipe n'a pas encore créé l'accès de l'équipe.",
       "mine": "Mon accès",
       "externalTitle": "Externe — {{label}}",
-      "externalOnly": "Dans cette équipe, c'est le chef d'équipe qui distribue les accès.",
       "notCreated": "Pas encore d'accès",
       "create": "Créer l'accès",
       "connect": "Connecter un appareil",
@@ -167,7 +162,7 @@
     },
     "settings": {
       "title": "Réglages",
-      "modeHelp": "Des accès externes peuvent être ajoutés dans tous les modes.",
+      "modeHelp": "Des accès externes peuvent être ajoutés dans les deux modes.",
       "modeTitle": "Passer en « {{mode}} » ?",
       "modeLoss_one": "{{count}} accès existant ne correspond pas à ce mode : il sera révoqué et ses appareils déconnectés.",
       "modeLoss_many": "{{count}} accès existants ne correspondent pas à ce mode : ils seront révoqués et leurs appareils déconnectés.",
