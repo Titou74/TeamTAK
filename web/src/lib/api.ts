@@ -7,6 +7,7 @@ import type {
   BackupRun,
   Devices,
   History,
+  HistoryRange,
   Monitoring,
   Release,
   Settings,
@@ -162,7 +163,11 @@ export const api = {
   // Monitoring (administrators). What is shown is what the platform last saw; `refresh`
   // makes it look first.
   monitoring: (refresh = false) => json<Monitoring>("GET", `/admin/monitoring${refresh ? "?refresh=true" : ""}`),
-  monitoringHistory: (hours: number) => json<History>("GET", `/admin/monitoring/history?hours=${hours}`),
+  monitoringHistory: (range: HistoryRange) =>
+    json<History>(
+      "GET",
+      `/admin/monitoring/history?${"hours" in range ? `hours=${range.hours}` : `from=${Math.floor(range.from / 1000)}&to=${Math.ceil(range.to / 1000)}`}`,
+    ),
   alertsSummary: () => json<AlertsSummary>("GET", "/admin/alerts/summary"),
   adminDevices: () => json<Devices>("GET", "/admin/devices"),
   teamDevices: (teamId: string) => json<Devices>("GET", `/teams/${teamId}/devices`),

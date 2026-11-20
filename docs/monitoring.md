@@ -51,11 +51,30 @@ measured service by service.
 A figure the agent cannot read is shown as unknown: Docker keeping its data elsewhere than in
 `/var/lib/docker`, or its control groups in an unusual place (rootless Docker).
 
-**The history** keeps one sample a minute. A chart over one hour shows each of them; over longer
-periods each point is the average of a few minutes (5 minutes over 24 hours, 34 over 7 days), so
-that a chart never has more than 300 points. Under the server's charts, one chart per service shows
-the chosen measure (processor, memory or disk), all on the same scale, the heaviest service first.
-A gap in a line is a time the platform was not looking (stopped, or being updated).
+**The history** keeps one sample a minute for 14 days, and one row an hour for ten years: each
+hour's average and its highest minute, for the server and for each service (about 88,000 rows per
+series over ten years). The hours are filled as the minutes come in, and the existing 14 days were
+turned into hours when this history was added. A chart over one hour shows each sample; over longer
+periods each point is the average of a few minutes (5 minutes over 24 hours, 34 over 7 days), or of
+whole hours once the period reaches further back than the minutes (3 hours over 30 days, 15 over
+six months), so that a chart never has more than 300 points. A light band above each line rises to
+the highest sample of each point: a short peak stays visible however long the period. Under the
+server's charts, one chart per service shows the chosen measure (processor, memory or disk), all on
+the same scale, the heaviest service first. A gap in a line is a time the platform was not looking
+(stopped, or being updated).
+
+The period is the last hour, 6 hours, 24 hours, 7 days, 30 days, 3 or 6 months, or any two dates
+within the ten years. To look for what makes the load rise:
+
+- every chart shows the moment under the pointer (or the arrow keys) at once, with its value;
+- dragging across a chart, or + on the keyboard, zooms all of them on that moment; zooming out goes
+  back one step, and a zoom within the last 14 days gets one point a minute;
+- the layout is a grid, full-width rows one above the other on the same time axis, or one combined
+  chart. The combined chart draws processor, memory, swap, disk, connected devices and up to three
+  services together, each curve against its own highest over the period, so that measures of
+  different units can be compared; its legend gives the real values and hides or shows each curve.
+
+The API is `GET /api/admin/monitoring/history?hours=N`, or `?from=…&to=…` in seconds since 1970.
 
 **What the web UI does not do**, on purpose: it never installs system updates, never restarts the
 server and never pulls an image. It reports, and shows the command to run over SSH:

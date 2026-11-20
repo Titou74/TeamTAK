@@ -370,6 +370,16 @@ async fn thresholds_are_settings_and_a_change_raises_and_resolves_an_alert() {
     assert_eq!(latest["sampled_at"], samples.last().unwrap()["sampled_at"]);
     let hour = admin.get("/admin/monitoring/history?hours=1").await.ok();
     assert_eq!(hour["bucket_seconds"], 60, "the last hour: every sample, one a minute");
+    // Past the minutes, the hours: the current one is already there, with its highest minute.
+    let months = admin.get("/admin/monitoring/history?hours=4320").await.ok();
+    assert_eq!((months["hourly"].as_bool(), months["bucket_seconds"].as_i64()), (Some(true), Some(15 * 3600)), "six months: {months}");
+    let latest = months["samples"].as_array().unwrap().last().unwrap_or_else(|| panic!("no hourly history: {months}"));
+    assert!(latest["cpu_percent_max"].as_f64().unwrap() >= latest["cpu_percent"].as_f64().unwrap(), "{latest}");
+    // Or any period, in seconds since 1970.
+    let now = time::OffsetDateTime::now_utc().unix_timestamp();
+    let period = admin.get(&format!("/admin/monitoring/history?from={}&to={now}", now - 7200)).await.ok();
+    assert_eq!((period["hourly"].as_bool(), period["bucket_seconds"].as_i64()), (Some(false), Some(60)));
+    assert!(!period["samples"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

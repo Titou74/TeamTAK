@@ -15,6 +15,7 @@ pub mod agent;
 pub mod alerting;
 pub mod api;
 pub mod devices;
+pub mod history;
 pub mod images;
 pub mod maintenance;
 pub mod probes;
@@ -724,24 +725,27 @@ impl Monitor {
 
         let measured: Vec<&ServiceView> =
             snapshot.services.services.iter().filter(|s| s.cpu_percent.is_some() || s.memory_bytes.is_some() || s.disk_bytes.is_some()).collect();
-        if measured.is_empty() {
-            return;
+        if !measured.is_empty() {
+            let bytes = |b: Option<u64>| b.and_then(|b| i64::try_from(b).ok());
+            let written = sqlx::query(
+                "INSERT INTO service_samples (sampled_at, service, cpu_percent, memory_bytes, disk_bytes)
+                 SELECT $1, * FROM UNNEST($2::text[], $3::real[], $4::bigint[], $5::bigint[])
+                 ON CONFLICT (sampled_at, service) DO NOTHING",
+            )
+            .bind(now)
+            .bind(measured.iter().map(|s| s.service.clone()).collect::<Vec<String>>())
+            .bind(measured.iter().map(|s| s.cpu_percent).collect::<Vec<Option<f32>>>())
+            .bind(measured.iter().map(|s| bytes(s.memory_bytes)).collect::<Vec<Option<i64>>>())
+            .bind(measured.iter().map(|s| bytes(s.disk_bytes)).collect::<Vec<Option<i64>>>())
+            .execute(&self.db)
+            .await;
+            if let Err(e) = written {
+                tracing::warn!(error = %e, "history sample of the services not written");
+            }
         }
-        let bytes = |b: Option<u64>| b.and_then(|b| i64::try_from(b).ok());
-        let written = sqlx::query(
-            "INSERT INTO service_samples (sampled_at, service, cpu_percent, memory_bytes, disk_bytes)
-             SELECT $1, * FROM UNNEST($2::text[], $3::real[], $4::bigint[], $5::bigint[])
-             ON CONFLICT (sampled_at, service) DO NOTHING",
-        )
-        .bind(now)
-        .bind(measured.iter().map(|s| s.service.clone()).collect::<Vec<String>>())
-        .bind(measured.iter().map(|s| s.cpu_percent).collect::<Vec<Option<f32>>>())
-        .bind(measured.iter().map(|s| bytes(s.memory_bytes)).collect::<Vec<Option<i64>>>())
-        .bind(measured.iter().map(|s| bytes(s.disk_bytes)).collect::<Vec<Option<i64>>>())
-        .execute(&self.db)
-        .await;
-        if let Err(e) = written {
-            tracing::warn!(error = %e, "history sample of the services not written");
+        // The long history follows: this hour's row now counts this sample.
+        if let Err(e) = history::roll_up(&self.db, now).await {
+            tracing::warn!(error = %e, "hourly history not updated");
         }
     }
 }

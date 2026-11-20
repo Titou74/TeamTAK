@@ -221,27 +221,48 @@ export interface Monitoring {
   };
 }
 
+/** One point of a chart: the average of the samples it stands for, and the highest of them (`…_max`). */
 export interface Sample {
   sampled_at: string;
   cpu_percent: number | null;
+  cpu_percent_max: number | null;
   load1: number | null;
   memory_percent: number | null;
+  memory_percent_max: number | null;
   swap_percent: number | null;
+  swap_percent_max: number | null;
   disk_percent: number | null;
+  disk_percent_max: number | null;
   devices: number | null;
+  devices_max: number | null;
 }
 
 export interface ServiceSample {
   sampled_at: string;
   cpu_percent: number | null;
+  cpu_percent_max: number | null;
   memory_bytes: number | null;
+  memory_bytes_max: number | null;
   disk_bytes: number | null;
+  disk_bytes_max: number | null;
 }
 
+/** The last hours up to now, or a period in milliseconds since 1970. */
+export type HistoryRange = { hours: number } | { from: number; to: number };
+
 export interface History {
-  hours: number;
+  /** The period drawn. */
+  from: string;
+  to: string;
+  /** The furthest back a chart can start. */
+  oldest: string;
+  /** Days one sample a minute is kept. */
   retention_days: number;
-  /** Each point is the average of the samples (one a minute) of this many seconds. */
+  /** Days one row an hour is kept. */
+  hourly_retention_days: number;
+  /** The points come from the hours: each point stands for whole hours. */
+  hourly: boolean;
+  /** Each point stands for the samples of this many seconds. */
   bucket_seconds: number;
   samples: Sample[];
   /** Each service the host agent measured over the period, by name. */

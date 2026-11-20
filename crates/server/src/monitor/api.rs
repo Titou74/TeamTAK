@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use teamtak_agent::report::RESTARTABLE_SERVICES;
 use teamtak_core::policy::Action;
+use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};
@@ -20,6 +21,7 @@ use crate::state::SharedState;
 
 use super::agent::AgentCallError;
 use super::alerting;
+use super::history;
 use super::maintenance::{self, BackupError};
 use super::release;
 
@@ -97,88 +99,53 @@ pub async fn alerts_summary(State(state): State<SharedState>, AdminAccount(admin
 
 #[derive(Deserialize, Default)]
 pub struct HistoryQuery {
+    /// The last this many hours, up to now.
     hours: Option<i64>,
+    /// Or a period, in seconds since 1970: both or neither.
+    from: Option<i64>,
+    to: Option<i64>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
-struct Sample {
-    #[serde(with = "time::serde::rfc3339")]
-    sampled_at: OffsetDateTime,
-    cpu_percent: Option<f32>,
-    load1: Option<f32>,
-    memory_percent: Option<f32>,
-    swap_percent: Option<f32>,
-    disk_percent: Option<f32>,
-    devices: Option<i32>,
+/// The period a history request asks for, within what is kept and never past `now`.
+fn history_period(query: &HistoryQuery, now: OffsetDateTime) -> ApiResult<(OffsetDateTime, OffsetDateTime)> {
+    let oldest = history::oldest(now);
+    let (from, to) = match (query.from, query.to) {
+        (Some(from), Some(to)) => {
+            let at = |s: i64| OffsetDateTime::from_unix_timestamp(s).map_err(|_| ApiError::InvalidInput);
+            (at(from)?.max(oldest), at(to)?.min(now))
+        }
+        (None, None) => {
+            let hours = query.hours.unwrap_or(24).clamp(1, maintenance::HOUR_SAMPLES_DAYS as i64 * 24);
+            (now - time::Duration::hours(hours), now)
+        }
+        _ => return Err(ApiError::InvalidInput),
+    };
+    // A minute at least: less than one sample is no chart.
+    if to - from < time::Duration::minutes(1) {
+        return Err(ApiError::InvalidInput);
+    }
+    Ok((from, to))
 }
 
-#[derive(Serialize, sqlx::FromRow)]
-struct ServiceSample {
-    #[serde(skip)]
-    service: String,
-    #[serde(with = "time::serde::rfc3339")]
-    sampled_at: OffsetDateTime,
-    cpu_percent: Option<f32>,
-    memory_bytes: Option<i64>,
-    disk_bytes: Option<i64>,
-}
-
-#[derive(Serialize)]
-struct ServiceHistory {
-    service: String,
-    samples: Vec<ServiceSample>,
-}
-
-/// Most points a chart is given.
-const MAX_POINTS: i64 = 300;
-
-/// Seconds each point of a chart over `hours` stands for: whole minutes, the samples being a
-/// minute apart, and no more than `MAX_POINTS` points. Each point is the average of the
-/// samples it stands for, at the time of the latest of them.
-fn bucket_seconds(hours: i64) -> i64 {
-    ((hours.max(1) * 60 + MAX_POINTS - 1) / MAX_POINTS) * 60
-}
-
-/// `GET /api/admin/monitoring/history?hours=24`: the machine's samples and each service's,
-/// oldest first.
+/// `GET /api/admin/monitoring/history?hours=24`, or `?from=…&to=…` in seconds since 1970: the
+/// machine's points and each service's, oldest first, each the average of the samples it
+/// stands for with their highest beside it (`…_max`).
 pub async fn history(State(state): State<SharedState>, AdminAccount(admin): AdminAccount, Query(query): Query<HistoryQuery>) -> ApiResult<Json<Value>> {
     admin.require_platform(Action::ViewMonitoring)?;
-    let hours = query.hours.unwrap_or(24).clamp(1, maintenance::METRIC_SAMPLES_DAYS as i64 * 24);
-    let bucket = bucket_seconds(hours);
-    let samples: Vec<Sample> = sqlx::query_as(
-        "SELECT max(sampled_at) AS sampled_at, avg(cpu_percent)::real AS cpu_percent, avg(load1)::real AS load1,
-                avg(memory_percent)::real AS memory_percent, avg(swap_percent)::real AS swap_percent,
-                avg(disk_percent)::real AS disk_percent, round(avg(devices))::int4 AS devices
-           FROM metric_samples WHERE sampled_at > now() - make_interval(hours => $1)
-          GROUP BY date_bin(make_interval(secs => $2), sampled_at, TIMESTAMPTZ '2000-01-01 00:00:00+00')
-          ORDER BY sampled_at",
-    )
-    .bind(hours as i32)
-    .bind(bucket as f64)
-    .fetch_all(&state.db)
-    .await?;
-    let rows: Vec<ServiceSample> = sqlx::query_as(
-        "SELECT service, max(sampled_at) AS sampled_at, avg(cpu_percent)::real AS cpu_percent,
-                round(avg(memory_bytes))::int8 AS memory_bytes, round(avg(disk_bytes))::int8 AS disk_bytes
-           FROM service_samples WHERE sampled_at > now() - make_interval(hours => $1)
-          GROUP BY service, date_bin(make_interval(secs => $2), sampled_at, TIMESTAMPTZ '2000-01-01 00:00:00+00')
-          ORDER BY service, sampled_at",
-    )
-    .bind(hours as i32)
-    .bind(bucket as f64)
-    .fetch_all(&state.db)
-    .await?;
-    let mut services: Vec<ServiceHistory> = Vec::new();
-    for row in rows {
-        match services.last_mut() {
-            Some(last) if last.service == row.service => last.samples.push(row),
-            _ => services.push(ServiceHistory { service: row.service.clone(), samples: vec![row] }),
-        }
-    }
+    let now = OffsetDateTime::now_utc();
+    let (from, to) = history_period(&query, now)?;
+    let plan = history::plan(from, to, now);
+    let samples = history::machine(&state.db, from, to, plan).await?;
+    let services = history::services(&state.db, from, to, plan).await?;
+    let rfc3339 = |at: OffsetDateTime| at.format(&Rfc3339).unwrap_or_default();
     Ok(Json(json!({
-        "hours": hours,
+        "from": rfc3339(from),
+        "to": rfc3339(to),
+        "oldest": rfc3339(history::oldest(now)),
         "retention_days": maintenance::METRIC_SAMPLES_DAYS,
-        "bucket_seconds": bucket,
+        "hourly_retention_days": maintenance::HOUR_SAMPLES_DAYS,
+        "hourly": plan.hourly,
+        "bucket_seconds": plan.bucket_seconds,
         "samples": samples,
         "services": services,
     })))
@@ -353,15 +320,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chart_points_stand_for_whole_minutes_and_stay_few() {
-        assert_eq!(bucket_seconds(1), 60, "the last hour: every sample");
-        assert_eq!(bucket_seconds(6), 120);
-        assert_eq!(bucket_seconds(24), 300);
-        assert_eq!(bucket_seconds(168), 34 * 60);
-        for hours in [1, 2, 6, 12, 24, 48, 168, 336] {
-            let points = hours * 3600 / bucket_seconds(hours);
-            assert!((MAX_POINTS / 6..=MAX_POINTS).contains(&points), "{hours} h: {points} points");
-        }
+    fn a_history_period_stays_within_what_is_kept() {
+        use time::macros::datetime;
+        use time::Duration;
+        let now = datetime!(2026-11-20 12:00 UTC);
+        let ask = |hours: Option<i64>, from: Option<i64>, to: Option<i64>| history_period(&HistoryQuery { hours, from, to }, now);
+        let at = |t: OffsetDateTime| Some(t.unix_timestamp());
+        assert_eq!(ask(None, None, None).unwrap(), (now - Duration::hours(24), now), "a day by default");
+        assert_eq!(ask(Some(24 * 180), None, None).unwrap().0, now - Duration::days(180));
+        assert_eq!(ask(Some(0), None, None).unwrap().0, now - Duration::hours(1));
+        assert_eq!(ask(Some(i64::MAX), None, None).unwrap().0, history::oldest(now), "no further back than the hours are kept");
+        let (from, to) = (now - Duration::days(40), now - Duration::days(39));
+        assert_eq!(ask(None, at(from), at(to)).unwrap(), (from, to));
+        assert_eq!(ask(None, at(now - Duration::days(9000)), at(now + Duration::days(1))).unwrap(), (history::oldest(now), now), "cut to what exists");
+        assert_eq!(ask(None, at(to), at(from)), Err(ApiError::InvalidInput), "the end before the start");
+        assert_eq!(ask(None, at(now + Duration::hours(1)), at(now + Duration::hours(2))), Err(ApiError::InvalidInput), "all in the future");
+        assert_eq!(ask(None, at(from), None), Err(ApiError::InvalidInput), "a start without an end");
+        assert_eq!(ask(None, Some(i64::MAX), at(to)), Err(ApiError::InvalidInput));
     }
 
     #[test]

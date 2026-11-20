@@ -24,8 +24,10 @@ use super::Monitor;
 /// Days resolved alerts and finished backup runs are kept.
 const RESOLVED_ALERTS_DAYS: i32 = 90;
 const BACKUP_RUNS_DAYS: i32 = 90;
-/// Days of history kept for the charts.
+/// Days the charts keep one sample a minute.
 pub const METRIC_SAMPLES_DAYS: i32 = 14;
+/// Days the charts keep one row an hour (`history.rs`): a server's whole life, or nearly.
+pub const HOUR_SAMPLES_DAYS: i32 = 3650;
 const MAIL_FAILURES_DAYS: i32 = 30;
 /// Longer than any client certificate lives.
 const CERTIFICATE_NOTICES_DAYS: i32 = 800;
@@ -133,6 +135,8 @@ pub async fn purge(db: &PgPool, audit_retention_days: u32) -> Result<Value> {
         ("alerts", "DELETE FROM alerts WHERE resolved_at IS NOT NULL AND resolved_at < now() - make_interval(days => $1)", RESOLVED_ALERTS_DAYS),
         ("metric_samples", "DELETE FROM metric_samples WHERE sampled_at < now() - make_interval(days => $1)", METRIC_SAMPLES_DAYS),
         ("service_samples", "DELETE FROM service_samples WHERE sampled_at < now() - make_interval(days => $1)", METRIC_SAMPLES_DAYS),
+        ("metric_hours", "DELETE FROM metric_hours WHERE hour < now() - make_interval(days => $1)", HOUR_SAMPLES_DAYS),
+        ("service_hours", "DELETE FROM service_hours WHERE hour < now() - make_interval(days => $1)", HOUR_SAMPLES_DAYS),
         ("backup_runs", "DELETE FROM backup_runs WHERE started_at < now() - make_interval(days => $1)", BACKUP_RUNS_DAYS),
         ("mail_failures", "DELETE FROM mail_failures WHERE occurred_at < now() - make_interval(days => $1)", MAIL_FAILURES_DAYS),
         ("certificate_notices", "DELETE FROM certificate_notices WHERE sent_at < now() - make_interval(days => $1)", CERTIFICATE_NOTICES_DAYS),
@@ -255,5 +259,9 @@ mod tests {
         assert!(most <= 27_000, "{most}");
         let services = teamtak_agent::report::CORE_SERVICES.len() + teamtak_agent::report::LOCAL_SERVICES.len();
         assert!(most * services as i64 <= 250_000);
+        // And one row an hour for ten years, the same way.
+        let hours = HOUR_SAMPLES_DAYS as i64 * 24;
+        assert!(hours <= 90_000, "{hours}");
+        assert!(hours * services as i64 <= 750_000);
     }
 }
