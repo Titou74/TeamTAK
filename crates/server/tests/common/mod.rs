@@ -475,6 +475,8 @@ impl Session {
             .map(|c| c.trim().to_string())
             .unwrap_or_else(|| panic!("no code in: {output}"));
         let mut session = Self::anonymous();
+        // While the code waits, the sign-in page offers "I already have a code".
+        assert_eq!(session.get("/config").await.ok()["rescue_code_pending"], true);
         session.post("/auth/verify", json!({ "email": address, "code": code })).await.ok();
         session.email = address;
         session

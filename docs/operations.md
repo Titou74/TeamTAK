@@ -51,7 +51,8 @@ docker compose exec app teamtak grant-admin you@example.org
 
 **Rescue command.** Makes the account a platform administrator (creating it if needed) and prints
 a one-time login code. It works when e-mail is down: on the sign-in page, type that address, choose
-"I already have a code" and enter it.
+"I already have a code" and enter it. That link is only there while a code from this command waits
+to be used (reload the page if it was open before), so users never see it otherwise.
 
 ```bash
 docker compose exec app teamtak reconcile

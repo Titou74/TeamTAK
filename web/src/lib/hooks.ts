@@ -22,9 +22,18 @@ export function useMe() {
   });
 }
 
-/** What the UI needs before anyone is signed in: languages, login timings, the server's name. */
-export function usePublicConfig() {
-  return useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
+/**
+ * What the UI needs before anyone is signed in: languages, login timings, the server's name.
+ * `refetchOnFocus` asks again each time the tab comes back to the front (the sign-in page, so
+ * that a rescue code made in a terminal meanwhile is offered).
+ */
+export function usePublicConfig({ refetchOnFocus = false }: { refetchOnFocus?: boolean } = {}) {
+  return useQuery({
+    queryKey: ["config"],
+    queryFn: api.config,
+    staleTime: Infinity,
+    ...(refetchOnFocus && { refetchOnWindowFocus: "always" as const }),
+  });
 }
 
 /** Turns an API error code into a sentence in the current language. */

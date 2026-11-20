@@ -480,6 +480,16 @@ pub async fn update_me(
 /// `GET /api/config`: what the UI needs before anyone is signed in.
 pub async fn public_config(State(state): State<SharedState>) -> ApiResult<Json<Value>> {
     let settings = settings::load(&state.db).await?;
+    // A code made by the rescue command is waiting to be typed: the sign-in page then offers
+    // "I already have a code" (the first administrator after the install, or one locked out
+    // when e-mail is down). Otherwise nobody can hold such a code and the link is not shown.
+    let (rescue_code_pending,): (bool,) = sqlx::query_as(
+        "SELECT EXISTS (SELECT 1 FROM login_codes
+                         WHERE ip = 'rescue-command' AND consumed_at IS NULL AND expires_at > now() AND attempts < $1)",
+    )
+    .bind(state.config.login.max_attempts_per_code)
+    .fetch_one(&state.db)
+    .await?;
     Ok(Json(json!({
         "languages": locale::languages(),
         "default_language": locale::DEFAULT_LANGUAGE,
@@ -487,6 +497,7 @@ pub async fn public_config(State(state): State<SharedState>) -> ApiResult<Json<V
         "resend_cooldown_seconds": state.config.login.resend_cooldown_secs,
         // Shown on the sign-in page, so it is no secret.
         "server_name": settings.values.server_name,
+        "rescue_code_pending": rescue_code_pending,
     })))
 }
 

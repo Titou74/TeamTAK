@@ -53,6 +53,8 @@ export interface PublicConfig {
   resend_cooldown_seconds: number;
   /** Name an administrator gave this server, to tell it from others; empty for none. */
   server_name: string;
+  /** A code made by the rescue command waits to be used: the sign-in page offers to type it. */
+  rescue_code_pending: boolean;
 }
 
 /** Anti-bot challenge solved before asking for a login code (lib/login-proof.ts). */

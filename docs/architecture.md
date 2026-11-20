@@ -92,7 +92,10 @@ hammer. Four layers stand in front of the mail server, checked in this order:
 4. **Wrong codes** burn the code after five tries, and an IP that submits too many wrong codes is
    blocked for the hour (`LOGIN_MAX_FAILURES_PER_IP`).
 
-Codes made by the rescue command (`teamtak grant-admin`) go through none of these.
+Codes made by the rescue command (`teamtak grant-admin`) go through none of these. The sign-in
+page offers "I already have a code" only while one of them waits to be used, not consumed, not
+expired and not burnt (`rescue_code_pending` in `GET /api/config`): the first administrator sees
+it right after the install, and once they are in nobody does until the command is run again.
 
 ## QR codes and port 8446
 
