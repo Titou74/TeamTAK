@@ -188,6 +188,11 @@
       "title": "Une seule identité pour toute l'équipe",
       "text": "Tous les appareils de l'équipe utilisent cet accès. L'état des canaux est partagé lui aussi : un canal désactivé sur un appareil l'est pour tous."
     },
+    "port": {
+      "label": "Port du serveur",
+      "main": "{{port}} (par défaut)",
+      "help": "Si le port {{port}} est bloqué sur le réseau de l'appareil, choisissez-en un autre. Le QR code iTAK, les zips et la configuration manuelle utilisent le port choisi ici."
+    },
     "tabs": {
       "qr": "QR code",
       "zip": "Fichier zip",
@@ -196,6 +201,7 @@
     "qr": {
       "atakTitle": "ATAK (Android)",
       "atakHelp": "À scanner depuis ATAK. Il contient l'adresse du serveur, l'identifiant et le mot de passe.",
+      "atakOtherPort": "À scanner depuis ATAK. Il ne contient pas de port : ATAK se connecte sur {{atakPort}}, pas sur {{port}}. Préférez un zip, ou changez le port dans les réglages du serveur d'ATAK après le scan.",
       "itakTitle": "iTAK (iPhone)",
       "itakHelp": "À scanner depuis iTAK, puis saisissez l'identifiant et le mot de passe du troisième onglet.",
       "warning": "Toute personne qui voit le code ATAK peut se connecter avec ce compte : montrez-le, ne l'envoyez pas. Les QR codes ne fonctionnent que si le port d'enrôlement du serveur présente un certificat reconnu publiquement ; sinon, utilisez le fichier zip."
@@ -206,7 +212,8 @@
       "enrollmentTitle": "Zip sans certificat",
       "enrollmentHelp": "L'appareil demande l'identifiant et le mot de passe, puis obtient son propre certificat auprès du serveur.",
       "download": "Télécharger",
-      "note": "Importez le fichier dans ATAK ou iTAK (Importer, puis choisissez le zip)."
+      "note": "Importez le fichier dans ATAK ou iTAK (Importer, puis choisissez le zip).",
+      "port": "Ces zips se connectent sur le port {{port}}."
     },
     "manual": {
       "host": "Adresse du serveur",
@@ -953,6 +960,7 @@
       "role": "Rôle :",
       "kind": "Type d'accès :",
       "form": "Zip :",
+      "port": "Port :",
       "member_cap": "Plafond de membres :",
       "removed_accesses": "Accès supprimés :",
       "other_team": "Équipe :",

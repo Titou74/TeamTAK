@@ -3,7 +3,7 @@
 //!
 //! The tests are black-box: they drive the platform through its public HTTP API on the
 //! running stack (`./install.sh --local`), read what it wrote to OpenLDAP, and connect to
-//! TAK Server's client port (8089) and enrollment port (8446) the way a phone does.
+//! TAK Server's client port (8089 by default) and enrollment port (8446) the way a phone does.
 
 #![allow(dead_code)]
 
@@ -44,6 +44,12 @@ pub fn env() -> &'static BTreeMap<String, String> {
 
 pub fn setting(name: &str) -> &'static str {
     env().get(name).unwrap_or_else(|| panic!("{name} missing from deploy/.env"))
+}
+
+/// Ports of the machine TAK clients connect to, the main one first (TAK_CLIENT_PORTS).
+pub fn client_ports() -> Vec<u16> {
+    let raw = env().get("TAK_CLIENT_PORTS").map(String::as_str).unwrap_or("8089");
+    raw.split([',', ' ']).filter(|s| !s.is_empty()).map(|p| p.parse().unwrap()).collect()
 }
 
 pub fn base_url() -> String {
@@ -414,7 +420,12 @@ impl Session {
 
     /// Downloads a connection zip.
     pub async fn package(&self, access_id: &str, form: &str) -> Vec<u8> {
-        let url = format!("{}/api/accesses/{access_id}/package/{form}", base_url());
+        self.package_at(access_id, form, "").await
+    }
+
+    /// Downloads a connection zip with a query string (`?port=8443`).
+    pub async fn package_at(&self, access_id: &str, form: &str, query: &str) -> Vec<u8> {
+        let url = format!("{}/api/accesses/{access_id}/package/{form}{query}", base_url());
         let response = self.http.get(url).send().await.unwrap();
         assert!(response.status().is_success(), "package {form}: HTTP {}", response.status());
         assert_eq!(response.headers()["content-type"], "application/zip");
@@ -710,7 +721,8 @@ pub async fn device_enroll(
 
 // ------------------------------------------------------------------------------- TAK client
 
-/// A scripted TAK client: mutual TLS on 8089, one position (CoT XML) per second (or per
+/// A scripted TAK client: mutual TLS on the main client port (8089 by default), one position
+/// (CoT XML) per second (or per
 /// `period`), every received event recorded. It never reconnects: a client that still
 /// receives after a change kept the same connection through it. It does not negotiate the protobuf protocol, so the server
 /// keeps talking XML, as it does with ATAK until negotiation.
@@ -746,6 +758,15 @@ impl TakClient {
 
     /// Same, sending a position every `period`: a shorter one measures delays more finely.
     pub async fn connect_every(identity: &Identity, label: &str, period: Duration) -> Result<Self, String> {
+        Self::open(identity, label, period, client_ports()[0]).await
+    }
+
+    /// Opens a connection on another of the client ports.
+    pub async fn connect_on(identity: &Identity, label: &str, port: u16) -> Result<Self, String> {
+        Self::open(identity, label, Duration::from_secs(1), port).await
+    }
+
+    async fn open(identity: &Identity, label: &str, period: Duration, port: u16) -> Result<Self, String> {
         install_crypto();
         let chain: Vec<CertificateDer<'static>> = identity.chain.iter().cloned().map(CertificateDer::from).collect();
         let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key.clone()));
@@ -754,7 +775,7 @@ impl TakClient {
             .with_client_auth_cert(chain, key)
             .map_err(|e| e.to_string())?;
         let connector = tokio_rustls::TlsConnector::from(Arc::new(tls));
-        let tcp = tokio::net::TcpStream::connect("127.0.0.1:8089").await.map_err(|e| e.to_string())?;
+        let tcp = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.map_err(|e| e.to_string())?;
         let name = ServerName::try_from(TAK_SERVER_NAME).unwrap();
         let stream = tokio::time::timeout(Duration::from_secs(10), connector.connect(name, tcp))
             .await

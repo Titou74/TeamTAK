@@ -161,8 +161,10 @@ export interface AccessDetail {
   generation: number;
   created_at: string;
   regenerated_at: string | null;
-  server: { host: string; port: number; enroll_port: number; name: string };
-  qr: { itak: string; atak: string };
+  /** `port` is the main one of `ports`, the ports TAK clients may connect to. */
+  server: { host: string; port: number; ports: number[]; enroll_port: number; name: string };
+  /** `itak`: one string per client port, keyed by the port. */
+  qr: { itak: Record<string, string>; atak: string };
   certificates: CertificateView[];
   can_manage: boolean;
 }

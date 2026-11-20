@@ -110,7 +110,7 @@ pub struct ConnectionPackage {
     pub description: String,
     /// Public host name or address of TAK Server.
     pub host: String,
-    /// Port of the TLS input for TAK clients (8089).
+    /// Port TAK clients connect to (8089, or another of the platform's client ports).
     pub port: u16,
     pub truststore_p12: Vec<u8>,
     /// With a client store the zip connects as it is; without, the client enrolls with the

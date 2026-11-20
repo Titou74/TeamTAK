@@ -108,8 +108,10 @@ export const api = {
   regenerateAccess: (id: string) => json<{ id: string; reenrolled: boolean }>("POST", `/accesses/${id}/regenerate`),
   deleteAccess: (id: string) => json<Synced>("DELETE", `/accesses/${id}`),
   /** Downloads a connection zip and returns it with the file name chosen by the server. */
-  accessPackage: async (id: string, form: "enrollment" | "certificate") => {
-    const response = await request("GET", `/accesses/${id}/package/${form}`);
+  /** A connection zip; `port` is one of the access's `server.ports`, the main one when absent. */
+  accessPackage: async (id: string, form: "enrollment" | "certificate", port?: number) => {
+    const query = port === undefined ? "" : `?port=${port}`;
+    const response = await request("GET", `/accesses/${id}/package/${form}${query}`);
     const disposition = response.headers.get("Content-Disposition") ?? "";
     const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${form}.zip`;
     return { name, blob: await response.blob() };

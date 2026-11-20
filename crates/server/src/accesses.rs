@@ -5,7 +5,7 @@
 //! their result is needed at once: enrolling the certificate shipped in a zip, and listing
 //! the certificates to revoke when an access is regenerated.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -349,6 +349,12 @@ pub async fn access_detail(
         None => None,
     };
     let tak = &state.config.tak;
+    // One iTAK QR code per port: the device picks the one its network lets through.
+    let itak: serde_json::Map<String, Value> = tak
+        .client_ports
+        .iter()
+        .map(|port| (port.to_string(), json!(itak_qr(&tak.connection_name, &tak.public_host, *port))))
+        .collect();
     Ok(Json(json!({
         "id": access.id,
         "team": { "id": ctx.team.id, "name": ctx.team.name, "slug": ctx.team.slug, "status": ctx.team.status },
@@ -360,9 +366,15 @@ pub async fn access_detail(
         "generation": access.generation,
         "created_at": access.created_at.format(&time::format_description::well_known::Rfc3339).ok(),
         "regenerated_at": access.regenerated_at.and_then(|t| t.format(&time::format_description::well_known::Rfc3339).ok()),
-        "server": { "host": tak.public_host, "port": tak.client_port, "enroll_port": ENROLL_PORT, "name": tak.connection_name },
+        "server": {
+            "host": tak.public_host,
+            "port": tak.client_port(),
+            "ports": tak.client_ports,
+            "enroll_port": ENROLL_PORT,
+            "name": tak.connection_name,
+        },
         "qr": {
-            "itak": itak_qr(&tak.connection_name, &tak.public_host, tak.client_port),
+            "itak": itak,
             "atak": atak_enroll_uri(&tak.public_host, &access.username, &password),
         },
         "certificates": certificates,
@@ -428,14 +440,27 @@ async fn package_certificate(state: &SharedState, access: &Access) -> ApiResult<
     Ok(ClientStore { file_name, p12, password: p12_password })
 }
 
-/// `GET /api/accesses/{id}/package/{form}`: a connection zip. `enrollment` holds the server
-/// address and the truststore, and the client enrolls with the username and password;
-/// `certificate` also holds a client certificate and connects as it is.
+#[derive(Deserialize, Default)]
+pub struct PackageQuery {
+    /// One of the client ports; the main one when absent.
+    port: Option<String>,
+}
+
+/// `GET /api/accesses/{id}/package/{form}?port=`: a connection zip. `enrollment` holds the
+/// server address and the truststore, and the client enrolls with the username and
+/// password; `certificate` also holds a client certificate and connects as it is. The zip
+/// connects on `port`, which must be one of the client ports.
 pub async fn access_package(
     State(state): State<SharedState>,
     CurrentAccount(account): CurrentAccount,
     Path((access_id, form)): Path<(Uuid, String)>,
+    Query(query): Query<PackageQuery>,
 ) -> ApiResult<Response> {
+    let tak = &state.config.tak;
+    let port = match query.port.as_deref() {
+        None | Some("") => tak.client_port(),
+        Some(raw) => raw.parse().ok().filter(|p| tak.client_ports.contains(p)).ok_or(ApiError::InvalidInput)?,
+    };
     let (access, ctx, _) = access_context(&state, access_id, &account).await?;
     let (client, file_name) = match form.as_str() {
         "enrollment" => (None, format!("{}-enrollment.zip", access.username)),
@@ -446,16 +471,16 @@ pub async fn access_package(
         _ => return Err(ApiError::NotFound),
     };
     let package = ConnectionPackage {
-        description: state.config.tak.connection_name.clone(),
-        host: state.config.tak.public_host.clone(),
-        port: state.config.tak.client_port,
+        description: tak.connection_name.clone(),
+        host: tak.public_host.clone(),
+        port,
         truststore_p12: state.truststore_p12.clone(),
         client,
         file_name: file_name.clone(),
     };
     let zip = build_connection_zip(&package, PackageLayout::Official)?;
-    tracing::info!(username = %access.username, form, by = %account.email, "connection zip downloaded");
-    let details = Details::new().text(Detail::Form, &form).text(Detail::Kind, &access.kind);
+    tracing::info!(username = %access.username, form, port, by = %account.email, "connection zip downloaded");
+    let details = Details::new().text(Detail::Form, &form).number(Detail::Port, port.into()).text(Detail::Kind, &access.kind);
     audit::record(&state.db, audit::Actor::Account(&account), AuditAction::AccessPackageDownloaded, Target::in_team(&ctx.team, &access.username), details).await;
     Ok((
         [

@@ -16,10 +16,49 @@ The settings worth knowing:
 | `P12_FORMAT` | `modern` (AES-256, what TAK Server's own scripts produce) or `legacy` (for Android 12 and older) |
 | `TAK_API_MAX_HEAP`, `TAK_MESSAGING_MAX_HEAP`, … | Java heap sizes of TAK Server in MB; empty lets it size them from the machine's RAM |
 | `TAK_CONNECTION_NAME` | Name of the server shown in ATAK and iTAK (`TeamTAK` by default) |
+| `TAK_CLIENT_PORTS` | Ports of the machine TAK clients connect to, separated by commas (`8089` by default). See [Client ports](#client-ports) |
 | `SMTP_*`, `MAIL_FROM` | Outgoing e-mail; check it with `docker compose exec app teamtak send-test-mail you@example.org` |
 
 The settings `install.sh` asks for, or reads from its options, are used on the first run only;
 afterwards they live in this file.
+
+## Client ports
+
+TAK clients connect to TAK Server on port 8089 by default. Two situations call for other ports:
+
+- **A network blocks 8089.** Some company, hotel or mobile networks only let a few ports out.
+  List more ports, and the device on such a network uses one of them.
+- **Another program of the machine already uses 8089.** Give another port instead of 8089.
+
+```
+TAK_CLIENT_PORTS=8089,8443,4443
+```
+
+The first port of the list is the default one: it goes into the zips and QR codes. When the list
+holds several ports, the dialog of an access in the web UI shows a choice of port; the iTAK QR
+code, the zips and the manual setup then use the port chosen. The ATAK QR code carries no port,
+so ATAK connects on its default port, 8089 (not checked on a device): for another port, hand over
+a zip, or change the port in ATAK's server settings after scanning.
+
+Every port listed leads to the same TLS input of TAK Server (8089 inside its container), so TAK
+Server's configuration does not change. Docker publishes them through
+`deploy/data/docker-compose.ports.yml`, which `install.sh` writes from this list (it is part of
+`COMPOSE_FILE`). After a change, run `./install.sh` again: TAK Server restarts with its new ports
+and connected devices reconnect by themselves. Open the new ports in the firewall too.
+
+What is refused:
+
+- 8446 (enrollment) and the web interface's ports: 80 and 443 in production, 8480 and 8025 in
+  local mode. In production, 443, the port almost every network lets through, belongs to the web
+  interface.
+- A port another program of the machine listens on: the install says which, before building
+  anything. Ports this stack already publishes are not counted.
+
+Port 8443 is free on the machine (TAK Server's API is not published), so it can be one of the
+client ports. Enrollment stays on 8446 only: a device on a network that also blocks 8446 needs
+the zip with certificate, which connects without enrolling.
+
+## Monitoring, backups and the webhook
 
 Thresholds of the alerts, the backup schedule and passphrase, and the webhook are not in this file:
 they are set from the web UI, in **Monitoring, Settings** (see [monitoring](monitoring.md) and

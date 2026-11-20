@@ -181,6 +181,11 @@
       "title": "One identity for the whole team",
       "text": "Every device of the team uses this access. Channel switches are shared too: a channel turned off on one device is turned off for all."
     },
+    "port": {
+      "label": "Server port",
+      "main": "{{port}} (default)",
+      "help": "If port {{port}} is blocked on the device's network, choose another one. The iTAK QR code, the zips and the manual setup use the port chosen here."
+    },
     "tabs": {
       "qr": "QR code",
       "zip": "Zip file",
@@ -189,6 +194,7 @@
     "qr": {
       "atakTitle": "ATAK (Android)",
       "atakHelp": "Scan it from ATAK. It carries the server address, the username and the password.",
+      "atakOtherPort": "Scan it from ATAK. It carries no port: ATAK connects on {{atakPort}}, not {{port}}. Prefer a zip, or change the port in ATAK's server settings after scanning.",
       "itakTitle": "iTAK (iPhone)",
       "itakHelp": "Scan it from iTAK, then enter the username and password of the third tab.",
       "warning": "Anyone who sees the ATAK code can connect as this account: show it, do not send it. QR codes only work when the server's enrollment port has a publicly trusted certificate; otherwise use the zip file."
@@ -199,7 +205,8 @@
       "enrollmentTitle": "Zip without certificate",
       "enrollmentHelp": "The device asks for the username and password, then obtains its own certificate from the server.",
       "download": "Download",
-      "note": "Import the file in ATAK or iTAK (Import, then pick the zip)."
+      "note": "Import the file in ATAK or iTAK (Import, then pick the zip).",
+      "port": "These zips connect on port {{port}}."
     },
     "manual": {
       "host": "Server address",
@@ -919,6 +926,7 @@
       "role": "Role:",
       "kind": "Kind of access:",
       "form": "Zip:",
+      "port": "Port:",
       "member_cap": "Member cap:",
       "removed_accesses": "Accesses removed:",
       "other_team": "Team:",

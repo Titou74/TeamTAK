@@ -23,10 +23,12 @@ Everything runs with Docker Compose, in the project `teamtak`.
 |---|---|
 | 443, 80 | Web UI in production (80 serves the Let's Encrypt challenge and redirects to HTTPS) |
 | 8480 | Web UI in local mode |
-| 8089 | TAK clients, mutual TLS |
+| 8089, and any other port of `TAK_CLIENT_PORTS` | TAK clients, mutual TLS ([Client ports](configuration.md#client-ports)) |
 | 8446 | TAK certificate enrollment |
 
 Port 8443 (TAK Server API) is not published: the platform reaches it over the Docker network.
+Every client port of the machine leads to the same TLS input of TAK Server, 8089 inside its
+container: TAK Server itself has a single input, and the monitoring watches that one.
 
 ## How it works
 

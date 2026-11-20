@@ -123,6 +123,8 @@ pub enum Detail {
     Kind,
     /// Which zip: `enrollment` or `certificate`.
     Form,
+    /// Port of TAK Server written in a zip.
+    Port,
     MemberCap,
     /// How many accesses an action removed.
     RemovedAccesses,
@@ -153,6 +155,7 @@ impl Detail {
         Detail::Role,
         Detail::Kind,
         Detail::Form,
+        Detail::Port,
         Detail::MemberCap,
         Detail::RemovedAccesses,
         Detail::OtherTeam,
@@ -174,6 +177,7 @@ impl Detail {
             Detail::Role => "role",
             Detail::Kind => "kind",
             Detail::Form => "form",
+            Detail::Port => "port",
             Detail::MemberCap => "member_cap",
             Detail::RemovedAccesses => "removed_accesses",
             Detail::OtherTeam => "other_team",

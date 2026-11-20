@@ -87,7 +87,8 @@ sudo apt update && sudo apt install -y git unzip openssl
 
 **2. Point the domain and open the ports.** Create a DNS record for the domain (for example
 `tak.example.org`) that points to the server, and open these ports in the firewall: 80/tcp,
-443/tcp and 443/udp (web), 8089/tcp (TAK clients) and 8446/tcp (enrollment). The domain must
+443/tcp and 443/udp (web), 8089/tcp (TAK clients, plus any other client port you choose at step 5)
+and 8446/tcp (enrollment). The domain must
 resolve before the install runs, because Caddy asks Let's Encrypt for the certificate as soon as it
 starts.
 
@@ -123,6 +124,7 @@ It asks its questions one by one, with the default in brackets (Enter keeps it):
 |---|---|
 | Mode | `1`, production |
 | Domain name | `tak.example.org` |
+| Ports for TAK clients | `8089` by default; add others, separated by commas, for networks that block 8089, or replace it if another program uses it ([Client ports](docs/configuration.md#client-ports)) |
 | E-mail address of the first administrator | your address |
 | Contact address given to Let's Encrypt | the administrator's by default |
 | Validity of TAK client certificates | 365 days by default |
@@ -170,7 +172,8 @@ With Docker running and the ZIP at the repository root:
 ./install.sh --local
 ```
 
-It asks for the address TAK clients use, the administrator's address and the certificate validity.
+It asks for the address TAK clients use, their ports, the administrator's address and the
+certificate validity.
 Keep `localhost` for this computer only; to let phones on the same network reach TAK Server, give
 the machine's LAN address (the script shows it): the server certificate then carries it and the
 ports listen on all interfaces.
@@ -193,6 +196,7 @@ Without questions:
 | `--host <name-or-ip>` | Local mode: address TAK clients use | `localhost` |
 | `--admin-email <address>` | First administrator | none |
 | `--cert-validity-days <n>` | Validity of TAK client certificates | 365 |
+| `--tak-client-ports <list>` | Ports TAK clients connect to, separated by commas; the first goes into the zips and QR codes ([Client ports](docs/configuration.md#client-ports)) | `8089` |
 | `--tak-enroll-letsencrypt` | Production: Let's Encrypt certificate on port 8446 | off |
 | `--smtp-host`, `--smtp-port`, `--smtp-username`, `--smtp-password`, `--smtp-tls`, `--mail-from` | Outgoing e-mail | mail catcher in local mode |
 | `--acme-email <address>` | Contact given to Let's Encrypt | the administrator's |

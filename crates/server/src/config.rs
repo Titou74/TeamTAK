@@ -51,11 +51,20 @@ pub struct TakConfig {
     pub api_cert_name: String,
     /// Host name or address written in zips and QR codes.
     pub public_host: String,
-    /// Port of the TLS input for TAK clients.
-    pub client_port: u16,
+    /// Ports of the machine that lead to the TLS input for TAK clients, never empty. The
+    /// first is the one written in zips and QR codes; the others are alternatives for
+    /// networks that block it, chosen per device.
+    pub client_ports: Vec<u16>,
     /// Name of the connection in the phones' server list.
     pub connection_name: String,
     pub p12_format: P12Format,
+}
+
+impl TakConfig {
+    /// The port written in zips and QR codes unless another one is chosen.
+    pub fn client_port(&self) -> u16 {
+        self.client_ports[0]
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +119,23 @@ where
     raw.parse().map_err(|e| anyhow!("{name}={raw:?} is not valid: {e}"))
 }
 
+/// The ports of a list like `8089,8443` (commas or spaces): at least one, none twice, in
+/// the order given.
+pub fn parse_ports(raw: &str) -> Result<Vec<u16>> {
+    let mut ports = Vec::new();
+    for item in raw.split([',', ' ', '\t']).filter(|s| !s.is_empty()) {
+        let port: u16 = item.parse().ok().filter(|p| *p != 0).ok_or_else(|| anyhow!("{item:?} is not a port number"))?;
+        if ports.contains(&port) {
+            bail!("port {port} is listed twice");
+        }
+        ports.push(port);
+    }
+    if ports.is_empty() {
+        bail!("no port");
+    }
+    Ok(ports)
+}
+
 impl Config {
     pub fn from_env() -> Result<Self> {
         let app_secret = var("APP_SECRET")?;
@@ -127,6 +153,8 @@ impl Config {
             P12Format::parse(&p12_raw).with_context(|| format!("P12_FORMAT={p12_raw:?}: expected modern or legacy"))?;
         let defaults = LoginPolicy::default();
         let web_dir = std::env::var("WEB_DIR").ok().filter(|s| !s.is_empty()).map(PathBuf::from);
+        let ports_raw = var_or("TAK_CLIENT_PORTS", "8089");
+        let client_ports = parse_ports(&ports_raw).with_context(|| format!("TAK_CLIENT_PORTS={ports_raw:?}"))?;
 
         Ok(Self {
             listen_addr: parsed("LISTEN_ADDR", "0.0.0.0:8080")?,
@@ -157,7 +185,7 @@ impl Config {
                 api_key_file: var("TAK_API_KEY_FILE")?.into(),
                 api_cert_name: var_or("TAK_API_CERT_NAME", "teamtak-api"),
                 public_host: var("TAK_PUBLIC_HOST")?,
-                client_port: parsed("TAK_CLIENT_PORT", "8089")?,
+                client_ports,
                 connection_name: var_or("TAK_CONNECTION_NAME", "TeamTAK"),
                 p12_format,
             },
@@ -179,5 +207,20 @@ impl Config {
                 web_tls_probe: Some(var_or("WEB_TLS_PROBE", "")).filter(|p| !p.is_empty()),
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_ports;
+
+    #[test]
+    fn client_ports() {
+        assert_eq!(parse_ports("8089").unwrap(), [8089]);
+        assert_eq!(parse_ports("8089,8443, 4443").unwrap(), [8089, 8443, 4443]);
+        assert_eq!(parse_ports(" 8090 8089 ").unwrap(), [8090, 8089], "order kept: the first is the main one");
+        for bad in ["", " , ", "8089,8089", "0", "65536", "80a", "-1", "8089;8090"] {
+            assert!(parse_ports(bad).is_err(), "{bad:?} accepted");
+        }
     }
 }

@@ -49,6 +49,40 @@ function QrPanel({ value, title, help }: { value: string; title: string; help: s
   );
 }
 
+/** The port ATAK connects on after enrolling from its QR code, which carries none. */
+const ATAK_DEFAULT_PORT = 8089;
+
+/** Which of TAK Server's client ports the QR code, the zips and the manual setup use. */
+function PortPicker({ ports, main, value, onChange }: { ports: number[]; main: number; value: number; onChange: (port: number) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2 rounded-lg border bg-card p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span id="access-port-label" className="text-sm font-medium">
+          {t("access.port.label")}
+        </span>
+        <div role="radiogroup" aria-labelledby="access-port-label" className="flex flex-wrap gap-1.5">
+          {ports.map((port) => (
+            <Button
+              key={port}
+              type="button"
+              role="radio"
+              aria-checked={value === port}
+              size="sm"
+              variant={value === port ? "default" : "outline"}
+              className="tabular-nums"
+              onClick={() => onChange(port)}
+            >
+              {port === main ? t("access.port.main", { port }) : port}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("access.port.help", { port: main })}</p>
+    </div>
+  );
+}
+
 function saveBlob(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -72,11 +106,13 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
   const notifyError = useNotifyError();
   const [downloading, setDownloading] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"regenerate" | "remove" | null>(null);
+  const [port, setPort] = useState(access.server.port);
+  const severalPorts = access.server.ports.length > 1;
 
   async function download(form: "enrollment" | "certificate") {
     setDownloading(form);
     try {
-      const { name, blob } = await api.accessPackage(access.id, form);
+      const { name, blob } = await api.accessPackage(access.id, form, port);
       saveBlob(name, blob);
       await onChanged();
     } catch (e) {
@@ -116,6 +152,7 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
           <AlertDescription>{t("access.sharedNote.text")}</AlertDescription>
         </Alert>
       )}
+      {severalPorts && <PortPicker ports={access.server.ports} main={access.server.port} value={port} onChange={setPort} />}
       <Tabs defaultValue="qr">
         <TabsList className="w-full">
           <TabsTrigger value="qr">{t("access.tabs.qr")}</TabsTrigger>
@@ -125,8 +162,12 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
 
         <TabsContent value="qr" className="space-y-3 pt-2">
           <div className="grid gap-3 sm:grid-cols-2">
-            <QrPanel value={access.qr.atak} title={t("access.qr.atakTitle")} help={t("access.qr.atakHelp")} />
-            <QrPanel value={access.qr.itak} title={t("access.qr.itakTitle")} help={t("access.qr.itakHelp")} />
+            <QrPanel
+              value={access.qr.atak}
+              title={t("access.qr.atakTitle")}
+              help={port === ATAK_DEFAULT_PORT ? t("access.qr.atakHelp") : t("access.qr.atakOtherPort", { port, atakPort: ATAK_DEFAULT_PORT })}
+            />
+            <QrPanel value={access.qr.itak[String(port)]} title={t("access.qr.itakTitle")} help={t("access.qr.itakHelp")} />
           </div>
           <p className="text-xs text-muted-foreground">{t("access.qr.warning")}</p>
         </TabsContent>
@@ -150,13 +191,16 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{t("access.zip.note")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("access.zip.note")}
+            {severalPorts && <> {t("access.zip.port", { port })}</>}
+          </p>
         </TabsContent>
 
         <TabsContent value="manual" className="pt-2">
           <dl className="rounded-lg border bg-card px-3 text-sm">
             <Field label={t("access.manual.host")} value={access.server.host} />
-            <Field label={t("access.manual.port")} value={String(access.server.port)} />
+            <Field label={t("access.manual.port")} value={String(port)} />
             <Field label={t("access.manual.enrollPort")} value={String(access.server.enroll_port)} />
             <Field label={t("access.manual.username")} value={access.username} />
             <Field label={t("access.manual.password")} value={access.password} secret />

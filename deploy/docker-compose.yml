@@ -1,10 +1,12 @@
 # TeamTAK: the full stack. Started by install.sh, which generates deploy/.env and
-# everything under deploy/data/ (both git-ignored). One of the two override files is added
-# through COMPOSE_FILE in .env:
+# everything under deploy/data/ (both git-ignored). Two more files are added through
+# COMPOSE_FILE in .env:
 #   docker-compose.production.yml   public ports 80/443, Let's Encrypt
 #   docker-compose.local.yml        plain HTTP on localhost, mail catcher
+#   data/docker-compose.ports.yml   the TAK client ports, generated from TAK_CLIENT_PORTS
 #
-# Published ports: web (Caddy), 8089 (TAK clients) and 8446 (TAK enrollment).
+# Published ports: web (Caddy), the TAK client ports (TAK_CLIENT_PORTS, 8089 by default)
+# and 8446 (TAK enrollment).
 # 8443 (TAK Server API) is NOT published: the platform reaches it over the Docker network.
 #
 # The host agent is the only service that holds the Docker socket. It sits alone on a
@@ -63,6 +65,7 @@ services:
       TAK_API_CERT_NAME: ${TAK_API_CERT_NAME}
       # What users are handed
       TAK_PUBLIC_HOST: ${PUBLIC_HOST}
+      TAK_CLIENT_PORTS: ${TAK_CLIENT_PORTS:-8089}
       TAK_CONNECTION_NAME: ${TAK_CONNECTION_NAME:-TeamTAK}
       P12_FORMAT: ${P12_FORMAT:-modern}
       # Limits (defaults in the binary; see deploy/.env.example)
@@ -236,7 +239,7 @@ services:
       - ./data/tak/certs:/opt/tak/certs/files
       - ./data/tak/logs:/opt/tak/logs
     ports:
-      - "${BIND_ADDRESS}:8089:8089"   # TAK clients (mutual TLS)
+      # TAK clients (mutual TLS) reach 8089 through the ports of data/docker-compose.ports.yml.
       - "${BIND_ADDRESS}:8446:8446"   # enrollment (username + password)
     networks:
       default:

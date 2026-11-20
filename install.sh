@@ -38,6 +38,9 @@ Settings (first run only):
   --admin-email <address>    First platform administrator.
   --acme-email <address>     Contact address given to Let's Encrypt (default: the admin's).
   --cert-validity-days <n>   Validity of TAK client certificates (default: 365).
+  --tak-client-ports <list>  Ports of this machine TAK clients connect to, separated by
+                             commas (default: 8089). The first goes into the zips and QR
+                             codes; the others are alternatives for networks that block it.
   --tak-enroll-letsencrypt   Production: also give the Let's Encrypt certificate to TAK
                              Server's enrollment port (8446), which QR-code enrollment needs.
   --smtp-host <host> --smtp-port <port> --smtp-username <u> --smtp-password <p>
@@ -63,13 +66,13 @@ EOF
 }
 
 MODE_ARG="" DOMAIN_ARG="" HOST_ARG="" ADMIN_EMAIL_ARG="" ACME_EMAIL_ARG="" VALIDITY_ARG=""
-ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0
+ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0 TAK_PORTS_ARG=""
 SMTP_HOST_ARG="" SMTP_PORT_ARG="" SMTP_USERNAME_ARG="" SMTP_PASSWORD_ARG="" SMTP_TLS_ARG="" MAIL_FROM_ARG=""
 # Options given on the command line, between spaces: they are not asked.
 GIVEN=" "
 while [ $# -gt 0 ]; do
   case "$1" in
-    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--smtp-*|--mail-from|--zip)
+    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--smtp-*|--mail-from|--zip)
       [ $# -ge 2 ] || { usage >&2; die "$1 needs a value"; } ;;
   esac
   GIVEN="$GIVEN${1#--} "
@@ -81,6 +84,7 @@ while [ $# -gt 0 ]; do
     --acme-email) ACME_EMAIL_ARG="$2"; shift ;;
     --cert-validity-days) VALIDITY_ARG="$2"; shift ;;
     --tak-enroll-letsencrypt) ENROLL_LE_ARG=true ;;
+    --tak-client-ports) TAK_PORTS_ARG="$2"; shift ;;
     --smtp-host) SMTP_HOST_ARG="$2"; shift ;;
     --smtp-port) SMTP_PORT_ARG="$2"; shift ;;
     --smtp-username) SMTP_USERNAME_ARG="$2"; shift ;;
@@ -177,6 +181,21 @@ check_days() {
 check_port() {
   case "$1" in ''|*[!0-9]*) ;; *) [ "$1" -ge 1 ] && [ "$1" -le 65535 ] && return 0 ;; esac
   echo "a port number is needed, like 587"; return 1
+}
+# "tak.example.org:8089, also 8443": where TAK clients connect.
+client_ports_text() {
+  local others
+  others="$(port_list "$1" | sed 1d | paste -s -d , - | sed 's/,/, /g')"
+  printf '%s:%s%s' "$PUBLIC_HOST" "$(port_list "$1" | sed -n 1p)" "${others:+, also $others}"
+}
+
+# Valid for the mode, and free: no other program of this machine listens on them.
+check_client_ports() {
+  local taken
+  client_ports_problem "$1" "$MODE" || return 1
+  taken="$(client_ports_taken "$1")"
+  [ -n "$taken" ] || return 0
+  echo "already used on this machine by another program: $taken; choose other ports"; return 1
 }
 check_tls() {
   case "$1" in starttls|tls|none) return 0 ;; esac
@@ -294,7 +313,7 @@ if [ ! -f "$ENV_FILE" ]; then
 
   DOMAIN="$DOMAIN_ARG" CLIENT_HOST="$HOST_ARG"
   ADMIN_EMAIL="$ADMIN_EMAIL_ARG" ACME_EMAIL="$ACME_EMAIL_ARG" VALIDITY="$VALIDITY_ARG"
-  ENROLL_LE="${ENROLL_LE_ARG:-false}"
+  ENROLL_LE="${ENROLL_LE_ARG:-false}" TAK_PORTS="$TAK_PORTS_ARG"
   SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="$SMTP_PORT_ARG" SMTP_TLS="$SMTP_TLS_ARG"
   SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG" MAIL_FROM="$MAIL_FROM_ARG"
 
@@ -310,6 +329,15 @@ if [ ! -f "$ENV_FILE" ]; then
       say "Address TAK clients use to reach this machine. localhost: this computer only. To let"
       say "phones on the local network connect, give this machine's LAN address${lan:+ (here: $lan)}."
       ask CLIENT_HOST "Address" localhost check_host
+    fi
+    if ! given tak-client-ports; then
+      echo >&2
+      say "Ports TAK clients connect to. 8089 is the usual one. Add others, separated by commas,"
+      say "for networks that block 8089, or give another one if a program of this machine already"
+      say "uses it. The first goes into the zips and QR codes; the others can be chosen per device."
+      [ "$MODE" != production ] || say "Port 443 is not available: the web interface uses it."
+      ask TAK_PORTS "Ports for TAK clients" 8089 check_client_ports
+      echo >&2
     fi
     given admin-email || ask ADMIN_EMAIL "E-mail address of the first administrator" "" check_email
     if [ "$MODE" = production ] && ! given acme-email; then
@@ -357,7 +385,7 @@ if [ ! -f "$ENV_FILE" ]; then
     PUBLIC_URL="https://$DOMAIN"
     BIND_ADDRESS=0.0.0.0
     COOKIE_SECURE=true
-    COMPOSE_FILES="docker-compose.yml:docker-compose.production.yml"
+    COMPOSE_FILES="docker-compose.yml:docker-compose.production.yml:$PORTS_COMPOSE_FILE"
     # Inside the Docker network the public name resolves to the takserver container, so the
     # platform can verify whichever certificate 8446 presents (private CA or Let's Encrypt).
     TAK_ENROLL_URL="https://$DOMAIN:8446"
@@ -373,7 +401,7 @@ if [ ! -f "$ENV_FILE" ]; then
     PUBLIC_URL="http://$PUBLIC_HOST:8480"
     if [ "$PUBLIC_HOST" = localhost ] || [ "$PUBLIC_HOST" = 127.0.0.1 ]; then BIND_ADDRESS=127.0.0.1; else BIND_ADDRESS=0.0.0.0; fi
     COOKIE_SECURE=false
-    COMPOSE_FILES="docker-compose.yml:docker-compose.local.yml"
+    COMPOSE_FILES="docker-compose.yml:docker-compose.local.yml:$PORTS_COMPOSE_FILE"
     TAK_ENROLL_URL="https://takserver:8446"
     TAK_NETWORK_ALIAS="takserver.internal"
     SMTP_HOST="${SMTP_HOST:-mailpit}" SMTP_PORT="${SMTP_PORT:-1025}" SMTP_TLS="${SMTP_TLS:-none}"
@@ -388,12 +416,14 @@ if [ ! -f "$ENV_FILE" ]; then
   fi
   check_port "$SMTP_PORT" > /dev/null || die "--smtp-port: not a port number: $SMTP_PORT"
   check_tls "$SMTP_TLS" > /dev/null || die "--smtp-tls must be starttls, tls or none"
+  TAK_PORTS="$(normalize_ports "${TAK_PORTS:-8089}")"
+  why="$(client_ports_problem "$TAK_PORTS" "$MODE")" || die "--tak-client-ports: $why"
 
   if [ "$INTERACTIVE" = 1 ]; then
     log "Summary"
     info "Mode:                  $MODE"
     info "Web:                   $PUBLIC_URL"
-    info "TAK clients:           $PUBLIC_HOST:8089, enrollment $PUBLIC_HOST:8446"
+    info "TAK clients:           $(client_ports_text "$TAK_PORTS"), enrollment $PUBLIC_HOST:8446"
     info "Administrator:         ${ADMIN_EMAIL:-none (later: docker compose exec app teamtak grant-admin <email>)}"
     if [ "$MODE" = production ]; then
       info "Let's Encrypt contact: ${ACME_EMAIL:-none}"
@@ -426,6 +456,9 @@ PUBLIC_HOST=$PUBLIC_HOST
 PUBLIC_URL=$PUBLIC_URL
 # Interface the published ports listen on
 BIND_ADDRESS=$BIND_ADDRESS
+# Ports of this machine TAK clients connect to, separated by commas. The first goes into the
+# zips and QR codes; the others are alternatives for networks that block it.
+TAK_CLIENT_PORTS=$TAK_PORTS
 COOKIE_SECURE=$COOKIE_SECURE
 ADMIN_EMAIL=$ADMIN_EMAIL
 ACME_EMAIL=$ACME_EMAIL
@@ -494,7 +527,7 @@ ENVEOF
   chmod 600 "$ENV_FILE"
 else
   info "keeping existing settings: $ENV_FILE"
-  for option in local domain host admin-email acme-email cert-validity-days tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
+  for option in local domain host admin-email acme-email cert-validity-days tak-client-ports tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
     if given "$option"; then
       info "note: --$option and the other settings options are only read on the first run; edit $ENV_FILE to change them"
       break
@@ -509,7 +542,19 @@ fi
 if [ -z "$(env_get MONITOR_INTERVAL_SECONDS)" ]; then
   if [ "$(env_get MODE)" = local ]; then env_set MONITOR_INTERVAL_SECONDS 10; else env_set MONITOR_INTERVAL_SECONDS 60; fi
 fi
+# Ports of TAK clients: 8089 until now, published through a generated Compose file.
+if [ -z "$(env_get TAK_CLIENT_PORTS)" ]; then
+  env_set TAK_CLIENT_PORTS 8089
+  info "added to $ENV_FILE: TAK_CLIENT_PORTS=8089 (ports TAK clients connect to; add others there)"
+fi
+compose_files="$(env_get COMPOSE_FILE)"
+case ":$compose_files:" in
+  *":$PORTS_COMPOSE_FILE:"*) ;;
+  *) env_set COMPOSE_FILE "${compose_files:+$compose_files:}$PORTS_COMPOSE_FILE" ;;
+esac
 load_env
+why="$(client_ports_problem "$TAK_CLIENT_PORTS" "$MODE")" || die "TAK_CLIENT_PORTS in $ENV_FILE: $why"
+render_ports_compose
 # Backup archives are written here by the host agent. They hold every secret.
 mkdir -p "$DEPLOY_DIR/backups"
 chmod 700 "$DEPLOY_DIR/backups"
@@ -590,6 +635,13 @@ if [ -z "$ZIP" ]; then
   fi
 fi
 info "mode: $MODE — public host: $PUBLIC_HOST — web: $PUBLIC_URL — client certificates: $CERT_VALIDITY_DAYS days"
+info "TAK clients: $(client_ports_text "$TAK_CLIENT_PORTS")"
+if [ "$NO_START" = 0 ]; then
+  # Docker cannot publish a port another program holds, and would only say so once
+  # everything is built.
+  taken="$(client_ports_taken "$TAK_CLIENT_PORTS")"
+  [ -z "$taken" ] || die "TAK clients' port(s) $taken already used on this machine by another program. Choose other ports in TAK_CLIENT_PORTS ($ENV_FILE), then run ./install.sh again"
+fi
 if [ "$MODE" = production ] && [ -z "$SMTP_HOST" ]; then
   info "WARNING: SMTP_HOST is empty in $ENV_FILE: login codes cannot be e-mailed until it is set."
 fi
@@ -718,7 +770,7 @@ fi
 
 log "TeamTAK is running"
 info "Web:               $PUBLIC_URL"
-info "TAK clients:       $PUBLIC_HOST:8089 (TLS)   enrollment: $PUBLIC_HOST:8446"
+info "TAK clients:       $(client_ports_text "$TAK_CLIENT_PORTS") (TLS)   enrollment: $PUBLIC_HOST:8446"
 if [ "$MODE" = local ]; then
   info "Mail catcher:      http://localhost:${MAILPIT_PORT:-8025} (login codes arrive here)"
 fi
