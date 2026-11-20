@@ -22,6 +22,11 @@ export function useMe() {
   });
 }
 
+/** What the UI needs before anyone is signed in: languages, login timings, the server's name. */
+export function usePublicConfig() {
+  return useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
+}
+
 /** Turns an API error code into a sentence in the current language. */
 export function useErrorText() {
   const { t, i18n } = useTranslation();

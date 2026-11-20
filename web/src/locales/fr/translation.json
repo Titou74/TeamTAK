@@ -1104,6 +1104,13 @@
   "settings": {
     "saved": "Réglages enregistrés.",
     "default": "Par défaut : {{value}}",
+    "server": {
+      "title": "Nom du serveur",
+      "description": "Distingue ce serveur des autres que vous exploitez : il s'affiche sur la page de connexion, dans l'onglet du navigateur, sous TeamTAK en haut à gauche et dans l'objet de chaque e-mail.",
+      "name": "Nom de ce serveur",
+      "nameHint": "Par exemple l'événement ou le nom de domaine (tak.example.org). 60 caractères au plus ; laissez vide pour aucun.",
+      "namePlaceholder": "Exercice Nord"
+    },
     "alerts": {
       "title": "Alertes",
       "description": "Où les alertes sont envoyées. Elles sont toujours affichées sur la page de supervision.",

@@ -14,18 +14,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
-import { useNotifyError } from "@/lib/hooks";
+import { useNotifyError, usePublicConfig } from "@/lib/hooks";
 import type { Me } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** Logo and name, with under it, small, the name an administrator gave this server. */
 export function Brand() {
   const { t } = useTranslation();
+  const serverName = usePublicConfig().data?.server_name;
+  // Never narrower than the logo and "TeamTAK": the server's name gives way first.
   return (
-    <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-      <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
+    <Link to="/" className="flex min-w-28 shrink items-center gap-2">
+      <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
         <ShieldCheckIcon className="size-4" />
       </span>
-      {t("app.name")}
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="font-semibold tracking-tight whitespace-nowrap">{t("app.name")}</span>
+        {serverName && (
+          <span className="max-w-40 truncate text-xs text-muted-foreground" title={serverName}>
+            {serverName}
+          </span>
+        )}
+      </span>
     </Link>
   );
 }
@@ -37,7 +47,7 @@ function NavItem({ to, children }: { to: string; children: ReactNode }) {
       end={to === "/"}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground",
+          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground lg:whitespace-nowrap",
           isActive && "bg-muted text-foreground",
         )
       }
@@ -111,7 +121,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                 target="_blank"
                 rel="noopener"
                 title={t("nav.takAdminHint")}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground lg:whitespace-nowrap"
               >
                 <ExternalLinkIcon className="size-4" />
                 {t("nav.takAdmin")}

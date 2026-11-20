@@ -21,6 +21,7 @@ use uuid::Uuid;
 use crate::audit::{self, AuditAction, Details, Target};
 use crate::error::{ApiError, ApiResult, Refusal};
 use crate::locale::{self, Template};
+use crate::settings;
 use crate::state::SharedState;
 
 pub const SESSION_COOKIE: &str = "tm_session";
@@ -477,13 +478,16 @@ pub async fn update_me(
 }
 
 /// `GET /api/config`: what the UI needs before anyone is signed in.
-pub async fn public_config(State(state): State<SharedState>) -> Json<Value> {
-    Json(json!({
+pub async fn public_config(State(state): State<SharedState>) -> ApiResult<Json<Value>> {
+    let settings = settings::load(&state.db).await?;
+    Ok(Json(json!({
         "languages": locale::languages(),
         "default_language": locale::DEFAULT_LANGUAGE,
         "code_ttl_minutes": state.config.login.code_ttl_secs / 60,
         "resend_cooldown_seconds": state.config.login.resend_cooldown_secs,
-    }))
+        // Shown on the sign-in page, so it is no secret.
+        "server_name": settings.values.server_name,
+    })))
 }
 
 /// Server-side rescue: makes `email` an administrator and returns a one-time login code for

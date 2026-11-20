@@ -211,8 +211,25 @@ pub fn ldap_member_of(username: &str) -> Vec<String> {
 // ------------------------------------------------------------------------------- mail
 
 pub struct Mail {
+    /// Without the server's name (see [`untagged`]).
     pub subject: String,
     pub text: String,
+}
+
+/// A subject as it is written when the server has no name: an administrator may have named
+/// the server of the test stack (`[TeamTAK · Bench] Alert: …`, `[Bench] Your sign-in code: …`).
+pub fn untagged(subject: &str) -> String {
+    if let Some(rest) = subject.strip_prefix("[TeamTAK · ") {
+        if let Some((_, after)) = rest.split_once(']') {
+            return format!("[TeamTAK]{after}");
+        }
+    }
+    if subject.starts_with('[') && !subject.starts_with("[TeamTAK]") {
+        if let Some((_, after)) = subject.split_once("] ") {
+            return after.to_string();
+        }
+    }
+    subject.to_string()
 }
 
 /// Latest message received by `to`, waiting up to ten seconds for it.
@@ -234,7 +251,7 @@ pub async fn latest_mail(to: &str) -> Mail {
             let message: Value =
                 http.get(format!("{}/api/v1/message/{id}", mailpit_url())).send().await.unwrap().json().await.unwrap();
             return Mail {
-                subject: message["Subject"].as_str().unwrap_or_default().to_string(),
+                subject: untagged(message["Subject"].as_str().unwrap_or_default()),
                 text: message["Text"].as_str().unwrap_or_default().to_string(),
             };
         }
@@ -265,7 +282,7 @@ pub async fn mail_about(to: &str, needle: &str) -> Mail {
             let message: Value =
                 http.get(format!("{}/api/v1/message/{id}", mailpit_url())).send().await.unwrap().json().await.unwrap();
             return Mail {
-                subject: message["Subject"].as_str().unwrap_or_default().to_string(),
+                subject: untagged(message["Subject"].as_str().unwrap_or_default()),
                 text: message["Text"].as_str().unwrap_or_default().to_string(),
             };
         }
@@ -275,7 +292,7 @@ pub async fn mail_about(to: &str, needle: &str) -> Mail {
     }
 }
 
-/// Subjects of every message received by `to`, newest first.
+/// Subjects of every message received by `to`, newest first, as they were received.
 pub async fn mail_subjects(to: &str) -> Vec<String> {
     let list: Value = reqwest::Client::new()
         .get(format!("{}/api/v1/search", mailpit_url()))

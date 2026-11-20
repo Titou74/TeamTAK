@@ -136,8 +136,14 @@ the checkout is on, or the last one followed by the number of commits since and 
 the platform and agent images are tagged with it (`teamtak/app:1.0.1`). The images of other
 versions are removed once the stack runs on the new one.
 
-## Monitoring, backups and the webhook
+## Set from the web UI
 
-Thresholds of the alerts, the backup schedule and passphrase, and the webhook are not in this file:
-they are set from the web UI, in **Monitoring, Settings** (see [monitoring](monitoring.md) and
-[backups](backups.md)).
+The name of the server, the thresholds of the alerts, the backup schedule and passphrase, and the
+webhook are not in this file: they are set from the web UI, in **Monitoring, Settings** (see
+[monitoring](monitoring.md) and [backups](backups.md)).
+
+The name of the server tells it from the others an organisation runs (one per event, or per
+domain name): it is shown on the sign-in page, in the browser tab and in small under TeamTAK at the
+top left of every page. It also starts the subject of every e-mail the server sends:
+`[Exercise North] Your sign-in code: …`, and for the alerts and the test e-mail
+`[TeamTAK · Exercise North] Alert: …`. Up to 60 characters; empty, nothing is shown.

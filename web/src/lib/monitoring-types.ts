@@ -305,6 +305,8 @@ export interface Thresholds {
 }
 
 export interface Settings {
+  /** Shown on the sign-in page, under the brand and in e-mail subjects; empty for none. */
+  server_name: string;
   thresholds: Thresholds;
   alert_emails: boolean;
   webhook_url: string;
