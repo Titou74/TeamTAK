@@ -15,6 +15,7 @@ use time::OffsetDateTime;
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};
 use crate::auth::AdminAccount;
 use crate::error::{ApiError, ApiResult};
+use crate::mail::scrub_error;
 use crate::state::SharedState;
 
 use super::agent::AgentCallError;
@@ -251,6 +252,29 @@ pub async fn webhook_test(State(state): State<SharedState>, AdminAccount(admin):
         Err(error) => {
             tracing::warn!(error, "webhook test failed");
             Err(ApiError::ActionFailed)
+        }
+    }
+}
+
+/// `POST /api/admin/settings/mail-test`: sends the test e-mail to the administrator who
+/// asks, in their language, and says how it went. A refusal of the mail server is a result
+/// of the test, not an error of the request: the answer carries its technical text, the one
+/// the monitoring page shows (without addresses).
+pub async fn mail_test(State(state): State<SharedState>, AdminAccount(admin): AdminAccount) -> ApiResult<Json<Value>> {
+    admin.require_platform(Action::OperatePlatform)?;
+    if !state.mailer.is_configured() {
+        return Err(ApiError::MailNotConfigured);
+    }
+    tracing::info!(by = %admin.email, "test e-mail requested");
+    let outcome = state.mailer.send_test(&admin.email, &admin.language).await;
+    // The monitoring page shows the last e-mail sent or failed: let it see this one.
+    state.monitor.refresh_soon();
+    match outcome {
+        Ok(()) => Ok(Json(json!({ "sent": true, "to": admin.email, "error": null }))),
+        Err(e) => {
+            let error = format!("{e:#}");
+            tracing::warn!(error, "test e-mail not sent");
+            Ok(Json(json!({ "sent": false, "to": admin.email, "error": scrub_error(&error) })))
         }
     }
 }

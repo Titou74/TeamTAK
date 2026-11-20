@@ -11,8 +11,8 @@
 # Three files: tests/e2e.rs (accounts, teams, TAK accesses, reconciliation), tests/events.rs
 # (cross-team events) and tests/monitoring.rs (the host agent, alerts, connected devices,
 # the audit log, backups). One of the event tests stops and restarts the platform's
-# container; the monitoring tests stop the reverse proxy for a minute, restart the mail
-# catcher, and write (then delete) two small backup archives in deploy/backups/.
+# container; the monitoring tests stop the reverse proxy for a minute, stop and restart the
+# mail catcher, and write (then delete) two small backup archives in deploy/backups/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v cargo > /dev/null || export PATH="/opt/homebrew/opt/rustup/bin:$PATH"

@@ -237,6 +237,7 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     }
     leader.post("/admin/backups/run", json!({})).await.expect_error(403, "forbidden");
     leader.post("/admin/services/mailpit/restart", json!({})).await.expect_error(403, "forbidden");
+    leader.post("/admin/settings/mail-test", json!({})).await.expect_error(403, "forbidden");
 }
 
 // ------------------------------------------------------------------------------ alerts
@@ -690,6 +691,56 @@ async fn a_backup_is_written_on_request_listed_recorded_and_encrypted_when_asked
     assert_eq!(archives(), existing);
 }
 
+/// Waits until the mail catcher takes e-mail, after it was stopped or restarted.
+async fn mail_catcher_ready() {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while reqwest::Client::new().get(format!("{}/api/v1/info", mailpit_url())).send().await.map(|r| !r.status().is_success()).unwrap_or(true) {
+        assert!(Instant::now() < deadline, "the mail catcher did not come back");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn a_test_email_reaches_the_administrator_or_says_why_not() {
+    let admin = Session::admin().await;
+
+    // From the settings page: to the administrator who asks, and counted as sent.
+    let sent = admin.post("/admin/settings/mail-test", json!({})).await.ok();
+    assert_eq!((sent["sent"].as_bool(), sent["to"].as_str()), (Some(true), Some(admin.email.as_str())), "{sent}");
+    assert!(sent["error"].is_null(), "{sent}");
+    let mail = mail_about(&admin.email, "[TeamTAK] Test e-mail").await;
+    assert!(mail.text.contains("outgoing e-mail works") && mail.text.contains("UTC"), "{}", mail.text);
+    let look = fresh_look(&admin).await;
+    assert!(look["snapshot"]["platform"]["mail"]["last_success_at"].is_string(), "{}", look["snapshot"]["platform"]["mail"]);
+
+    // From the command line, before anyone can sign in, in the language asked for.
+    let address = email("mailtest");
+    let (ok, output) = compose_exec("app", &["teamtak", "send-test-mail", &address, "--language", "fr"], None);
+    assert!(ok && output.contains("Mail server: mailpit:1025 (none)") && output.contains("accepted the test e-mail"), "{output}");
+    let mail = mail_about(&address, "[TeamTAK] E-mail de test").await;
+    assert!(mail.text.contains("l'envoi des e-mails fonctionne"), "{}", mail.text);
+    let (ok, output) = compose_exec("app", &["teamtak", "send-test-mail", &address, "--language", "xx"], None);
+    assert!(!ok && output.contains("unknown language"), "{output}");
+
+    // Without a mail server to take it, the test says why, and never with an address.
+    let (ok, output) = compose(&["stop", "mailpit"]);
+    assert!(ok, "stopping the mail catcher failed: {output}");
+    let failed = admin.post("/admin/settings/mail-test", json!({})).await.ok();
+    let (cli_ok, cli_output) = compose_exec("app", &["teamtak", "send-test-mail", &address], None);
+    let (ok, output) = compose(&["start", "mailpit"]);
+    assert!(ok, "starting the mail catcher failed: {output}");
+    mail_catcher_ready().await;
+    assert_eq!(failed["sent"], false, "{failed}");
+    let error = failed["error"].as_str().unwrap_or_default();
+    assert!(!error.is_empty() && !error.contains('@'), "{failed}");
+    assert!(!cli_ok && cli_output.contains("the test e-mail was not sent"), "{cli_output}");
+
+    // It works again: the next test says so, which also clears the failures for the alerts.
+    let sent = admin.post("/admin/settings/mail-test", json!({})).await.ok();
+    assert_eq!(sent["sent"], true, "{sent}");
+}
+
 #[tokio::test]
 #[ignore = "needs the running stack"]
 async fn an_administrator_restarts_a_service_of_this_stack_from_the_api() {
@@ -711,11 +762,7 @@ async fn an_administrator_restarts_a_service_of_this_stack_from_the_api() {
     assert_eq!((entry["object"].as_str(), entry["details"]["outcome"].as_str()), (Some("mailpit"), Some("ok")));
 
     // Wait until it takes e-mail again, so the tests that follow find it ready.
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while reqwest::Client::new().get(format!("{}/api/v1/info", mailpit_url())).send().await.map(|r| !r.status().is_success()).unwrap_or(true) {
-        assert!(Instant::now() < deadline, "the mail catcher did not come back");
-        tokio::time::sleep(Duration::from_millis(500)).await;
-    }
+    mail_catcher_ready().await;
     let later = Session::new_account("afterrestart").await;
     assert!(later.get("/me").await.ok()["account"]["email"].is_string(), "login codes are delivered again");
 

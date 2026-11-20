@@ -93,6 +93,8 @@ api_errors! {
     ActionFailed => ("action_failed", BAD_GATEWAY),
     /// No webhook address is set.
     WebhookNotSet => ("webhook_not_set", CONFLICT),
+    /// No mail server is set (`SMTP_HOST` is empty): no e-mail can be sent.
+    MailNotConfigured => ("mail_not_configured", CONFLICT),
     Internal => ("internal", INTERNAL_SERVER_ERROR),
 }
 

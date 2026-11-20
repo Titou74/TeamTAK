@@ -16,7 +16,7 @@ The settings worth knowing:
 | `P12_FORMAT` | `modern` (AES-256, what TAK Server's own scripts produce) or `legacy` (for Android 12 and older) |
 | `TAK_API_MAX_HEAP`, `TAK_MESSAGING_MAX_HEAP`, … | Java heap sizes of TAK Server in MB; empty lets it size them from the machine's RAM |
 | `TAK_CONNECTION_NAME` | Name of the server shown in ATAK and iTAK (`TeamTAK` by default) |
-| `SMTP_*`, `MAIL_FROM` | Outgoing e-mail |
+| `SMTP_*`, `MAIL_FROM` | Outgoing e-mail; check it with `docker compose exec app teamtak send-test-mail you@example.org` |
 
 The settings `install.sh` asks for, or reads from its options, are used on the first run only;
 afterwards they live in this file.

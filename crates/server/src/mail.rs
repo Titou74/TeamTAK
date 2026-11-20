@@ -59,6 +59,19 @@ impl Mailer {
         Ok(Self { transport, from, public_url: public_url.to_string(), db })
     }
 
+    /// False when no mail server is set: nothing can be sent.
+    pub fn is_configured(&self) -> bool {
+        self.transport.is_some()
+    }
+
+    /// Sends the test e-mail to `to`, written in `language`. Counted like any other: a
+    /// success shows on the monitoring page as the last e-mail sent, a failure as the last
+    /// one that failed.
+    pub async fn send_test(&self, to: &str, language: &str) -> Result<()> {
+        let date = locale::format_datetime(language, time::OffsetDateTime::now_utc());
+        self.send(to, language, Template::MailTest, &[("date", &date), ("url", &self.public_url)]).await
+    }
+
     async fn deliver(&self, to: &str, rendered: Rendered) -> Result<()> {
         let transport = self.transport.as_ref().context("no SMTP server configured")?;
         let message = Message::builder()
@@ -139,7 +152,10 @@ mod tests {
     async fn without_a_mail_server_sending_fails_cleanly() {
         let config = SmtpConfig { host: String::new(), port: 587, username: String::new(), password: String::new(), tls: SmtpTls::StartTls, from: "TeamTAK <tak@localhost>".into() };
         let mailer = Mailer::new(&config, "https://tak.example.org", None).unwrap();
+        assert!(!mailer.is_configured());
         let error = mailer.send("someone@example.org", "en", Template::LoginCode, &[("code", "123456"), ("minutes", "10")]).await.unwrap_err();
+        assert!(format!("{error:#}").contains("no SMTP server configured"));
+        let error = mailer.send_test("someone@example.org", "fr").await.unwrap_err();
         assert!(format!("{error:#}").contains("no SMTP server configured"));
     }
 }

@@ -62,6 +62,10 @@
     "subject": "{{team}} : le certificat TAK de {{access}} expire dans {{days}} jours",
     "body": "Bonjour,\n\nLe zip de connexion de l'accès « {{access}} » de votre équipe « {{team}} » contient un certificat client qui expire le {{date}}, dans {{days}} jours.\n\nRien ne le renouvelle. Passé cette date, les appareils configurés avec ce zip ne se connecteront plus au serveur TAK.\n\nD'ici là, en tant que chef d'équipe :\n\n  1. ouvrez l'accès sur la page de votre équipe et choisissez « Régénérer » ;\n  2. téléchargez le nouveau zip et redistribuez-le à toutes les personnes qui l'utilisent.\n\nRégénérer déconnecte aussitôt les appareils qui utilisent l'accès : prévoyez-le à un moment où l'équipe peut reconfigurer ses appareils.\n\n    {{url}}"
   },
+  "mail_test": {
+    "subject": "[TeamTAK] E-mail de test",
+    "body": "Bonjour,\n\nCeci est un e-mail de test de TeamTAK, envoyé le {{date}}.\n\nSi vous le lisez, l'envoi des e-mails fonctionne : les codes de connexion, les invitations et les alertes peuvent parvenir à leurs destinataires. Il n'y a rien d'autre à faire.\n\n    {{url}}"
+  },
   "alerts": {
     "subject_raised": "[TeamTAK] Alerte : {{text}}",
     "subject_resolved": "[TeamTAK] Résolu : {{text}}",

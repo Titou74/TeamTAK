@@ -968,6 +968,10 @@
       "webhookHint": "Optional. Each alert raised, recalled or resolved is also posted there as a JSON document (its format is in docs/monitoring.md in the repository). Save before testing.",
       "webhookTest": "Send a test",
       "webhookTested": "The webhook accepted the test message.",
+      "mailTest": "Send me a test e-mail",
+      "mailTestHint": "Sent to your own address, in your language, through the mail server set in deploy/.env: the way sign-in codes, invitations and alerts go out.",
+      "mailTested": "The mail server accepted the test e-mail for {{email}}. Check that it arrives, spam folder included.",
+      "mailTestFailed": "The test e-mail could not be sent. The mail server answered:",
       "reminder": "Recall an alert that lasts every (hours)"
     },
     "thresholds": {
@@ -1043,6 +1047,7 @@
     "agent_busy": "The host agent is busy with another action (a backup or a restart). Try again in a moment.",
     "service_not_allowed": "This service cannot be restarted from here.",
     "action_failed": "The action was attempted and failed. The server's log has the reason.",
-    "webhook_not_set": "No webhook address is saved yet."
+    "webhook_not_set": "No webhook address is saved yet.",
+    "mail_not_configured": "No mail server is set (SMTP_HOST is empty in deploy/.env): no e-mail can be sent."
   }
 }

@@ -52,6 +52,15 @@ enum Command {
     },
     /// Checks that the database, the directory and TAK Server can be reached.
     Status,
+    /// Sends a test e-mail through the configured mail server and prints its answer. Works
+    /// before anyone can sign in.
+    SendTestMail {
+        /// E-mail address of the recipient.
+        email: String,
+        /// Language of the e-mail.
+        #[arg(long, default_value = locale::DEFAULT_LANGUAGE)]
+        language: String,
+    },
     /// Runs one reconciliation pass now and prints what it changed.
     Reconcile,
     /// Exits with 0 when the local server answers (container healthcheck).
@@ -155,6 +164,7 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/letsencrypt/sync", post(monitor::api::letsencrypt_sync))
         .route("/admin/settings", get(settings::get).patch(settings::update))
         .route("/admin/settings/webhook-test", post(monitor::api::webhook_test))
+        .route("/admin/settings/mail-test", post(monitor::api::mail_test))
         .route("/admin/audit", get(audit::list))
         .fallback(|| async { ApiError::NotFound })
         // The client's address, for the audit log.
@@ -243,6 +253,31 @@ async fn status(config: Config) -> Result<()> {
     Ok(())
 }
 
+async fn send_test_mail(config: Config, to: &str, language: &str) -> Result<()> {
+    if !locale::is_supported(language) {
+        bail!("unknown language {language:?}; the platform has: {}", locale::languages().join(", "));
+    }
+    let smtp = &config.smtp;
+    if smtp.host.is_empty() {
+        bail!("SMTP_HOST is empty in deploy/.env: no e-mail can be sent");
+    }
+    let login = if smtp.username.is_empty() { "without authentication".to_string() } else { format!("as {}", smtp.username) };
+    println!("Mail server: {}:{} ({}), {login}", smtp.host, smtp.port, smtp.tls.name());
+    println!("Sender:      {}", smtp.from);
+    // Counted like any e-mail when the database answers, so the monitoring page sees it.
+    let db = match state::connect_database(&config).await {
+        Ok(db) => Some(db),
+        Err(e) => {
+            println!("Database:    not reachable ({e:#}): the attempt is not counted");
+            None
+        }
+    };
+    let mailer = mail::Mailer::new(smtp, &config.public_url, db)?;
+    mailer.send_test(to, language).await.context("the test e-mail was not sent")?;
+    println!("The mail server accepted the test e-mail for {to}. Check that it arrives, spam folder included.");
+    Ok(())
+}
+
 async fn healthcheck(listen_addr: SocketAddr) -> Result<()> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let target = SocketAddr::from(([127, 0, 0, 1], listen_addr.port()));
@@ -273,6 +308,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Serve => serve(config).await,
         Command::Status => status(config).await,
+        Command::SendTestMail { email, language } => send_test_mail(config, &email, &language).await,
         Command::GrantAdmin { email } => {
             let state = state::build_state(config).await?;
             let (code, minutes) = auth::grant_admin(&state, &email).await?;

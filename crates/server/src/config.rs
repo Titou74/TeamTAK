@@ -19,6 +19,17 @@ pub enum SmtpTls {
     None,
 }
 
+impl SmtpTls {
+    /// The value of `SMTP_TLS` that selects it.
+    pub fn name(self) -> &'static str {
+        match self {
+            SmtpTls::StartTls => "starttls",
+            SmtpTls::Tls => "tls",
+            SmtpTls::None => "none",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SmtpConfig {
     pub host: String,

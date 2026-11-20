@@ -58,6 +58,7 @@ function SettingsForm({ view }: { view: SettingsView }) {
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testingMail, setTestingMail] = useState(false);
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const defaults = view.defaults;
 
@@ -95,6 +96,30 @@ function SettingsForm({ view }: { view: SettingsView }) {
     }
   }
 
+  async function testMail() {
+    setTestingMail(true);
+    try {
+      const result = await api.testMail();
+      if (result.sent) {
+        toast.success(t("settings.alerts.mailTested", { email: result.to }));
+      } else {
+        // The mail server's own words, technical and in English: shown as they are.
+        toast.error(t("settings.alerts.mailTestFailed"), {
+          description: result.error && (
+            <span className="font-mono text-xs break-words" translate="no">
+              {result.error}
+            </span>
+          ),
+          duration: 20_000,
+        });
+      }
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setTestingMail(false);
+    }
+  }
+
   const webhookSaved = view.settings.webhook_url !== "" && view.settings.webhook_url === draft.webhook_url;
   return (
     <form onSubmit={save} className="space-y-6">
@@ -105,6 +130,12 @@ function SettingsForm({ view }: { view: SettingsView }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <Toggle id="set-emails" label={t("settings.alerts.emails")} hint={t("settings.alerts.emailsHint")} checked={draft.alert_emails} onChange={(v) => set("alert_emails", v)} />
+          <div className="space-y-1.5">
+            <Button type="button" variant="outline" disabled={testingMail} onClick={() => void testMail()}>
+              {testingMail ? t("common.working") : t("settings.alerts.mailTest")}
+            </Button>
+            <p className="text-xs text-muted-foreground">{t("settings.alerts.mailTestHint")}</p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="set-webhook">{t("settings.alerts.webhook")}</Label>
             <div className="flex flex-wrap gap-2">

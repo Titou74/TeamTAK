@@ -70,7 +70,11 @@ the page, the list of resolved alerts opens by itself for a day after a resoluti
 | The server's clock not synchronised | warning |
 | The host agent not answering | warning |
 
-Thresholds, the reminder period and the e-mail switch are in **Monitoring, Settings**.
+Thresholds, the reminder period and the e-mail switch are in **Monitoring, Settings**. Its button
+**Send me a test e-mail** sends one to the administrator who clicks, in their language, and says
+at once whether the mail server took it, or what it answered (the same text, without addresses,
+as on the dashboard). The command `teamtak send-test-mail` does the same from the server (see
+[operations](operations.md)).
 
 The leaders of a team are also told by e-mail, 30 and 7 days ahead, when a certificate shipped in
 one of the team's zips nears its end: nothing renews it, the access must be regenerated and the

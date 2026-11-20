@@ -101,6 +101,9 @@ pub enum Template {
     AlertDigest,
     /// To the leaders of a team: a certificate shipped in one of its zips nears its end.
     CertificateNotice,
+    /// Asked by an administrator, from the settings page or the command line, to check that
+    /// e-mail goes out.
+    MailTest,
 }
 
 impl Template {
@@ -121,6 +124,7 @@ impl Template {
         Template::EventTeamRemoved,
         Template::AlertDigest,
         Template::CertificateNotice,
+        Template::MailTest,
     ];
 
     pub fn key(self) -> &'static str {
@@ -140,6 +144,7 @@ impl Template {
             Template::EventTeamRemoved => "event_team_removed",
             Template::AlertDigest => "alert_digest",
             Template::CertificateNotice => "certificate_notice",
+            Template::MailTest => "mail_test",
         }
     }
 }
@@ -347,6 +352,19 @@ mod tests {
         assert!(!en.body.contains("{{") && !fr.body.contains("{{"));
         let fallback = render(Template::LoginCode, "de", &vars, "u");
         assert_eq!(fallback.subject, en.subject);
+    }
+
+    #[test]
+    fn the_test_email_is_complete_in_every_language() {
+        let date = format_datetime("fr", time::macros::datetime!(2026-11-20 14:05 UTC));
+        for language in languages() {
+            let mail = render(Template::MailTest, language, &[("date", &date), ("url", "https://tak.example.org")], "https://tak.example.org");
+            let all = format!("{}\n{}", mail.subject, mail.body);
+            assert!(!all.contains("{{"), "{language}: a placeholder was left: {all}");
+            assert!(mail.subject.starts_with("[TeamTAK]"), "{language}: {}", mail.subject);
+            assert!(mail.body.contains(&date) && mail.body.contains("https://tak.example.org"), "{language}: {}", mail.body);
+        }
+        assert_eq!(render(Template::MailTest, "fr", &[], "u").subject, "[TeamTAK] E-mail de test");
     }
 
     #[test]

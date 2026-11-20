@@ -160,6 +160,8 @@ export const api = {
   updateSettings: (changes: { settings?: DeepPartial<Settings>; backup_passphrase?: string }) =>
     json<SettingsView>("PATCH", "/admin/settings", changes),
   testWebhook: () => json<{ status: number }>("POST", "/admin/settings/webhook-test"),
+  /** Sends the test e-mail to the signed-in administrator. `error`: the mail server's refusal, technical (English). */
+  testMail: () => json<{ sent: boolean; to: string; error: string | null }>("POST", "/admin/settings/mail-test"),
   audit: (filter: AuditFilter) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(filter)) {

@@ -31,11 +31,13 @@ see each other from the scheduled start of an event to its scheduled end and not
 it, without reconnecting. For the monitoring they prove that the host agent reports this stack and
 refuses every other container, that a stopped service raises one alert e-mail in each
 administrator's language and one more when it is back, who sees which connected devices, what the
-audit log records, and that a backup asked from the API is written and readable.
+audit log records, that a backup asked from the API is written and readable, and that the test
+e-mail arrives, from the settings page and from the command line, or says why it could not.
 
 The tests use random names and can be replayed on the same stack. A word after the command runs
 only the tests whose name contains it. The whole suite takes about ten minutes; it stops and
-restarts the `app` container, stops the reverse proxy for a minute, and restarts the mail catcher.
+restarts the `app` container, stops the reverse proxy for a minute, and stops and restarts the mail
+catcher.
 
 ## Restore proof
 
