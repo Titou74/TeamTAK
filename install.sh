@@ -567,7 +567,7 @@ else
     fi
   done
 fi
-# The version of this checkout follows git: rewritten in place when it changed (git pull).
+# The version of this checkout follows git: rewritten in place when it changed (checkout of another release).
 if [ -z "$(env_get TEAMTAK_VERSION)" ]; then
   printf '\n# Version of this checkout, from git, set by install.sh at every run: the tag of the\n# platform and agent images (teamtak/app, teamtak/agent)\nTEAMTAK_VERSION=%s\n' "$TEAMTAK_VERSION" >> "$ENV_FILE"
 elif [ "$(env_get TEAMTAK_VERSION)" != "$TEAMTAK_VERSION" ]; then

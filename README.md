@@ -120,6 +120,16 @@ git clone https://github.com/Titou74/teamtak.git
 cd teamtak
 ```
 
+Then switch to the latest release, the highest `v<major>.<minor>.<patch>` tag: `main` is where
+development goes on, and may hold changes not yet released.
+
+```bash
+git checkout "$(git tag --list 'v*' --sort=-v:refname | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)"
+```
+
+Git says the checkout is in "detached HEAD" state: that is expected, it is on the release's tag
+rather than on a branch.
+
 **4. Add the TAK Server ZIP.** Download the latest `takserver-docker-hardened-<version>.zip` from
 tak.gov and put it at the root of the repository. From your own computer, for example:
 
@@ -247,7 +257,7 @@ something waiting; nothing is ever updated from the web UI, on purpose.
 
 | What | How | Said by the monitoring page |
 |---|---|---|
-| TeamTAK itself | `git pull`, then `sudo ./install.sh` ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
+| TeamTAK itself | `git fetch --tags`, `git checkout` of the latest release, then `sudo ./install.sh` ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
 | Caddy, PostgreSQL, the mail catcher | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
 | The directory (OpenLDAP) | Pinned by digest in `deploy/docker-compose.yml`: change the digest, test, then `./install.sh` | "Pinned; a newer build exists" |
 | The server's packages | `sudo apt update && sudo apt full-upgrade`, then `sudo reboot` if asked | pending updates, security updates, restart required |
@@ -268,11 +278,19 @@ Run from the root of the repository, on the server.
 sudo deploy/scripts/backup.sh
 ```
 
-**2. Get the new version.**
+**2. Get the new version**: fetch the releases, then switch to the latest one.
 
 ```bash
-git pull
+git fetch --tags
 ```
+
+```bash
+git checkout "$(git tag --list 'v*' --sort=-v:refname | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)"
+```
+
+The **Monitoring** page gives the same command with the release's tag written out
+(`git checkout v1.0.4`, for example). An installation made from `main` moves to the release the
+same way.
 
 **3. Apply it.**
 
@@ -296,7 +314,7 @@ cd deploy && docker compose exec app teamtak status
 ```
 
 **Going back.** Database migrations are not undone by returning to older code. Check out the
-previous version (`git checkout <commit>`), run `sudo ./install.sh`, then restore the archive of
+previous release (`git checkout v1.0.2`, for example), run `sudo ./install.sh`, then restore the archive of
 step 1 ([Restoring](docs/backups.md#restoring)).
 
 ### Upgrading TAK Server

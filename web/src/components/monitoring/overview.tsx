@@ -38,7 +38,10 @@ const APT_UPGRADE = "sudo apt update && sudo apt full-upgrade";
 const REBOOT = "sudo reboot";
 const PULL_IMAGES = "cd deploy && docker compose pull && docker compose up -d";
 const UPGRADE_TAK = "sudo ./install.sh --upgrade-tak";
-const UPDATE_TEAMTAK = "sudo deploy/scripts/backup.sh && git pull && sudo ./install.sh";
+/** Moves the checkout to the tag of a release, not to `main`. `tag` is a release's tag, which the
+ * server only offers when it reads as one (`v1.0.4`): nothing for the shell to interpret. */
+const updateTeamtak = (tag: string) =>
+  `sudo deploy/scripts/backup.sh && git fetch --tags && git checkout ${tag} && sudo ./install.sh`;
 const START_AGENT = "cd deploy && docker compose up -d agent && docker compose logs --tail 20 agent";
 
 /** An image reference with its digest shortened to what the eye can compare. */
@@ -622,7 +625,7 @@ function ReleaseSection({ release, reload }: { release: Release; reload: () => P
                 {t("monitoring.release.notes")}
               </a>
             </p>
-            <Command label={t("monitoring.release.commandLabel")}>{UPDATE_TEAMTAK}</Command>
+            <Command label={t("monitoring.release.commandLabel")}>{updateTeamtak(latest.tag)}</Command>
           </AlertDescription>
         </Alert>
       )}

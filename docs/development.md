@@ -64,3 +64,8 @@ server and the agent report it, and `install.sh` prints it), and `version` in `w
 Installed platforms ask GitHub for the latest release twice a day (see
 [monitoring](monitoring.md)): once it is published, their monitoring page and an alert tell their
 administrators. A draft or a pre-release is not offered to them.
+
+Installations run a release's tag, not `main`: the README has them check out the highest
+`v<major>.<minor>.<patch>` tag on install and on update, and the monitoring page's update command
+names the tag of the latest release. What is committed on `main` reaches them only once it is
+tagged; a tag with a suffix (`v1.1.0-rc.1`) is skipped.
