@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::report::{ContainerReport, MemoryReport, OsInfo, ProcessReport};
+use crate::report::{ContainerReport, MemoryReport, OsInfo, ProcessReport, PublishedPort};
 
 // ------------------------------------------------------------------------------- /proc
 
@@ -146,7 +146,31 @@ pub fn container(v: &Value) -> Option<ContainerReport> {
         cpu_percent: None,
         memory_bytes: None,
         disk_bytes: None,
+        published_ports: Some(published_ports(v)),
     })
+}
+
+/// The ports of the machine a container's configuration publishes, from `docker inspect`
+/// (`HostConfig.PortBindings`). A port Docker would choose itself (no `HostPort`) is left
+/// out; one listed for several addresses is kept once.
+pub fn published_ports(v: &Value) -> Vec<PublishedPort> {
+    let Some(bindings) = v.get("HostConfig").and_then(|h| h.get("PortBindings")).and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for (key, hosts) in bindings {
+        let Some((port, protocol)) = key.split_once('/') else { continue };
+        let Ok(container_port) = port.parse::<u16>() else { continue };
+        for host in hosts.as_array().into_iter().flatten() {
+            let Some(host_port) = text_at(host, &["HostPort"]).and_then(|p| p.parse::<u16>().ok()) else { continue };
+            let published = PublishedPort { container_port, protocol: protocol.to_string(), host_port };
+            if !found.contains(&published) {
+                found.push(published);
+            }
+        }
+    }
+    found.sort();
+    found
 }
 
 /// The full identifier of a container, from `docker inspect`.
@@ -389,6 +413,22 @@ mod tests {
         let c = container(&stopped).unwrap();
         assert_eq!((c.state.as_str(), c.health, c.exit_code, c.started_at), ("exited", None, Some(137), None));
         assert!(container(&json!({"Name": "/mapping-db-1", "Config": {"Labels": {}}})).is_none(), "not a Compose container");
+    }
+
+    #[test]
+    fn published_ports_are_read_from_docker_inspect() {
+        // As Docker 29 describes TAK Server with TAK_CLIENT_PORTS=8089,4443, stopped or not.
+        let v = json!({"Id": "abc", "HostConfig": {"PortBindings": {
+            "8089/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8089"}, {"HostIp": "0.0.0.0", "HostPort": "4443"}, {"HostIp": "::", "HostPort": "4443"}],
+            "8446/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8446"}],
+            "9000/udp": [{"HostIp": "", "HostPort": ""}],
+            "8443/tcp": null,
+            "nonsense": [{"HostPort": "1"}]
+        }}});
+        let p = |container_port, protocol: &str, host_port| PublishedPort { container_port, protocol: protocol.into(), host_port };
+        assert_eq!(published_ports(&v), vec![p(8089, "tcp", 4443), p(8089, "tcp", 8089), p(8446, "tcp", 8446)]);
+        assert!(published_ports(&json!({"Id": "x", "HostConfig": {"PortBindings": {}}})).is_empty());
+        assert!(published_ports(&json!({"Id": "x"})).is_empty());
     }
 
     #[test]

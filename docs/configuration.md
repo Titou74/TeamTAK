@@ -59,6 +59,10 @@ Server's configuration does not change. Docker publishes them through
 `COMPOSE_FILE`). After a change, run `./install.sh` again: TAK Server restarts with its new ports
 and connected devices reconnect by themselves. Open the new ports in the firewall too.
 
+The monitoring watches every port of the list, and shows a port listed here that Docker does not
+publish (`./install.sh` not run again) as not published, with an alert
+([monitoring](monitoring.md#the-monitoring-page)).
+
 What is refused:
 
 - 8446 (enrollment) and the web interface's ports: 80 and 443 in production, 8480 and 8025 in

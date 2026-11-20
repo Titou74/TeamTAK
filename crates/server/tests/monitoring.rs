@@ -189,10 +189,16 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     assert!(usage("takserver-db")["disk_bytes"].as_u64().unwrap() > 10 << 20, "TAK Server's database: {}", usage("takserver-db"));
     assert!(usage("agent")["disk_bytes"].is_null(), "the agent's mounts are not its data");
 
-    // TAK Server: its three ports, its version, its five processes.
+    // TAK Server: each port of TAK_CLIENT_PORTS, published by Docker, then its API and
+    // enrollment ports; its version, its five processes.
     let tak = &snapshot["tak"];
     let ports: Vec<(u64, bool)> = tak["ports"].as_array().unwrap().iter().map(|p| (p["port"].as_u64().unwrap(), p["open"].as_bool().unwrap())).collect();
-    assert_eq!(ports, vec![(8089, true), (8443, true), (8446, true)]);
+    let mut expected: Vec<(u64, bool)> = client_ports().iter().map(|&port| (u64::from(port), true)).collect();
+    expected.extend([(8443, true), (8446, true)]);
+    assert_eq!(ports, expected);
+    for port in tak["ports"].as_array().unwrap().iter().filter(|p| p["role"] == "clients") {
+        assert_eq!(port["published"], true, "Docker publishes every client port: {port}");
+    }
     assert_eq!(tak["api_ok"], true);
     assert!(tak["version"].as_str().unwrap().starts_with(setting("TAK_VERSION")), "{}", tak["version"]);
     assert_eq!(tak["installed_version"], setting("TAK_VERSION"));
