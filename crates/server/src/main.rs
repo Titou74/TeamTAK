@@ -163,6 +163,7 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/services/{service}/restart", post(monitor::api::restart_service))
         .route("/admin/backups/run", post(monitor::api::run_backup))
         .route("/admin/letsencrypt/sync", post(monitor::api::letsencrypt_sync))
+        .route("/admin/release/check", post(monitor::api::check_release))
         .route("/admin/settings", get(settings::get).patch(settings::update))
         .route("/admin/settings/webhook-test", post(monitor::api::webhook_test))
         .route("/admin/settings/mail-test", post(monitor::api::mail_test))

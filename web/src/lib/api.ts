@@ -8,6 +8,7 @@ import type {
   Devices,
   History,
   Monitoring,
+  Release,
   Settings,
   SettingsView,
 } from "./monitoring-types";
@@ -157,6 +158,8 @@ export const api = {
   restartService: (service: string) => json<{ restarted: boolean; accepted: boolean }>("POST", `/admin/services/${service}/restart`),
   runBackup: () => json<{ run: BackupRun }>("POST", "/admin/backups/run"),
   syncLetsEncrypt: () => json<{ outcome: string }>("POST", "/admin/letsencrypt/sync"),
+  /** Asks GitHub for TeamTAK's latest release now. GitHub's refusal is in `release.error`. */
+  checkRelease: () => json<{ release: Release }>("POST", "/admin/release/check"),
   settings: () => json<SettingsView>("GET", "/admin/settings"),
   /** Only the fields given change. `backup_passphrase`: a new one, or "" to remove it. */
   updateSettings: (changes: { settings?: DeepPartial<Settings>; backup_passphrase?: string }) =>

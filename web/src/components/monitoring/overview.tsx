@@ -533,9 +533,27 @@ function CertificatesCard({ snapshot }: { snapshot: Snapshot }) {
 }
 
 /** The version that runs, the latest one on GitHub, and how to move to it. */
-function ReleaseSection({ release }: { release: Release }) {
+function ReleaseSection({ release, reload }: { release: Release; reload: () => Promise<unknown> }) {
   const { t } = useTranslation();
+  const notifyError = useNotifyError();
+  const [checking, setChecking] = useState(false);
   const latest = release.latest;
+
+  async function checkAgain() {
+    setChecking(true);
+    try {
+      const { release: checked } = await api.checkRelease();
+      if (checked.error) toast.error(t("monitoring.release.checkFailed"));
+      else if (checked.status === "update_available" && checked.latest) toast.info(t("monitoring.release.updateTitle", { version: checked.latest.version }));
+      else toast.success(t("monitoring.release.noNewer"));
+      await reload();
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setChecking(false);
+    }
+  }
+
   let latestText: ReactNode;
   if (release.status === "off") latestText = t("monitoring.release.off");
   else if (release.status === "unknown") latestText = t("monitoring.release.unknown");
@@ -552,7 +570,15 @@ function ReleaseSection({ release }: { release: Release }) {
     );
   return (
     <div className="space-y-2">
-      <h3 className="font-medium">{t("monitoring.release.title")}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-medium">{t("monitoring.release.title")}</h3>
+        {release.repository && (
+          <Button variant="outline" size="sm" disabled={checking} onClick={() => void checkAgain()}>
+            <RotateCwIcon className={checking ? "animate-spin" : undefined} />
+            {checking ? t("common.working") : t("monitoring.release.checkAgain")}
+          </Button>
+        )}
+      </div>
       <dl>
         <Field label={t("monitoring.release.installed")}>
           <span translate="no">{release.installed}</span>
@@ -673,7 +699,7 @@ function PlatformCard({ snapshot, reload }: { snapshot: Snapshot; reload: () => 
             </Button>
           </div>
         )}
-        <ReleaseSection release={platform.release} />
+        <ReleaseSection release={platform.release} reload={reload} />
       </CardContent>
     </Card>
   );

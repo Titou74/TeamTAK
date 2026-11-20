@@ -44,7 +44,10 @@ platform and the agent the version of the checkout given by git (`teamtak/app:1.
 **TeamTAK's own version.** The platform asks GitHub, twice a day at most (every hour while GitHub
 does not answer), which release of TeamTAK is the latest: one anonymous request to
 `api.github.com/repos/Titou74/TeamTAK/releases/latest`, which leaves drafts and pre-releases out.
-When it is newer than the version that runs, the page shows it with a link to its release notes and
+The answer is kept across restarts. While the version that runs is newer than that answer (the
+platform was updated to a release published since, or not published yet), GitHub is asked again
+at once when that version starts, then every hour until it has it. The **Check again** button
+asks it at once, whenever it was last asked. When it is newer than the version that runs, the page shows it with a link to its release notes and
 the update command, and a minor alert is raised; the alert is resolved once the new version is
 installed. Nothing is downloaded or installed by the platform: the update is
 [done over SSH](../README.md#updating-teamtak). A fork points the check at its own repository, and

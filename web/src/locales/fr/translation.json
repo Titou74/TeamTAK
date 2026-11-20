@@ -781,7 +781,10 @@
       "updateText": "Lisez ce qu'elle change, puis mettez à jour en SSH depuis la racine du dépôt : la commande ci-dessous fait une sauvegarde, récupère la nouvelle version et l'applique (« Updating TeamTAK » dans le README).",
       "notes": "Notes de version",
       "commandLabel": "la commande de mise à jour",
-      "help": "GitHub (github.com/{{repository}}) est interrogé deux fois par jour sur la dernière version publiée ; une alerte prévient quand une plus récente sort. Rien n'est mis à jour depuis l'interface web."
+      "help": "GitHub (github.com/{{repository}}) est interrogé deux fois par jour sur la dernière version publiée, toutes les heures tant qu'il ne connaît pas encore celle installée ; « Revérifier » l'interroge tout de suite. Une alerte prévient quand une plus récente sort. Rien n'est mis à jour depuis l'interface web.",
+      "checkAgain": "Revérifier",
+      "noNewer": "Aucune version plus récente sur GitHub.",
+      "checkFailed": "GitHub n'a pas répondu ; la raison est affichée sous la version."
     },
     "letsencrypt": {
       "noCertificate": "Le port d'enrôlement attend un certificat Let's Encrypt : Caddy n'en a pas encore.",

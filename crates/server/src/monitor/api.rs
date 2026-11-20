@@ -21,6 +21,7 @@ use crate::state::SharedState;
 use super::agent::AgentCallError;
 use super::alerting;
 use super::maintenance::{self, BackupError};
+use super::release;
 
 #[derive(Serialize, sqlx::FromRow)]
 struct AlertRow {
@@ -237,6 +238,21 @@ pub async fn letsencrypt_sync(State(state): State<SharedState>, AdminAccount(adm
         }
         Err(e) => Err(agent_error(&e)),
     }
+}
+
+/// `POST /api/admin/release/check`: asks GitHub for TeamTAK's latest release now, without
+/// waiting for the next scheduled check, and answers with what the dashboard shows of it.
+/// GitHub's refusal is part of that answer (`error`), as after a scheduled check.
+pub async fn check_release(State(state): State<SharedState>, AdminAccount(admin): AdminAccount) -> ApiResult<Json<Value>> {
+    admin.require_platform(Action::ViewMonitoring)?;
+    let monitor = &state.monitor;
+    if let Err(e) = release::check_now(monitor).await {
+        tracing::error!(error = %format!("{e:#}"), "release check requested");
+        return Err(ApiError::ActionFailed);
+    }
+    let check = release::load(&state.db).await?;
+    let (view, _) = release::status(monitor.targets.release_repository.as_deref(), &check);
+    Ok(Json(json!({ "release": view })))
 }
 
 /// `POST /api/admin/settings/webhook-test`: posts a test document to the webhook that is set.

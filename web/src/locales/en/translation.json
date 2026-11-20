@@ -754,7 +754,10 @@
       "updateText": "Read what it changes, then update over SSH from the root of the repository: the command below takes a backup, gets the new version and applies it (“Updating TeamTAK” in the README).",
       "notes": "Release notes",
       "commandLabel": "the update command",
-      "help": "GitHub (github.com/{{repository}}) is asked twice a day for the latest release; an alert says when a newer one is published. Nothing is updated from the web UI."
+      "help": "GitHub (github.com/{{repository}}) is asked twice a day for the latest release, every hour while it does not know the installed one yet; “Check again” asks it at once. An alert says when a newer one is published. Nothing is updated from the web UI.",
+      "checkAgain": "Check again",
+      "noNewer": "No newer release on GitHub.",
+      "checkFailed": "GitHub did not answer; the reason is shown under the version."
     },
     "letsencrypt": {
       "noCertificate": "The enrollment port waits for a Let's Encrypt certificate: Caddy has none yet.",
