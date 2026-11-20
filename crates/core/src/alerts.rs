@@ -266,7 +266,8 @@ pub struct Observations {
     /// `None` until the releases could be asked once.
     pub release: Option<ReleaseObservation>,
     pub clock_synchronized: Option<bool>,
-    /// What does not answer on TAK Server, by name (`8089`, `8443`, `8446`, `api`).
+    /// What does not answer on TAK Server, by name: the ports of TAK clients
+    /// (`TAK_CLIENT_PORTS`, `8089` by default), `8443`, `8446`, `api`.
     pub tak_failures: Option<Vec<String>>,
     pub directory_reachable: Option<bool>,
     pub reconcile: Option<ReconcileObservation>,

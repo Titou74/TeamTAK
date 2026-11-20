@@ -390,6 +390,7 @@ function TakCard({ snapshot }: { snapshot: Snapshot }) {
   const { t, i18n } = useTranslation();
   const tak = snapshot.tak;
   const devices = snapshot.devices;
+  const unpublished = tak.ports.filter((port) => port.published === false).map((port) => port.port);
   return (
     <Card>
       <CardHeader>
@@ -403,15 +404,18 @@ function TakCard({ snapshot }: { snapshot: Snapshot }) {
       <CardContent className="space-y-4 text-sm">
         <div className="grid gap-2 sm:grid-cols-3">
           {tak.ports.map((port) => (
-            <div key={port.port} className="flex items-center gap-2 rounded-lg border bg-card p-2.5">
+            <div key={`${port.role}-${port.port}`} className="flex items-center gap-2 rounded-lg border bg-card p-2.5">
               <StateDot state={port.open ? "ok" : "bad"} />
               <span className="flex-1">
                 <span className="font-medium tabular-nums">{port.port}</span> <span className="text-muted-foreground">{t(`monitoring.tak.port.${port.role}`)}</span>
               </span>
-              <span className={port.open ? "text-muted-foreground" : "text-destructive"}>{port.open ? t("monitoring.tak.open") : t("monitoring.tak.closed")}</span>
+              <span className={port.open ? "text-muted-foreground" : "text-destructive"}>
+                {port.open ? t("monitoring.tak.open") : port.published === false ? t("monitoring.tak.notPublished") : t("monitoring.tak.closed")}
+              </span>
             </div>
           ))}
         </div>
+        {unpublished.length > 0 && <p className="text-muted-foreground">{t("monitoring.tak.notPublishedHint", { ports: unpublished.join(", ") })}</p>}
         {tak.processes.length > 0 && (
           <div className="space-y-1.5">
             <h3 className="font-medium">{t("monitoring.tak.processes")}</h3>

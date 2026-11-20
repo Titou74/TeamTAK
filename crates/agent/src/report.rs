@@ -168,6 +168,22 @@ pub struct ContainerReport {
     /// machine's and the other services'.
     #[serde(default)]
     pub disk_bytes: Option<u64>,
+    /// Ports of the machine its configuration publishes (`HostConfig.PortBindings`), stopped
+    /// or not: Docker does not start a container whose ports it cannot publish. `None` from
+    /// an agent older than this field.
+    #[serde(default)]
+    pub published_ports: Option<Vec<PublishedPort>>,
+}
+
+/// A port of the machine that leads to a port of a container.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct PublishedPort {
+    /// The container's port it leads to.
+    pub container_port: u16,
+    /// `tcp` or `udp`.
+    pub protocol: String,
+    /// The port of the machine.
+    pub host_port: u16,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

@@ -146,7 +146,7 @@ export interface Snapshot {
   host: Host | null;
   services: { services: Service[]; error: string | null };
   tak: {
-    ports: { port: number; role: "clients" | "api" | "enrollment"; open: boolean }[];
+    ports: { port: number; role: "clients" | "api" | "enrollment"; open: boolean; published: boolean | null }[];
     api_ok: boolean;
     version: string | null;
     installed_version: string;

@@ -673,6 +673,8 @@
       },
       "open": "answers",
       "closed": "does not answer",
+      "notPublished": "not published",
+      "notPublishedHint": "Docker does not publish {{ports}} to TAK Server: run ./install.sh again to apply TAK_CLIENT_PORTS of deploy/.env.",
       "processes": "Processes",
       "process": {
         "config": "Configuration",

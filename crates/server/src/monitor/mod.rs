@@ -64,6 +64,8 @@ struct Targets {
     reconcile_interval: Duration,
     /// Host of TAK Server inside the network, and its API port.
     tak_host: String,
+    /// Ports of the machine TAK clients connect to (`TAK_CLIENT_PORTS`), the main one first.
+    client_ports: Vec<u16>,
     tak_api_port: u16,
     /// Host and port of the enrollment connector as the platform reaches it.
     enroll_host: String,
@@ -82,8 +84,33 @@ struct Targets {
     release_repository: Option<String>,
 }
 
-/// TLS port of TAK Server for its clients, inside the network.
-const TAK_CLIENT_PORT: u16 = 8089;
+/// TAK Server's single TLS input for its clients, inside the network: every port of
+/// `TAK_CLIENT_PORTS` is published to it.
+const TAK_INPUT_PORT: u16 = 8089;
+
+/// Ports of the machine Docker publishes to TAK Server's input, from the agent's report.
+/// `None` when the report cannot tell: Docker did not answer, no TAK Server container, or
+/// an agent too old to report them.
+fn published_to_input(report: &Report) -> Option<Vec<u16>> {
+    if report.containers.error.is_some() {
+        return None;
+    }
+    let takserver = report.containers.containers.iter().find(|c| c.service == "takserver")?;
+    let published = takserver.published_ports.as_ref()?;
+    Some(published.iter().filter(|p| p.container_port == TAK_INPUT_PORT && p.protocol == "tcp").map(|p| p.host_port).collect())
+}
+
+/// One view per port of TAK_CLIENT_PORTS. A port answers when TAK Server's input does and
+/// Docker publishes it there; when what Docker publishes is unknown, the input alone decides.
+fn client_port_views(client_ports: &[u16], input_open: bool, published: Option<&[u16]>) -> Vec<PortView> {
+    client_ports
+        .iter()
+        .map(|&port| {
+            let published = published.map(|list| list.contains(&port));
+            PortView { port, role: "clients", open: input_open && published != Some(false), published }
+        })
+        .collect()
+}
 
 pub struct Monitor {
     db: PgPool,
@@ -101,6 +128,8 @@ pub struct Monitor {
     restarts: Mutex<RestartHistory>,
     /// Certificates the servers presented last time they answered.
     presented: Mutex<BTreeMap<&'static str, CertificateInfo>>,
+    /// Ports of the machine Docker publishes to TAK Server's input, last time the agent told.
+    published: Mutex<Option<Vec<u16>>>,
     last_sample: Mutex<Option<OffsetDateTime>>,
     /// One look at a time.
     cycle: tokio::sync::Mutex<()>,
@@ -173,6 +202,7 @@ impl Monitor {
                 interval: config.monitor.interval,
                 reconcile_interval: config.reconcile_interval,
                 tak_host,
+                client_ports: config.tak.client_ports.clone(),
                 tak_api_port,
                 enroll_host,
                 enroll_port,
@@ -196,6 +226,7 @@ impl Monitor {
             streaks: Mutex::new(Streaks::default()),
             restarts: Mutex::new(RestartHistory::default()),
             presented: Mutex::new(BTreeMap::new()),
+            published: Mutex::new(None),
             last_sample: Mutex::new(None),
             cycle: tokio::sync::Mutex::new(()),
             kick: Notify::new(),
@@ -295,12 +326,12 @@ impl Monitor {
                 None => None,
             }
         };
-        let (agent_answer, clients_open, api, enroll, version, subscriptions, ldap_open, web) = tokio::join!(
+        let (agent_answer, input_open, api, enroll, version, subscriptions, ldap_open, web) = tokio::join!(
             agent_call,
-            // The clients' port is only asked whether it accepts connections. A TLS exchange
+            // The clients' input is only asked whether it accepts connections. A TLS exchange
             // without a client certificate would be logged by TAK Server as an error, at
             // every look; the same certificate is read on the API port, which stays quiet.
-            tcp_open(&t.tak_host, TAK_CLIENT_PORT),
+            tcp_open(&t.tak_host, TAK_INPUT_PORT),
             tls_probe(&t.tak_host, t.tak_api_port, &t.tak_host),
             tls_probe(&t.enroll_host, t.enroll_port, &t.enroll_host),
             version_call,
@@ -385,12 +416,27 @@ impl Monitor {
         }
 
         // ----- TAK Server
-        let ports = vec![
-            PortView { port: TAK_CLIENT_PORT, role: "clients", open: clients_open },
-            PortView { port: t.tak_api_port, role: "api", open: api.open },
-            PortView { port: t.enroll_port, role: "enrollment", open: enroll.open },
-        ];
-        let mut failures: Vec<String> = ports.iter().filter(|p| !p.open).map(|p| p.port.to_string()).collect();
+        // Each port of TAK_CLIENT_PORTS answers when TAK Server's input does and Docker
+        // publishes that port to it. Connecting to the ports of the machine from a container
+        // would depend on the address they are bound to and on the machine's firewall, which
+        // the phones' connections do not go through: the platform would raise false alarms.
+        let published = {
+            let mut last = self.published.lock().unwrap();
+            if let Some(seen) = report.as_ref().and_then(published_to_input) {
+                *last = Some(seen);
+            }
+            last.clone()
+        };
+        let mut ports = client_port_views(&t.client_ports, input_open, published.as_deref());
+        ports.push(PortView { port: t.tak_api_port, role: "api", open: api.open, published: None });
+        ports.push(PortView { port: t.enroll_port, role: "enrollment", open: enroll.open, published: None });
+        let mut failures: Vec<String> = Vec::new();
+        for port in ports.iter().filter(|p| !p.open).map(|p| p.port.to_string()) {
+            // A client port can be 8443 too, TAK Server's API port inside the network.
+            if !failures.contains(&port) {
+                failures.push(port);
+            }
+        }
         if version.is_none() {
             failures.push("api".to_string());
         }
@@ -796,6 +842,47 @@ mod tests {
         assert!(sample_due(Some(at(0)), at(58)), "a look that comes a little early is still the next minute's");
         assert!(!sample_due(Some(at(0)), at(20)), "an administrator's refresh in between");
         assert!(sample_due(Some(at(0)), at(300)), "after a pause");
+    }
+
+    #[test]
+    fn every_client_port_is_watched() {
+        let views = |input_open, published: Option<&[u16]>| -> Vec<(u16, bool, Option<bool>)> {
+            client_port_views(&[8089, 4443, 8090], input_open, published).iter().map(|p| (p.port, p.open, p.published)).collect()
+        };
+        assert_eq!(views(true, Some(&[4443, 8089, 8090])), vec![(8089, true, Some(true)), (4443, true, Some(true)), (8090, true, Some(true))]);
+        assert_eq!(
+            views(true, Some(&[8089])),
+            vec![(8089, true, Some(true)), (4443, false, Some(false)), (8090, false, Some(false))],
+            "TAK_CLIENT_PORTS changed without ./install.sh: Docker still publishes the old list"
+        );
+        assert_eq!(views(false, Some(&[8089, 4443, 8090])).iter().filter(|p| p.1).count(), 0, "the input is down: none answers");
+        assert_eq!(views(true, None), vec![(8089, true, None), (4443, true, None), (8090, true, None)], "without the agent, the input alone decides");
+    }
+
+    #[test]
+    fn the_ports_published_to_tak_servers_input_are_read_from_the_agents_report() {
+        use teamtak_agent::report::{ContainerReport, ContainersReport, PublishedPort};
+        let port = |container_port, protocol: &str, host_port| PublishedPort { container_port, protocol: protocol.into(), host_port };
+        let takserver = ContainerReport {
+            service: "takserver".into(),
+            published_ports: Some(vec![port(8089, "tcp", 4443), port(8089, "tcp", 8089), port(8089, "udp", 8089), port(8446, "tcp", 8446)]),
+            ..Default::default()
+        };
+        let report = |containers: Vec<ContainerReport>, error: Option<&str>| Report {
+            agent_version: "1.0.4".into(),
+            generated_at: datetime!(2026-11-20 12:00 UTC),
+            mode: "production".into(),
+            host: Default::default(),
+            containers: ContainersReport { expected: vec![], containers, error: error.map(str::to_string) },
+            tak: Default::default(),
+            backups: Default::default(),
+            letsencrypt: Default::default(),
+        };
+        assert_eq!(published_to_input(&report(vec![takserver.clone()], None)), Some(vec![4443, 8089]));
+        assert_eq!(published_to_input(&report(vec![takserver.clone()], Some("docker: unavailable"))), None, "Docker did not answer");
+        assert_eq!(published_to_input(&report(vec![], None)), None, "no TAK Server container");
+        let older_agent = ContainerReport { published_ports: None, ..takserver };
+        assert_eq!(published_to_input(&report(vec![older_agent], None)), None, "an agent that does not report them");
     }
 
     #[test]

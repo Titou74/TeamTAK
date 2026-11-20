@@ -9,7 +9,7 @@ probed while a page loads.
 |---|---|
 | The server: processor, load, memory, swap, each filesystem (Docker's data included), uptime, whether the clock is synchronised, pending system updates with the security ones apart, "restart required" | The host agent |
 | The services of this stack: state, health, restarts, image, and whether a newer image exists | The host agent, and the registries for the last point |
-| TAK Server: ports 8089, 8443 and 8446, version, its five processes, connected devices | The platform itself, over the Docker network; the processes from the agent |
+| TAK Server: each port of `TAK_CLIENT_PORTS` (8089 by default), 8443 and 8446, version, its five processes, connected devices | The platform itself, over the Docker network; which ports Docker publishes, and the processes, from the agent |
 | Certificates: root and intermediate authority, TAK Server's, the platform's, the one of TAK Server's administration pages (when they are open), the Let's Encrypt ones, client certificates | The platform's files, what each port presents, and its database |
 | The platform: last clean synchronisation, drift, whether the starts and ends of events were applied, e-mails that failed | The platform's database |
 | TeamTAK's version, and the latest release published on GitHub | The platform itself, and GitHub for the last point |
@@ -18,6 +18,18 @@ probed while a page loads.
 
 The machine and the Docker socket are seen through the host agent only; see
 [architecture](architecture.md#the-host-agent).
+
+**TAK clients' ports.** The page shows one line per port of `TAK_CLIENT_PORTS`
+([client ports](configuration.md#client-ports)). They all lead to TAK Server's single TLS input
+(8089 inside its container), so a port answers when that input accepts connections and Docker
+publishes the port to it, as the agent reads in TAK Server's container. A port listed in
+`deploy/.env` but not published, because `./install.sh` was not run again after the change, is
+shown as **not published** and raises the "TAK Server not answering" alert, which names it. The
+platform does not connect to the ports of the machine themselves: from a container, that would
+depend on the address they are bound to and on the machine's firewall, which the phones'
+connections do not go through, and would raise false alarms. What a firewall or the network in
+front of the server lets through is therefore not seen. Without the agent, the input alone
+decides; the ports it last saw published are kept until it answers again.
 
 **Swap.** The server's card shows the share of the swap space in use, as the kernel gives it
 (`SwapTotal` and `SwapFree` of `/proc/meminfo`), or "no swap" when the server has none, which is
