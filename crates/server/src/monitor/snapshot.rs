@@ -108,8 +108,9 @@ pub struct PortView {
     /// `clients`, `api` or `enrollment`.
     pub role: &'static str,
     pub open: bool,
-    /// For a port of TAK clients: Docker publishes it to TAK Server's input. `None` when
-    /// unknown (no agent), and for the other ports, which are TAK Server's own.
+    /// For a port of TAK clients: Docker publishes it to TAK Server's input. For the API:
+    /// Docker publishes 8443 of the machine to it, where TAK clients read their channels.
+    /// `None` when unknown (no agent), and for the enrollment port, published as it is.
     pub published: Option<bool>,
 }
 

@@ -3,7 +3,8 @@
 //!
 //! The tests are black-box: they drive the platform through its public HTTP API on the
 //! running stack (`./install.sh --local`), read what it wrote to OpenLDAP, and connect to
-//! TAK Server's client port (8089 by default) and enrollment port (8446) the way a phone does.
+//! TAK Server's client port (8089 by default), enrollment port (8446) and API port (8443) the
+//! way a phone does.
 
 #![allow(dead_code)]
 
@@ -819,6 +820,42 @@ pub async fn device_enroll(
     let mut chain = vec![enrolled.certificate_der];
     chain.extend(enrolled.ca_ders);
     Ok(Identity { chain, key: enrolled.private_key_der, roots: roots.to_vec() })
+}
+
+/// Where TAK clients reach TAK Server's API: 8443 of the machine. `TM_TAK_API_ADDRESS`
+/// (`ip:port`) points elsewhere, for instance at TAK Server's container itself.
+pub fn tak_api_address() -> std::net::SocketAddr {
+    std::env::var("TM_TAK_API_ADDRESS").unwrap_or_else(|_| "127.0.0.1:8443".to_string()).parse().expect("TM_TAK_API_ADDRESS: ip:port")
+}
+
+/// The groups TAK Server lists to a device, the way ATAK and iTAK read their channels: on its
+/// API, 8443 of the server whatever port they stream on, with the device's certificate
+/// (`GET /Marti/api/groups/all?useCache=true`). Each entry has `name`, `direction` (`IN`,
+/// `OUT`) and `active`. An error says what answered instead.
+pub async fn device_channels(identity: &Identity) -> Result<Vec<Value>, String> {
+    install_crypto();
+    let chain: Vec<CertificateDer<'static>> = identity.chain.iter().cloned().map(CertificateDer::from).collect();
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key.clone()));
+    let tls = tls_builder()
+        .with_root_certificates(root_store(&identity.roots))
+        .with_client_auth_cert(chain, key)
+        .map_err(|e| e.to_string())?;
+    let address = tak_api_address();
+    let http = reqwest::Client::builder()
+        .tls_backend_preconfigured(tls)
+        .resolve(TAK_SERVER_NAME, address)
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let url = format!("https://{TAK_SERVER_NAME}:{}/Marti/api/groups/all?useCache=true", address.port());
+    let answer = http.get(&url).send().await.map_err(|e| format!("{url} ({address}): {e:?}"))?;
+    let status = answer.status();
+    let body = answer.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(format!("{url} ({address}): HTTP {status}: {body}"));
+    }
+    let value: Value = serde_json::from_str(&body).map_err(|e| format!("{url}: not JSON ({e}): {body}"))?;
+    value["data"].as_array().cloned().ok_or_else(|| format!("{url}: no data: {body}"))
 }
 
 // ------------------------------------------------------------------------------- TAK client

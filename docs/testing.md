@@ -23,10 +23,11 @@ scripts/test-integration.sh
 Runs the integration tests against the real stack, which must be up in local mode
 (`./install.sh --local`). They drive the platform through its HTTP API, read login codes in the
 mail catcher, read what was written to OpenLDAP, and connect scripted TAK clients to TAK Server on
-8089 and 8446.
+8089, 8443 and 8446.
 
 They prove, among other things, that two members of a team see each other, that another team does
-not see them, that regenerating a shared identity cuts every old certificate, and that two teams
+not see them, that a device reads its team's channel, and only it, on TAK Server's API on 8443 as
+ATAK and iTAK do, that regenerating a shared identity cuts every old certificate, and that two teams
 see each other from the scheduled start of an event to its scheduled end and not a moment outside
 it, without reconnecting, and that teams an administrator puts in an event see each other at once. For the monitoring they prove that the host agent reports this stack and
 refuses every other container, that a stopped service raises one alert e-mail in each

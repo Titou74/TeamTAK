@@ -3,7 +3,8 @@
 //!
 //! A zip holds the server address, the truststore and, optionally, a client certificate.
 //! It never holds a callsign, a team colour, a role or a group: groups come from the
-//! directory through TAK Server.
+//! directory through TAK Server. It turns on ATAK's channels for the server, so that the
+//! device lists those groups.
 
 use std::io::{Cursor, Write};
 
@@ -24,6 +25,14 @@ pub enum PackageError {
 pub const TRUSTSTORE_PASSWORD: &str = "atakatak";
 /// File name of the truststore inside a zip.
 pub const TRUSTSTORE_FILE: &str = "truststore.p12";
+
+/// ATAK preference that shows its Channels tool.
+pub const CHANNELS_PREF: &str = "prefs_enable_channels";
+
+/// ATAK preference that lists a server's groups in that tool, for one server host.
+pub fn channels_host_pref(host: &str) -> String {
+    format!("prefs_enable_channels_host-{host}")
+}
 
 /// Encryption of the PKCS#12 stores.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -133,11 +142,12 @@ fn xml_escape(s: &str) -> String {
 }
 
 fn entry(key: &str, class: &str, value: &str) -> String {
-    format!("    <entry key=\"{key}\" class=\"class java.lang.{class}\">{}</entry>\n", xml_escape(value))
+    format!("    <entry key=\"{}\" class=\"class java.lang.{class}\">{}</entry>\n", xml_escape(key), xml_escape(value))
 }
 
 /// `config.pref` of a package, with the same keys as the official script: a single
-/// `cot_streams` entry and nothing about the user or the device.
+/// `cot_streams` entry and nothing about the user or the device; and ATAK's channels turned
+/// on for the server.
 pub fn config_pref(package: &ConnectionPackage) -> String {
     let mut s = String::from("<?xml version='1.0' encoding='ASCII' standalone='yes'?>\n<preferences>\n");
     s.push_str("  <preference version=\"1\" name=\"cot_streams\">\n");
@@ -161,6 +171,14 @@ pub fn config_pref(package: &ConnectionPackage) -> String {
     s.push_str("  </preference>\n");
     s.push_str("  <preference version=\"1\" name=\"com.atakmap.app_preferences\">\n");
     s.push_str(&entry("displayServerConnectionWidget", "Boolean", "true"));
+    // ATAK shows its Channels tool, with this server's groups in it, only once these two
+    // preferences are set. TAK Server hands them out in its device profiles when channels are
+    // on (`x509useGroupCache`), but a device that connects with the zip's certificate never
+    // enrolls, and ATAK asks for profiles on connection only when the user ticked it: such a
+    // device would never show its team's channel. Same keys and type (strings) as TAK
+    // Server's own profile. The list itself comes from TAK Server's API on 8443.
+    s.push_str(&entry(CHANNELS_PREF, "String", "true"));
+    s.push_str(&entry(&channels_host_pref(&package.host), "String", "true"));
     s.push_str("  </preference>\n</preferences>\n");
     s
 }
@@ -296,6 +314,8 @@ mod tests {
         "useAuth0",
         "cacheCreds0",
         "displayServerConnectionWidget",
+        "prefs_enable_channels",
+        "prefs_enable_channels_host-tak.example.org",
     ];
 
     fn keys(pref: &str) -> Vec<String> {
@@ -347,6 +367,24 @@ mod tests {
                 assert!(!lower.contains(forbidden), "{forbidden} found in config.pref");
             }
         }
+    }
+
+    #[test]
+    fn every_zip_turns_on_atak_channels_for_its_server() {
+        let (ca, cert, key) = test_chain();
+        let p12 = build_client_store("a", &key, &cert, &[ca], "p", P12Format::Modern).unwrap();
+        let client = ClientStore { file_name: "a.p12".into(), p12, password: "p".into() };
+        for pkg in [package(None), package(Some(client))] {
+            let pref = config_pref(&pkg);
+            // In ATAK's own preferences, next to the connection widget, as TAK Server sends them.
+            let app = &pref[pref.find(r#"name="com.atakmap.app_preferences""#).expect("app preferences")..];
+            assert!(app.contains(r#"<entry key="prefs_enable_channels" class="class java.lang.String">true</entry>"#), "{pref}");
+            assert!(
+                app.contains(r#"<entry key="prefs_enable_channels_host-tak.example.org" class="class java.lang.String">true</entry>"#),
+                "the host is the one of connectString0: {pref}"
+            );
+        }
+        assert_eq!(channels_host_pref("10.0.0.5"), "prefs_enable_channels_host-10.0.0.5");
     }
 
     #[test]

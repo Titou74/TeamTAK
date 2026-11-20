@@ -1,11 +1,11 @@
 # TAK Server's own administration pages, for the platform's administrators. Imported by the
-# Caddyfile of each mode, inside the site that listens on 8443 (published on TAK_ADMIN_PORT
+# Caddyfile of each mode, inside the site that listens on 8444 (published on TAK_ADMIN_PORT
 # of the machine by data/docker-compose.ports.yml).
 #
-# The browser holds no certificate and TAK Server's 8443 is not published. For each request,
-# the platform says whether the browser's TeamTAK session belongs to an administrator (the
-# session cookie reaches every port of the host); without one, the browser is sent to the
-# sign-in page. Then Caddy passes the request on to TAK Server with a certificate of its own,
+# The browser holds no certificate, and TAK Server's 8443 asks for one (TAK clients present
+# theirs there, to read their channels). For each request, the platform says whether the
+# browser's TeamTAK session belongs to an administrator (the session cookie reaches every
+# port of the host); without one, the browser is sent to the sign-in page. Then Caddy passes the request on to TAK Server with a certificate of its own,
 # declared administrator there (install.sh, data/caddy/tak-admin/).
 
 forward_auth app:8080 {

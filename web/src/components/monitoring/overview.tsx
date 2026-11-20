@@ -391,6 +391,7 @@ function TakCard({ snapshot }: { snapshot: Snapshot }) {
   const tak = snapshot.tak;
   const devices = snapshot.devices;
   const unpublished = tak.ports.filter((port) => port.published === false).map((port) => port.port);
+  const apiUnpublished = tak.ports.some((port) => port.role === "api" && port.published === false);
   return (
     <Card>
       <CardHeader>
@@ -415,7 +416,12 @@ function TakCard({ snapshot }: { snapshot: Snapshot }) {
             </div>
           ))}
         </div>
-        {unpublished.length > 0 && <p className="text-muted-foreground">{t("monitoring.tak.notPublishedHint", { ports: unpublished.join(", ") })}</p>}
+        {unpublished.length > 0 && (
+          <p className="text-muted-foreground">
+            {t("monitoring.tak.notPublishedHint", { ports: unpublished.join(", ") })}
+            {apiUnpublished && <> {t("monitoring.tak.apiNotPublishedHint")}</>}
+          </p>
+        )}
         {tak.processes.length > 0 && (
           <div className="space-y-1.5">
             <h3 className="font-medium">{t("monitoring.tak.processes")}</h3>

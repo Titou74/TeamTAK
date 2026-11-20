@@ -9,6 +9,6 @@
 }
 
 # TAK Server's administration pages, plain HTTP like the web UI (see tak-admin.caddy).
-:8443 {
+:8444 {
 	import tak-admin.caddy
 }
