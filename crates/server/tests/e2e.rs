@@ -77,6 +77,18 @@ async fn emails_follow_the_language_saved_on_the_account() {
 
 #[tokio::test]
 #[ignore = "needs the running stack"]
+async fn the_colour_theme_is_saved_on_the_account() {
+    let account = Session::login(&email("theme"), "en").await;
+    assert_eq!(account.get("/me").await.ok()["account"]["theme"], "auto", "the device decides by default");
+    assert_eq!(account.patch("/me", json!({ "theme": "dark" })).await.ok()["account"]["theme"], "dark");
+    account.patch("/me", json!({ "theme": "blue" })).await.expect_error(400, "invalid_input");
+    // Changing something else leaves the theme alone.
+    account.patch("/me", json!({ "display_name": "Night owl" })).await.ok();
+    assert_eq!(account.get("/me").await.ok()["account"]["theme"], "dark");
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
 async fn login_codes_are_rate_limited_per_address() {
     let address = email("limit");
     let browser = Session::anonymous();

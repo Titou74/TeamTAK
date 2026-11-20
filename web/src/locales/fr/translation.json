@@ -363,11 +363,18 @@
   },
   "profile": {
     "title": "Profil",
-    "description": "La façon dont vous apparaissez aux membres de vos équipes, et la langue de ce site et des e-mails que vous recevez.",
+    "description": "La façon dont vous apparaissez aux membres de vos équipes, la langue de ce site et des e-mails que vous recevez, et l'affichage clair ou sombre de ce site.",
     "email": "Adresse e-mail",
     "displayName": "Nom affiché",
     "displayNameHelp": "Affiché aux membres de vos équipes à la place de votre adresse e-mail.",
     "languageHelp": "Utilisée aussi pour les e-mails qui vous sont envoyés.",
+    "theme": "Apparence",
+    "themeHelp": "Auto suit le réglage clair ou sombre de votre appareil. Enregistré dès que vous choisissez.",
+    "themes": {
+      "auto": "Auto",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
     "saved": "Profil enregistré."
   },
   "admin": {

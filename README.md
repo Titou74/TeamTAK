@@ -71,7 +71,8 @@ each team runs itself. The administrator approves new teams; everything else hap
 
    ![Cross-team events: one under way that another team has joined, one coming later](docs/images/events.png)
 
-The UI and the e-mails are in English and French; other languages are two files away.
+The UI and the e-mails are in English and French; other languages are two files away. The UI is
+light or dark like the device it is opened on, and each user can force one in their profile.
 
 If you are the one installing TeamTAK, the [Installation](#installation) and
 [Updating](#updating) guides below are all you need.

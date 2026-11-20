@@ -12,6 +12,7 @@ import type {
   Settings,
   SettingsView,
 } from "./monitoring-types";
+import type { Theme } from "./theme";
 import type {
   AccessDetail,
   AccessKind,
@@ -96,7 +97,7 @@ export const api = {
     json<void>("POST", "/auth/request-code", { email, language, proof }),
   verifyCode: (email: string, code: string, language: string) => json<Me>("POST", "/auth/verify", { email, code, language }),
   logout: () => json<void>("POST", "/auth/logout"),
-  updateMe: (changes: { display_name?: string; language?: string }) => json<Me>("PATCH", "/me", changes),
+  updateMe: (changes: { display_name?: string; language?: string; theme?: Theme }) => json<Me>("PATCH", "/me", changes),
 
   requestTeam: (name: string, mode: TeamMode, message: string) => json<Team>("POST", "/teams", { name, mode, message }),
   team: (id: string) => json<TeamDetail>("GET", `/teams/${id}`),
