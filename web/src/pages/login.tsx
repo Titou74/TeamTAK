@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Brand } from "@/components/app-shell";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { SiteFooter } from "@/components/site-footer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,7 +119,7 @@ export function LoginPage() {
         <Brand />
         <LanguageSwitcher />
       </header>
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-24">
+      <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8">
         {/* Which server this is, when an organisation runs several. */}
         {serverName && (
           <p className="flex max-w-sm items-center justify-center gap-2 text-center text-lg font-semibold tracking-tight">
@@ -230,6 +231,7 @@ export function LoginPage() {
           </CardContent>
         </Card>
       </main>
+      <SiteFooter />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -99,7 +100,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-svh">
+    <div className="flex min-h-svh flex-col">
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
           <Brand />
@@ -149,7 +150,8 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </DropdownMenu>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
+      <SiteFooter />
     </div>
   );
 }

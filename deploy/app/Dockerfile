@@ -32,5 +32,7 @@ USER 10001:0
 ENV LISTEN_ADDR=0.0.0.0:8080 \
     WEB_DIR=/app/web
 EXPOSE 8080
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/Titou74/TeamTAK"
 ENTRYPOINT ["/usr/local/bin/teamtak"]
 CMD ["serve"]
