@@ -48,3 +48,19 @@ same keys and placeholders and that every key used by the code exists.
 ## Tests
 
 See [testing](testing.md).
+
+## Releasing a version
+
+Versions follow `MAJOR.MINOR.PATCH`. The version is written in two places, which must agree:
+`version` under `[workspace.package]` in `Cargo.toml` (the three crates take it from there; the
+server and the agent report it, and `install.sh` prints it), and `version` in `web/package.json`.
+
+1. Change both, then update `Cargo.lock` with `cargo update -w --offline`.
+2. Run the [tests](testing.md), commit on `main` and push.
+3. Tag the commit `v<version>` (`git tag -a v1.0.2 -m "TeamTAK 1.0.2"`) and push the tag.
+4. Publish a release of that tag on GitHub, titled `TeamTAK <version>`, with what changed and
+   anything an administrator must do when updating. Leave pre-releases marked as such.
+
+Installed platforms ask GitHub for the latest release twice a day (see
+[monitoring](monitoring.md)): once it is published, their monitoring page and an alert tell their
+administrators. A draft or a pre-release is not offered to them.

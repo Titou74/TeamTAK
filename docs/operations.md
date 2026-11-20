@@ -33,8 +33,8 @@ takes about a minute to become healthy.
 docker compose exec app teamtak status
 ```
 
-Checks that the database, the directory and TAK Server are reachable, and says whether the host
-agent answers.
+Prints the version of TeamTAK, checks that the database, the directory and TAK Server are
+reachable, says whether the host agent answers, and what GitHub last said about the latest release.
 
 ```bash
 docker compose exec app teamtak send-test-mail you@example.org

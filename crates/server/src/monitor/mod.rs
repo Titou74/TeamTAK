@@ -18,6 +18,7 @@ pub mod devices;
 pub mod images;
 pub mod maintenance;
 pub mod probes;
+pub mod release;
 pub mod snapshot;
 
 use std::collections::{BTreeMap, VecDeque};
@@ -71,6 +72,8 @@ struct Targets {
     web: Option<(String, u16, String)>,
     smtp_configured: bool,
     public_url: String,
+    /// GitHub repository TeamTAK's releases are looked for in; `None`: not looked for.
+    release_repository: Option<String>,
 }
 
 /// TLS port of TAK Server for its clients, inside the network.
@@ -83,7 +86,7 @@ pub struct Monitor {
     agent: Option<AgentClient>,
     mailer: Arc<Mailer>,
     secrets: SecretBox,
-    /// For the registries and the webhook; `None` if it could not be built.
+    /// For the registries, GitHub and the webhook; `None` if it could not be built.
     http: Option<reqwest::Client>,
     started_at: OffsetDateTime,
     latest: RwLock<Option<Arc<Snapshot>>>,
@@ -98,6 +101,7 @@ pub struct Monitor {
     kick: Notify,
     daily_running: AtomicBool,
     images_running: AtomicBool,
+    release_running: AtomicBool,
     /// When the webhook was last posted to, and the outcome.
     webhook_last: Mutex<Option<(OffsetDateTime, Result<u16, String>)>>,
 }
@@ -172,6 +176,7 @@ impl Monitor {
                 web,
                 smtp_configured: !config.smtp.host.is_empty(),
                 public_url: config.public_url.clone(),
+                release_repository: config.monitor.release_repository.clone(),
             },
             tak,
             agent,
@@ -189,6 +194,7 @@ impl Monitor {
             kick: Notify::new(),
             daily_running: AtomicBool::new(false),
             images_running: AtomicBool::new(false),
+            release_running: AtomicBool::new(false),
             webhook_last: Mutex::new(None),
         }
     }
@@ -429,7 +435,11 @@ impl Monitor {
         obs.certificates = Some(certificates.iter().map(|c| CertificateObservation { name: c.id.to_string(), expires_at: c.expires_at }).collect());
 
         // ----- the platform's own state
-        let platform = self.platform(now, ldap_open).await?;
+        let mut platform = self.platform(now, ldap_open).await?;
+        let release_check = release::load(&self.db).await.unwrap_or_default();
+        let (release_view, release_observation) = release::status(t.release_repository.as_deref(), &release_check);
+        platform.release = release_view;
+        obs.release = release_observation;
         obs.directory_reachable = ldap_open;
         obs.reconcile = Some(ReconcileObservation { last_ok_at: platform.reconcile.last_ok_at, running_since: Some(self.started_at) });
         obs.overdue_events = Some(
@@ -556,6 +566,7 @@ impl Monitor {
             },
             directory_open: ldap_open.unwrap_or(false),
             started_at: Some(self.started_at),
+            release: ReleaseView::default(),
         })
     }
 
@@ -650,6 +661,7 @@ impl Monitor {
         alerting::notify_team_leaders(self, &stored).await?;
         maintenance::run_if_due(self, &stored, now);
         images::refresh_if_due(self);
+        release::refresh_if_due(self);
         Ok(())
     }
 

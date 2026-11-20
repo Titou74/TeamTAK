@@ -12,6 +12,7 @@ probed while a page loads.
 | TAK Server: ports 8089, 8443 and 8446, version, its five processes, connected devices | The platform itself, over the Docker network; the processes from the agent |
 | Certificates: root and intermediate authority, TAK Server's, the platform's, the Let's Encrypt ones, client certificates | The platform's files, what each port presents, and its database |
 | The platform: last clean synchronisation, drift, whether the starts and ends of events were applied, e-mails that failed | The platform's database |
+| TeamTAK's version, and the latest release published on GitHub | The platform itself, and GitHub for the last point |
 | A history of processor, memory, disk and connected devices | One sample every five minutes, kept 14 days |
 
 The machine and the Docker socket are seen through the host agent only; see
@@ -36,6 +37,16 @@ them. If the page says the lists are old, the server's own daily `apt update` is
 "A newer image exists" means, for an image pulled by tag (Caddy, PostgreSQL), that the registry now
 serves another image under the same tag. The directory's image is pinned to one exact build; a
 newer build is shown for information. Registries are asked twice a day at most.
+
+**TeamTAK's own version.** The platform asks GitHub, twice a day at most (every hour while GitHub
+does not answer), which release of TeamTAK is the latest: one anonymous request to
+`api.github.com/repos/Titou74/TeamTAK/releases/latest`, which leaves drafts and pre-releases out.
+When it is newer than the version that runs, the page shows it with a link to its release notes and
+the update command, and a minor alert is raised; the alert is resolved once the new version is
+installed. Nothing is downloaded or installed by the platform: the update is
+[done over SSH](../README.md#updating-teamtak). A fork points the check at its own repository, and
+`off` turns it off, with `RELEASE_REPOSITORY` ([configuration](configuration.md)). The command
+`teamtak status` prints the same information.
 
 **Connected devices.** Administrators see every device connected to TAK Server: its callsign, the
 access it uses, its team, its channels, since when. A team leader sees, on the team's page, the
@@ -66,6 +77,7 @@ the page, the list of resolved alerts opens by itself for a day after a resoluti
 | Client certificates expiring | minor, then warning |
 | A backup failed; no backup for 36 hours | warning |
 | Security updates waiting; restart required | minor |
+| A newer release of TeamTAK published on GitHub | minor |
 | E-mails failing | warning |
 | The server's clock not synchronised | warning |
 | The host agent not answering | warning |

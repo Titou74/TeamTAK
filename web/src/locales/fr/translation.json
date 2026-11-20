@@ -527,6 +527,7 @@
       "backup_stale": "Aucune sauvegarde n'a été faite depuis {{hours}} heures.",
       "security_updates": "Mises à jour de sécurité en attente sur le serveur : {{count}}.",
       "reboot_required": "Le serveur doit être redémarré pour terminer l'installation des mises à jour.",
+      "teamtak_update": "TeamTAK {{version}} est publié (version installée : {{installed}}).",
       "mail_failing": "Les e-mails ne partent plus ({{count}} échecs dans la dernière heure).",
       "clock_unsynchronized": "L'horloge du serveur n'est pas synchronisée : les événements peuvent commencer et finir à la mauvaise heure."
     },
@@ -761,6 +762,20 @@
       "mailOff": "aucun serveur de messagerie n'est configuré",
       "mailFailures": "E-mails en échec",
       "mailFailuresValue": "{{hour}} dans la dernière heure, {{day}} en 24 heures"
+    },
+    "release": {
+      "title": "Version de TeamTAK",
+      "installed": "Installée",
+      "latest": "Dernière sur GitHub",
+      "checked": "Dernière vérification",
+      "off": "non recherchée (RELEASE_REPOSITORY=off)",
+      "unknown": "pas encore connue",
+      "none": "aucune publiée pour l'instant",
+      "updateTitle": "TeamTAK {{version}} est disponible",
+      "updateText": "Lisez ce qu'elle change, puis mettez à jour en SSH depuis la racine du dépôt : la commande ci-dessous fait une sauvegarde, récupère la nouvelle version et l'applique (« Updating TeamTAK » dans le README).",
+      "notes": "Notes de version",
+      "commandLabel": "la commande de mise à jour",
+      "help": "GitHub (github.com/{{repository}}) est interrogé deux fois par jour sur la dernière version publiée ; une alerte prévient quand une plus récente sort. Rien n'est mis à jour depuis l'interface web."
     },
     "letsencrypt": {
       "noCertificate": "Le port d'enrôlement attend un certificat Let's Encrypt : Caddy n'en a pas encore.",

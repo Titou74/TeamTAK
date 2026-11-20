@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
 
 # The host agent: the only component that sees the host and the Docker socket. It is kept
 # small on purpose: no database, no outgoing connection, a fixed list of things it can do.

@@ -429,6 +429,7 @@ mod tests {
             tak_processes: Some(vec![("messaging".into(), false)]),
             security_updates: Some(9),
             reboot_required: Some(true),
+            release: Some(ReleaseObservation { installed: "1.0.1".into(), latest: Some("v1.2.0".into()) }),
             clock_synchronized: Some(false),
             tak_failures: Some(vec!["8089".into(), "api".into()]),
             directory_reachable: Some(false),

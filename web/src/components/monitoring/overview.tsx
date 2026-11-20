@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { BellIcon, CircleCheckIcon, RotateCwIcon, TriangleAlertIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -24,7 +24,7 @@ import {
   formatRelative,
 } from "@/lib/format";
 import { useNotifyError } from "@/lib/hooks";
-import type { Alert as AlertData, Certificate, Monitoring, Service, Snapshot } from "@/lib/monitoring-types";
+import type { Alert as AlertData, Certificate, Monitoring, Release, Service, Snapshot } from "@/lib/monitoring-types";
 
 import { HistoryCharts } from "./charts";
 import { Command, Field, Meter, ResolvedBadge, SeverityBadge, StateDot, useAlertText } from "./shared";
@@ -38,6 +38,7 @@ const APT_UPGRADE = "sudo apt update && sudo apt full-upgrade";
 const REBOOT = "sudo reboot";
 const PULL_IMAGES = "cd deploy && docker compose pull && docker compose up -d";
 const UPGRADE_TAK = "sudo ./install.sh --upgrade-tak";
+const UPDATE_TEAMTAK = "sudo deploy/scripts/backup.sh && git pull && sudo ./install.sh";
 const START_AGENT = "cd deploy && docker compose up -d agent && docker compose logs --tail 20 agent";
 
 /** An image reference with its digest shortened to what the eye can compare. */
@@ -531,6 +532,59 @@ function CertificatesCard({ snapshot }: { snapshot: Snapshot }) {
   );
 }
 
+/** The version that runs, the latest one on GitHub, and how to move to it. */
+function ReleaseSection({ release }: { release: Release }) {
+  const { t } = useTranslation();
+  const latest = release.latest;
+  let latestText: ReactNode;
+  if (release.status === "off") latestText = t("monitoring.release.off");
+  else if (release.status === "unknown") latestText = t("monitoring.release.unknown");
+  else if (release.status === "no_release" || !latest) latestText = t("monitoring.release.none");
+  else
+    latestText = (
+      <span className="inline-flex items-center gap-1.5">
+        <StateDot state={release.status === "update_available" ? "warning" : "ok"} />
+        <a href={latest.url} target="_blank" rel="noreferrer" className="hover:underline" translate="no">
+          {latest.version}
+        </a>
+        {latest.published_at && <span className="text-muted-foreground">({formatDate(latest.published_at)})</span>}
+      </span>
+    );
+  return (
+    <div className="space-y-2">
+      <h3 className="font-medium">{t("monitoring.release.title")}</h3>
+      <dl>
+        <Field label={t("monitoring.release.installed")}>
+          <span translate="no">{release.installed}</span>
+        </Field>
+        <Field label={t("monitoring.release.latest")}>{latestText}</Field>
+        {release.checked_at && <Field label={t("monitoring.release.checked")}>{formatRelative(release.checked_at)}</Field>}
+      </dl>
+      {release.status === "update_available" && latest && (
+        <Alert>
+          <TriangleAlertIcon />
+          <AlertTitle>{t("monitoring.release.updateTitle", { version: latest.version })}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>
+              {t("monitoring.release.updateText")}{" "}
+              <a href={latest.url} target="_blank" rel="noreferrer">
+                {t("monitoring.release.notes")}
+              </a>
+            </p>
+            <Command label={t("monitoring.release.commandLabel")}>{UPDATE_TEAMTAK}</Command>
+          </AlertDescription>
+        </Alert>
+      )}
+      {release.error && (
+        <p className="font-mono text-xs text-muted-foreground" lang="en">
+          {release.error}
+        </p>
+      )}
+      {release.repository && <p className="text-xs text-muted-foreground">{t("monitoring.release.help", { repository: release.repository })}</p>}
+    </div>
+  );
+}
+
 function PlatformCard({ snapshot, reload }: { snapshot: Snapshot; reload: () => Promise<unknown> }) {
   const { t } = useTranslation();
   const notifyError = useNotifyError();
@@ -619,6 +673,7 @@ function PlatformCard({ snapshot, reload }: { snapshot: Snapshot; reload: () => 
             </Button>
           </div>
         )}
+        <ReleaseSection release={platform.release} />
       </CardContent>
     </Card>
   );

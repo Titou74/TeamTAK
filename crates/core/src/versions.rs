@@ -1,5 +1,41 @@
-//! Versions of TAK Server and names of container images, for the "is it up to date?" part
-//! of the monitoring.
+//! Versions of TeamTAK and TAK Server, and names of container images, for the "is it up to
+//! date?" part of the monitoring.
+
+/// A TeamTAK version, as Cargo.toml writes it (`1.0.1`) and its releases are tagged on
+/// GitHub (`v1.0.1`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ReleaseVersion {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+}
+
+impl std::fmt::Display for ReleaseVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+/// Reads `1.0.1` or `v1.0.1`. A pre-release (`1.1.0-rc.1`) or anything else is not a
+/// release: `None`.
+pub fn parse_release_version(text: &str) -> Option<ReleaseVersion> {
+    let text = text.trim();
+    let text = text.strip_prefix(['v', 'V']).unwrap_or(text);
+    let numbers: Vec<u64> = text
+        .split('.')
+        .map(|part| part.bytes().all(|b| b.is_ascii_digit()).then(|| part.parse().ok()).flatten())
+        .collect::<Option<_>>()?;
+    match numbers[..] {
+        [major, minor, patch] => Some(ReleaseVersion { major, minor, patch }),
+        _ => None,
+    }
+}
+
+/// True when `latest` is a release newer than `installed`. False whenever either cannot be
+/// read: a development build is never told to update.
+pub fn release_is_newer(latest: &str, installed: &str) -> bool {
+    matches!((parse_release_version(latest), parse_release_version(installed)), (Some(latest), Some(installed)) if latest > installed)
+}
 
 /// A TAK Server version as tak.gov names it: `5.8-RELEASE-103`. The running server appends
 /// a build tag (`5.8-RELEASE-103-HEAD`) and its API writes the same version another way
@@ -90,6 +126,33 @@ pub fn local_digests(repo_digests: &[String]) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn teamtak_versions_are_read_from_cargo_and_from_release_tags() {
+        let v = ReleaseVersion { major: 1, minor: 0, patch: 1 };
+        for text in ["1.0.1", "v1.0.1", "V1.0.1", " v1.0.1\n"] {
+            assert_eq!(parse_release_version(text), Some(v), "{text:?}");
+        }
+        assert_eq!(v.to_string(), "1.0.1");
+        assert_eq!(parse_release_version(env!("CARGO_PKG_VERSION")).map(|v| v.to_string()).as_deref(), Some(env!("CARGO_PKG_VERSION")));
+        for text in ["", "v", "1.0", "1.0.1.2", "1.0.1-rc.1", "1.0.1+build", "v1..1", "release-1.0.1", "1.0.x", "+1.0.1"] {
+            assert_eq!(parse_release_version(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_release_is_newer_by_its_numbers() {
+        assert!(release_is_newer("v1.0.2", "1.0.1"));
+        assert!(release_is_newer("v1.1.0", "1.0.9"));
+        assert!(release_is_newer("v1.10.0", "1.9.3"), "numbers, not text");
+        assert!(release_is_newer("2.0.0", "1.99.99"));
+        assert!(!release_is_newer("v1.0.1", "1.0.1"), "the same one");
+        assert!(!release_is_newer("v1.0.0", "1.0.1"), "older than what runs");
+        // Unreadable on either side: never "update".
+        assert!(!release_is_newer("v1.1.0-rc.1", "1.0.1"));
+        assert!(!release_is_newer("v1.1.0", "1.1.0-dev"));
+        assert!(!release_is_newer("", "1.0.1"));
+    }
 
     #[test]
     fn tak_versions_are_read_in_every_form_the_server_uses() {

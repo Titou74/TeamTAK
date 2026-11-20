@@ -208,6 +208,7 @@ async fn serve(config: Config) -> Result<()> {
 }
 
 async fn status(config: Config) -> Result<()> {
+    println!("TeamTAK:    {}", monitor::release::INSTALLED);
     let db = state::connect_database(&config).await?;
     let (accounts,): (i64,) = sqlx::query_as("SELECT count(*) FROM accounts").fetch_one(&db).await?;
     println!("database:   ok ({accounts} accounts)");
@@ -246,6 +247,21 @@ async fn status(config: Config) -> Result<()> {
             },
             Err(e) => println!("host agent: NOT ANSWERING ({e})"),
         },
+    }
+    // What the monitoring last heard from GitHub; never a failure of the check either.
+    let check = monitor::release::load(&db).await.unwrap_or_default();
+    let (release, _) = monitor::release::status(config.monitor.release_repository.as_deref(), &check);
+    let latest = release.latest.as_ref();
+    match release.status {
+        "update_available" => println!(
+            "releases:   TeamTAK {} is published ({}); to update, see \"Updating TeamTAK\" in the README",
+            latest.map_or("", |l| l.version.as_str()),
+            latest.map_or("", |l| l.url.as_str())
+        ),
+        "up_to_date" => println!("releases:   up to date (latest on GitHub: {})", latest.map_or("", |l| l.version.as_str())),
+        "no_release" => println!("releases:   none published yet on github.com/{}", release.repository.unwrap_or_default()),
+        "off" => println!("releases:   not looked for (RELEASE_REPOSITORY=off)"),
+        _ => println!("releases:   GitHub has not answered yet{}", release.error.map(|e| format!(" ({e})")).unwrap_or_default()),
     }
     if failed {
         bail!("at least one backend cannot be reached");

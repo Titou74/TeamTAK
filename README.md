@@ -223,18 +223,23 @@ cd deploy && docker compose exec app teamtak grant-admin you@example.org
 
 ## Updating
 
-There are five things to keep up to date. The monitoring page tells when most of them have
+There are five things to keep up to date. The monitoring page tells when each of them has
 something waiting; nothing is ever updated from the web UI, on purpose.
 
 | What | How | Said by the monitoring page |
 |---|---|---|
-| TeamTAK itself | `git pull`, then `sudo ./install.sh` ([below](#updating-teamtak)) | |
+| TeamTAK itself | `git pull`, then `sudo ./install.sh` ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
 | Caddy, PostgreSQL, the mail catcher | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
 | The directory (OpenLDAP) | Pinned by digest in `deploy/docker-compose.yml`: change the digest, test, then `./install.sh` | "Pinned; a newer build exists" |
 | The server's packages | `sudo apt update && sudo apt full-upgrade`, then `sudo reboot` if asked | pending updates, security updates, restart required |
 | TAK Server | [Upgrading TAK Server](#upgrading-tak-server) | "TAK Server … is available", or a ZIP of a newer version at the repository root |
 
 ### Updating TeamTAK
+
+TeamTAK's versions are published as [releases on GitHub](https://github.com/Titou74/TeamTAK/releases),
+with what each one changes. The platform asks GitHub twice a day: when a newer release is out, the
+**Monitoring** page says so, with the update command, and the administrators get an alert e-mail.
+The installed version is on the same page, and in the output of `teamtak status` and of the install.
 
 Run from the root of the repository, on the server.
 

@@ -272,6 +272,9 @@ choose_first_zip() {
 
 # ----------------------------------------------------------------------------- preflight
 
+# The version of this checkout, as Cargo.toml gives it.
+TEAMTAK_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$REPO_DIR/Cargo.toml" | head -n 1)"
+
 log "Checking the machine"
 command -v docker > /dev/null || die "Docker is required"
 docker compose version > /dev/null 2>&1 || die "Docker Compose v2 is required (docker compose)"
@@ -279,7 +282,7 @@ docker info > /dev/null 2>&1 || die "Docker is not running, or this user cannot 
 if [ "$(uname -s)" = Linux ] && [ "$(id -u)" != 0 ]; then
   die "on Linux, run this script as root (sudo ./install.sh ...): it sets the ownership of files mounted into the containers"
 fi
-info "Docker $(docker version --format '{{.Server.Version}}'), $(docker compose version --short), $(uname -s) $(uname -m)"
+info "TeamTAK ${TEAMTAK_VERSION:-of an unknown version}, Docker $(docker version --format '{{.Server.Version}}'), $(docker compose version --short), $(uname -s) $(uname -m)"
 
 # ----------------------------------------------------------------------------- settings
 
@@ -784,7 +787,7 @@ if [ -n "${ADMIN_EMAIL:-}" ]; then
   compose exec -T app teamtak grant-admin "$ADMIN_EMAIL"
 fi
 
-log "TeamTAK is running"
+log "TeamTAK $TEAMTAK_VERSION is running"
 info "Web:               $PUBLIC_URL"
 info "TAK clients:       $(client_ports_text "$TAK_CLIENT_PORTS") (TLS)   enrollment: $PUBLIC_HOST:8446"
 if [ "$MODE" = local ]; then

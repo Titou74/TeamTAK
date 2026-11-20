@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use time::{Duration, OffsetDateTime};
 
+use crate::versions::{parse_release_version, release_is_newer};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
@@ -106,6 +108,8 @@ alert_kinds! {
     BackupStale => "backup_stale",
     SecurityUpdates => "security_updates",
     RebootRequired => "reboot_required",
+    /// A newer release of TeamTAK is published on GitHub.
+    TeamtakUpdate => "teamtak_update",
     /// E-mails are not going out.
     MailFailing => "mail_failing",
     ClockUnsynchronized => "clock_unsynchronized",
@@ -228,6 +232,15 @@ pub struct MailObservation {
     pub last_success_at: Option<OffsetDateTime>,
 }
 
+/// TeamTAK's own version and the latest one published.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ReleaseObservation {
+    /// The version that runs.
+    pub installed: String,
+    /// The latest release published; `None` when none is, or the check is turned off.
+    pub latest: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ReconcileObservation {
     pub last_ok_at: Option<OffsetDateTime>,
@@ -249,6 +262,8 @@ pub struct Observations {
     pub tak_processes: Option<Vec<(String, bool)>>,
     pub security_updates: Option<u32>,
     pub reboot_required: Option<bool>,
+    /// `None` until the releases could be asked once.
+    pub release: Option<ReleaseObservation>,
     pub clock_synchronized: Option<bool>,
     /// What does not answer on TAK Server, by name (`8089`, `8443`, `8446`, `api`).
     pub tak_failures: Option<Vec<String>>,
@@ -274,6 +289,7 @@ impl Observations {
             tak_processes: None,
             security_updates: None,
             reboot_required: None,
+            release: None,
             clock_synchronized: None,
             tak_failures: None,
             directory_reachable: None,
@@ -408,6 +424,13 @@ pub fn evaluate(obs: &Observations, thresholds: &Thresholds) -> Evaluation {
         out.judged.insert(RebootRequired);
         if required {
             out.findings.push(Finding::new(RebootRequired, "", Severity::Low));
+        }
+    }
+    if let Some(release) = &obs.release {
+        out.judged.insert(TeamtakUpdate);
+        if let Some(latest) = release.latest.as_deref().filter(|latest| release_is_newer(latest, &release.installed)) {
+            let latest = parse_release_version(latest).map(|v| v.to_string()).unwrap_or_default();
+            out.findings.push(Finding::new(TeamtakUpdate, "", Severity::Low).with("version", json!(latest)).with("installed", json!(release.installed)));
         }
     }
     if let Some(synchronized) = obs.clock_synchronized {
@@ -665,6 +688,7 @@ mod tests {
             tak_processes: Some(vec![("api".into(), true), ("messaging".into(), true)]),
             security_updates: Some(0),
             reboot_required: Some(false),
+            release: Some(ReleaseObservation { installed: "1.0.1".into(), latest: Some("v1.0.1".into()) }),
             clock_synchronized: Some(true),
             tak_failures: Some(vec![]),
             directory_reachable: Some(true),
@@ -915,6 +939,26 @@ mod tests {
                 ("clock_unsynchronized", String::new(), Severity::Warning),
             ]
         );
+    }
+
+    #[test]
+    fn a_newer_release_of_teamtak_is_a_low_alert_until_it_is_installed() {
+        let mut obs = healthy();
+        let release = |installed: &str, latest: Option<&str>| Some(ReleaseObservation { installed: installed.into(), latest: latest.map(str::to_string) });
+        obs.release = release("1.0.1", Some("v1.0.2"));
+        let e = evaluate(&obs, &Thresholds::default());
+        assert_eq!(kinds(&e), vec![("teamtak_update", String::new(), Severity::Low)]);
+        assert_eq!(e.findings[0].details["version"], json!("1.0.2"), "written without the tag's v");
+        assert_eq!(e.findings[0].details["installed"], json!("1.0.1"));
+        // Installed, or older than what runs: nothing, and an open alert resolves.
+        for (installed, latest) in [("1.0.2", Some("v1.0.2")), ("1.1.0", Some("v1.0.2")), ("1.0.1", None), ("1.1.0-dev", Some("v1.0.2"))] {
+            obs.release = release(installed, latest);
+            let e = evaluate(&obs, &Thresholds::default());
+            assert!(e.findings.is_empty() && e.judged.contains(&AlertKind::TeamtakUpdate), "{installed} {latest:?}");
+        }
+        // Never asked: not judged.
+        obs.release = None;
+        assert!(!evaluate(&obs, &Thresholds::default()).judged.contains(&AlertKind::TeamtakUpdate));
     }
 
     #[test]

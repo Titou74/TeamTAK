@@ -80,6 +80,8 @@ services:
       MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-60}
       # Where Caddy answers inside the network, to read the certificate it presents
       WEB_TLS_PROBE: ${WEB_TLS_PROBE:-caddy:443}
+      # GitHub repository whose latest release is compared with this version (off: never asked)
+      RELEASE_REPOSITORY: ${RELEASE_REPOSITORY:-}
     volumes:
       - ./data/app:/data:ro
     networks:

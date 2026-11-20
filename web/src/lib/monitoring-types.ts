@@ -184,10 +184,23 @@ export interface Snapshot {
     };
     directory_open: boolean;
     started_at: string | null;
+    release: Release;
   };
   backups: Backups;
   letsencrypt: { enabled: boolean; certificate_found: boolean; handed_over: boolean } | null;
   devices: { identified: number; unidentified: number };
+}
+
+/** TeamTAK's own version, and the latest release published on GitHub. */
+export interface Release {
+  installed: string;
+  /** owner/name on GitHub; null when the check is turned off (RELEASE_REPOSITORY=off). */
+  repository: string | null;
+  /** unknown: GitHub has not answered yet; no_release: none published yet. */
+  status: "up_to_date" | "update_available" | "no_release" | "unknown" | "off";
+  latest: { version: string; tag: string; name: string; url: string; published_at: string | null } | null;
+  checked_at: string | null;
+  error: string | null;
 }
 
 export interface Monitoring {

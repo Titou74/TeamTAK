@@ -156,6 +156,34 @@ pub struct PlatformView {
     pub directory_open: bool,
     #[serde(with = "time::serde::rfc3339::option")]
     pub started_at: Option<OffsetDateTime>,
+    /// TeamTAK's own version, and the latest one published.
+    pub release: ReleaseView,
+}
+
+/// The version that runs and the latest release on GitHub.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ReleaseView {
+    pub installed: &'static str,
+    /// `owner/name` of the GitHub repository asked; `None` when the check is turned off.
+    pub repository: Option<String>,
+    /// `up_to_date`, `update_available`, `no_release` (none published yet), `unknown`
+    /// (GitHub has not answered yet) or `off`.
+    pub status: &'static str,
+    pub latest: Option<LatestRelease>,
+    /// When GitHub was last asked, and why it did not answer then.
+    pub checked_at: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LatestRelease {
+    /// `1.0.2`, read from the tag; the tag itself when it is not a version.
+    pub version: String,
+    pub tag: String,
+    pub name: String,
+    /// Its page on GitHub, with the release notes.
+    pub url: String,
+    pub published_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

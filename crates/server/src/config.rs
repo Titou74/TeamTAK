@@ -98,6 +98,9 @@ pub struct MonitorConfig {
     /// `host:port` where the reverse proxy answers in TLS inside the network, to read the
     /// certificate it presents for the web UI. Only used when the UI is served over HTTPS.
     pub web_tls_probe: Option<String>,
+    /// GitHub repository (`owner/name`) whose latest release is compared with the version
+    /// that runs; `None` when that check is turned off.
+    pub release_repository: Option<String>,
 }
 
 fn var(name: &str) -> Result<String> {
@@ -117,6 +120,25 @@ where
 {
     let raw = var_or(name, default);
     raw.parse().map_err(|e| anyhow!("{name}={raw:?} is not valid: {e}"))
+}
+
+/// The GitHub repository TeamTAK is released from, as Cargo.toml names it.
+pub const DEFAULT_RELEASE_REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
+
+/// The `owner/name` of a GitHub repository given as `owner/name` or as its address;
+/// `None` for `off` or `none`, which turn the release check off.
+pub fn parse_release_repository(raw: &str) -> Result<Option<String>> {
+    let raw = raw.trim();
+    if raw.eq_ignore_ascii_case("off") || raw.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    let path = raw.strip_prefix("https://github.com/").unwrap_or(raw).trim_end_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let valid = |part: &str| !part.is_empty() && part != "." && part != ".." && part.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b));
+    match path.split_once('/') {
+        Some((owner, name)) if valid(owner) && valid(name) => Ok(Some(format!("{owner}/{name}"))),
+        _ => bail!("expected owner/name of a GitHub repository, its https://github.com/ address, or off"),
+    }
 }
 
 /// The ports of a list like `8089,8443` (commas or spaces): at least one, none twice, in
@@ -155,6 +177,8 @@ impl Config {
         let web_dir = std::env::var("WEB_DIR").ok().filter(|s| !s.is_empty()).map(PathBuf::from);
         let ports_raw = var_or("TAK_CLIENT_PORTS", "8089");
         let client_ports = parse_ports(&ports_raw).with_context(|| format!("TAK_CLIENT_PORTS={ports_raw:?}"))?;
+        let repository_raw = var_or("RELEASE_REPOSITORY", DEFAULT_RELEASE_REPOSITORY);
+        let release_repository = parse_release_repository(&repository_raw).with_context(|| format!("RELEASE_REPOSITORY={repository_raw:?}"))?;
 
         Ok(Self {
             listen_addr: parsed("LISTEN_ADDR", "0.0.0.0:8080")?,
@@ -205,6 +229,7 @@ impl Config {
                 agent_token: var_or("AGENT_TOKEN", ""),
                 interval: Duration::from_secs(parsed::<u64>("MONITOR_INTERVAL_SECONDS", "60")?.clamp(5, 3600)),
                 web_tls_probe: Some(var_or("WEB_TLS_PROBE", "")).filter(|p| !p.is_empty()),
+                release_repository,
             },
         })
     }
@@ -212,7 +237,20 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_ports;
+    use super::{parse_ports, parse_release_repository, DEFAULT_RELEASE_REPOSITORY};
+
+    #[test]
+    fn release_repository() {
+        let repo = |raw: &str| parse_release_repository(raw).unwrap();
+        assert_eq!(repo(DEFAULT_RELEASE_REPOSITORY).as_deref(), Some("Titou74/TeamTAK"), "Cargo.toml's repository");
+        assert_eq!(repo("someone/teamtak-fork").as_deref(), Some("someone/teamtak-fork"));
+        assert_eq!(repo(" https://github.com/someone/fork.git/ ").as_deref(), Some("someone/fork"));
+        assert_eq!(repo("off"), None);
+        assert_eq!(repo("NONE"), None);
+        for bad in ["", "teamtak", "a/b/c", "https://gitlab.com/a/b", "a/../b", "../b", "a b/c", "a/b?x=1"] {
+            assert!(parse_release_repository(bad).is_err(), "{bad:?} accepted");
+        }
+    }
 
     #[test]
     fn client_ports() {

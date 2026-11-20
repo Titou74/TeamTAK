@@ -122,6 +122,7 @@
       "backup_stale": "No backup has been made for {{hours}} hours.",
       "security_updates": "Security updates waiting to be installed on the server: {{count}}.",
       "reboot_required": "The server must be restarted to finish installing updates.",
+      "teamtak_update": "TeamTAK {{version}} is published (installed: {{installed}}).",
       "mail_failing": "E-mails are not going out ({{count}} failed in the last hour).",
       "clock_unsynchronized": "The server's clock is not synchronised: events may start and end at the wrong time."
     }

@@ -6,6 +6,7 @@ members = ["crates/core", "crates/server", "crates/agent"]
 version = "0.1.0"
 edition = "2021"
 license = "UNLICENSED"
+repository = "https://github.com/Titou74/TeamTAK"
 publish = false
 
 # Keep the debug build small (disk is tight) and make RSA key generation usable in tests.
