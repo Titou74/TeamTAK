@@ -65,10 +65,22 @@
   "alerts": {
     "subject_raised": "[TeamTAK] Alerte : {{text}}",
     "subject_resolved": "[TeamTAK] Résolu : {{text}}",
+    "subject_resolved_several": "[TeamTAK] Résolues : {{count}} alertes",
     "subject_several": "[TeamTAK] Alertes — nouvelles : {{raised}}, résolues : {{resolved}}, toujours en cours : {{reminded}}",
     "heading_raised": "Nouvelles alertes :",
-    "heading_resolved": "Résolues :",
+    "heading_resolved": "Résolues (le problème a disparu) :",
     "heading_reminded": "Toujours en cours (rappel) :",
+    "resolved_after": "résolue après {{duration}}",
+    "duration": {
+      "second": "{{count}} seconde",
+      "seconds": "{{count}} secondes",
+      "minute": "{{count}} minute",
+      "minutes": "{{count}} minutes",
+      "hour": "{{count}} heure",
+      "hours": "{{count}} heures",
+      "day": "{{count}} jour",
+      "days": "{{count}} jours"
+    },
     "severity": {
       "low": "mineure",
       "warning": "avertissement",

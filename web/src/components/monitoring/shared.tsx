@@ -1,3 +1,4 @@
+import { CircleCheckIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,17 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   const { t } = useTranslation();
   const variant = severity === "critical" ? "destructive" : severity === "warning" ? "default" : "secondary";
   return <Badge variant={variant}>{t(`alerts.severity.${severity}`)}</Badge>;
+}
+
+/** Takes the place of the severity on an alert that is over: the problem is gone. */
+export function ResolvedBadge() {
+  const { t } = useTranslation();
+  return (
+    <Badge variant="outline" className="border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-400">
+      <CircleCheckIcon />
+      {t("alerts.resolved")}
+    </Badge>
+  );
 }
 
 /**

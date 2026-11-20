@@ -56,6 +56,19 @@ export function formatRelative(iso: string | null | undefined): string {
   return rtf.format(Math.round(seconds), "second");
 }
 
+/** "12 minutes", "3 hours": the time between two instants, in its largest whole unit. */
+export function formatDuration(fromIso: string, toIso: string): string {
+  const seconds = Math.max(0, (new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000);
+  const units: [string, number][] = [
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+    ["second", 1],
+  ];
+  const [unit, size] = units.find(([, size]) => seconds >= size) ?? units[units.length - 1];
+  return new Intl.NumberFormat(currentLanguage(), { style: "unit", unit, unitDisplay: "long" }).format(Math.round(seconds / size));
+}
+
 /** "2.3 GB", "640 MB": a size, with the unit written the way the current language does. */
 export function formatBytes(bytes: number): string {
   const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const;

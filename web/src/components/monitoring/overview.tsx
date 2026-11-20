@@ -12,12 +12,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import { formatBytes, formatDate, formatDateTime, formatList, formatNumber, formatPercent, formatRelative } from "@/lib/format";
+import {
+  formatBytes,
+  formatDate,
+  formatDateTime,
+  formatDateTimeRange,
+  formatDuration,
+  formatList,
+  formatNumber,
+  formatPercent,
+  formatRelative,
+} from "@/lib/format";
 import { useNotifyError } from "@/lib/hooks";
 import type { Alert as AlertData, Certificate, Monitoring, Service, Snapshot } from "@/lib/monitoring-types";
 
 import { HistoryCharts } from "./charts";
-import { Command, Field, Meter, SeverityBadge, StateDot, useAlertText } from "./shared";
+import { Command, Field, Meter, ResolvedBadge, SeverityBadge, StateDot, useAlertText } from "./shared";
 
 /** Thresholds used to colour the gauges; the alerts themselves follow the settings. */
 const DISK_WARN = 90;
@@ -35,19 +45,39 @@ function shortImage(image: string): string {
   return image.replace(/@sha256:([0-9a-f]{12})[0-9a-f]+$/, "@sha256:$1…");
 }
 
+/** An alert resolved this recently is shown without having to unfold the list. */
+const RECENTLY_RESOLVED_MS = 24 * 3600 * 1000;
+
 function AlertsCard({ data }: { data: Monitoring }) {
   const { t } = useTranslation();
   const alertText = useAlertText();
   const { open, resolved } = data.alerts;
-  const row = (alert: AlertData, done: boolean) => (
+  const openRow = (alert: AlertData) => (
     <li key={alert.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
       <SeverityBadge severity={alert.severity} />
-      <span className={done ? "text-muted-foreground" : "font-medium"}>{alertText(alert)}</span>
-      <span className="text-xs text-muted-foreground" title={formatDateTime(done ? alert.resolved_at : alert.raised_at)}>
-        {done ? t("alerts.resolvedWhen", { when: formatRelative(alert.resolved_at) }) : t("alerts.since", { when: formatRelative(alert.raised_at) })}
+      <span className="font-medium">{alertText(alert)}</span>
+      <span className="text-xs text-muted-foreground" title={formatDateTime(alert.raised_at)}>
+        {t("alerts.since", { when: formatRelative(alert.raised_at) })}
       </span>
     </li>
   );
+  // A resolved alert says so first, in green: its sentence describes the problem as it was.
+  const resolvedRow = (alert: AlertData) => {
+    const resolvedAt = alert.resolved_at ?? alert.last_seen_at;
+    return (
+      <li key={alert.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
+        <ResolvedBadge />
+        <span className="text-muted-foreground">{alertText(alert)}</span>
+        <span className="text-xs text-muted-foreground" title={formatDateTimeRange(alert.raised_at, resolvedAt)}>
+          {t("alerts.resolvedAfter", { when: formatRelative(resolvedAt), duration: formatDuration(alert.raised_at, resolvedAt) })}
+        </span>
+      </li>
+    );
+  };
+  // Measured from the platform's last look, which the page refreshes.
+  const lookedAt = data.snapshot ? new Date(data.snapshot.collected_at).getTime() : null;
+  const recentlyResolved =
+    lookedAt !== null && resolved.some((alert) => alert.resolved_at && lookedAt - new Date(alert.resolved_at).getTime() < RECENTLY_RESOLVED_MS);
   const channels = [
     data.notifications.emails ? t("alerts.channels.email") : t("alerts.channels.emailOff"),
     ...(data.notifications.webhook_set ? [data.notifications.webhook_last?.ok === false ? t("alerts.channels.webhookFailing") : t("alerts.channels.webhook")] : []),
@@ -64,11 +94,11 @@ function AlertsCard({ data }: { data: Monitoring }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {open.length === 0 ? <p className="text-sm text-muted-foreground">{t("alerts.none")}</p> : <ul className="divide-y text-sm">{open.map((alert) => row(alert, false))}</ul>}
+        {open.length === 0 ? <p className="text-sm text-muted-foreground">{t("alerts.none")}</p> : <ul className="divide-y text-sm">{open.map(openRow)}</ul>}
         {resolved.length > 0 && (
-          <details className="text-sm">
+          <details className="text-sm" open={recentlyResolved}>
             <summary className="cursor-pointer text-muted-foreground">{t("alerts.resolvedTitle", { count: resolved.length })}</summary>
-            <ul className="mt-1 divide-y">{resolved.map((alert) => row(alert, true))}</ul>
+            <ul className="mt-1 divide-y">{resolved.map(resolvedRow)}</ul>
           </details>
         )}
       </CardContent>

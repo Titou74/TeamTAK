@@ -175,11 +175,18 @@ pub struct AlertLine {
     pub details: Value,
 }
 
+/// An alert that is over, and how long the problem lasted.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedLine {
+    pub line: AlertLine,
+    pub lasted: time::Duration,
+}
+
 /// What one evaluation has to say: everything in one message.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AlertBatch {
     pub raised: Vec<AlertLine>,
-    pub resolved: Vec<AlertLine>,
+    pub resolved: Vec<ResolvedLine>,
     /// Still open, last mentioned long enough ago.
     pub reminded: Vec<AlertLine>,
 }
@@ -220,24 +227,43 @@ pub fn alert_sentence(language: &str, line: &AlertLine) -> String {
     fill(template, &borrowed)
 }
 
+/// "41 seconds", "3 hours": how long something lasted, in its largest whole unit, in
+/// `language`. Each language has a form for one and a form for several.
+pub fn format_duration(language: &str, lasted: time::Duration) -> String {
+    let language = resolve(language);
+    let seconds = lasted.whole_seconds().max(0);
+    let units = [("day", 86_400), ("hour", 3_600), ("minute", 60), ("second", 1)];
+    let (unit, size) = units.into_iter().find(|(_, size)| seconds >= *size).unwrap_or(("second", 1));
+    let count = ((seconds as f64 / size as f64).round() as i64).max(1);
+    let key = if count == 1 { unit.to_string() } else { format!("{unit}s") };
+    fill(text(language, &["alerts", "duration", &key]), &[("count", &count.to_string())])
+}
+
 /// The e-mail that tells an administrator what one evaluation found, in their language.
-/// A single alert is named in the subject; several are counted.
+/// A single alert is named in the subject; several are counted. An alert that is over is
+/// marked as resolved where the others give their severity: its sentence describes the
+/// problem as it was.
 pub fn render_alerts(language: &str, batch: &AlertBatch, url: &str) -> Rendered {
     let lang = resolve(language);
     let word = |key: &str| text(lang, &["alerts", key]);
-    let line = |alert: &AlertLine| {
-        let severity = alert_text(lang, &["alerts", "severity", &alert.severity]).unwrap_or(&alert.severity);
-        format!("  - [{severity}] {}", alert_sentence(lang, alert))
-    };
+    let item = |tag: &str, alert: &AlertLine| format!("  - [{tag}] {}", alert_sentence(lang, alert));
+    let open = |alert: &AlertLine| item(alert_text(lang, &["alerts", "severity", &alert.severity]).unwrap_or(&alert.severity), alert);
+    let closed = |resolved: &ResolvedLine| item(&fill(word("resolved_after"), &[("duration", &format_duration(lang, resolved.lasted))]), &resolved.line);
     let mut sections = Vec::new();
-    for (heading, alerts) in [("heading_raised", &batch.raised), ("heading_resolved", &batch.resolved), ("heading_reminded", &batch.reminded)] {
-        if !alerts.is_empty() {
-            sections.push(format!("{}\n{}", word(heading), alerts.iter().map(line).collect::<Vec<_>>().join("\n")));
+    for (heading, items) in [
+        ("heading_raised", batch.raised.iter().map(open).collect::<Vec<_>>()),
+        ("heading_resolved", batch.resolved.iter().map(closed).collect()),
+        ("heading_reminded", batch.reminded.iter().map(open).collect()),
+    ] {
+        if !items.is_empty() {
+            sections.push(format!("{}\n{}", word(heading), items.join("\n")));
         }
     }
     let subject = match (&batch.raised[..], &batch.resolved[..], &batch.reminded[..]) {
         ([only], [], []) => fill(word("subject_raised"), &[("text", &alert_sentence(lang, only))]),
-        ([], [only], []) => fill(word("subject_resolved"), &[("text", &alert_sentence(lang, only))]),
+        ([], [only], []) => fill(word("subject_resolved"), &[("text", &alert_sentence(lang, &only.line))]),
+        // Only good news: the subject says so instead of counting zeros.
+        ([], resolved, []) if !resolved.is_empty() => fill(word("subject_resolved_several"), &[("count", &resolved.len().to_string())]),
         _ => fill(
             word("subject_several"),
             &[
@@ -484,14 +510,24 @@ mod tests {
         assert_eq!(fr.subject, "[TeamTAK] Alerte : Le service caddy ne tourne pas (état : exited).");
         assert!(fr.body.contains("Nouvelles alertes :\n  - [critique] Le service caddy ne tourne pas"), "{}", fr.body);
 
-        let resolved = AlertBatch { resolved: vec![down.clone()], ..Default::default() };
-        assert_eq!(render_alerts("fr", &resolved, "u").subject, "[TeamTAK] Résolu : Le service caddy ne tourne pas (état : exited).");
-        assert!(render_alerts("en", &resolved, "u").subject.starts_with("[TeamTAK] Resolved: "));
+        // A resolved alert says so where the others give their severity, with how long it lasted.
+        let over = |line: AlertLine, seconds| ResolvedLine { line, lasted: time::Duration::seconds(seconds) };
+        let resolved = AlertBatch { resolved: vec![over(down.clone(), 41)], ..Default::default() };
+        let fr = render_alerts("fr", &resolved, "u");
+        assert_eq!(fr.subject, "[TeamTAK] Résolu : Le service caddy ne tourne pas (état : exited).");
+        assert!(fr.body.contains("Résolues (le problème a disparu) :\n  - [résolue après 41 secondes] Le service caddy ne tourne pas"), "{}", fr.body);
+        assert!(!fr.body.contains("[critique]"), "a resolved alert does not keep its severity: {}", fr.body);
+        let en = render_alerts("en", &resolved, "u");
+        assert!(en.subject.starts_with("[TeamTAK] Resolved: "));
+        assert!(en.body.contains("Resolved (the problem is gone):\n  - [resolved after 41 seconds] The service caddy is not running"), "{}", en.body);
+        let calm = AlertBatch { resolved: vec![over(down.clone(), 41), over(line("backup_failed", "", "warning", Value::Null), 7_200)], ..Default::default() };
+        assert_eq!(render_alerts("fr", &calm, "u").subject, "[TeamTAK] Résolues : 2 alertes", "only good news: no count of zeros");
+        assert_eq!(render_alerts("en", &calm, "u").subject, "[TeamTAK] Resolved: 2 alerts");
 
         // Everything fails at once: one message, counted in its subject, listed in its body.
         let storm = AlertBatch {
             raised: vec![down.clone(), line("tak_unreachable", "", "critical", serde_json::json!({ "what": "8089, api" })), line("directory_unreachable", "", "critical", Value::Null)],
-            resolved: vec![line("backup_failed", "", "warning", Value::Null)],
+            resolved: vec![over(line("backup_failed", "", "warning", Value::Null), 3_600)],
             reminded: vec![line("security_updates", "", "low", serde_json::json!({ "count": 4 }))],
         };
         let mail = render_alerts("en", &storm, "u");
@@ -499,6 +535,18 @@ mod tests {
         assert_eq!(mail.body.matches("\n  - [").count(), 5);
         assert!(mail.body.contains("Still open (reminder):\n  - [low] Security updates waiting to be installed on the server: 4."));
         assert!(!mail.subject.contains('\n') && !mail.body.contains("{{"));
+    }
+
+    #[test]
+    fn durations_are_written_in_their_largest_unit() {
+        let d = time::Duration::seconds;
+        assert_eq!(format_duration("fr", d(41)), "41 secondes");
+        assert_eq!(format_duration("fr", d(0)), "1 seconde", "never zero");
+        assert_eq!(format_duration("en", d(60)), "1 minute");
+        assert_eq!(format_duration("en", d(150)), "3 minutes", "rounded");
+        assert_eq!(format_duration("fr", d(7_200)), "2 heures");
+        assert_eq!(format_duration("en", d(86_400 * 3 + 600)), "3 days");
+        assert_eq!(format_duration("xx", d(5)), "5 seconds", "unknown language: English");
     }
 
     #[test]

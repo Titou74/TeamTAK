@@ -18,7 +18,7 @@ use teamtak_core::alerts::{evaluate, plan, AlertKind, Finding, Observations, Ope
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::locale::{self, AlertBatch, AlertLine, Template};
+use crate::locale::{self, AlertBatch, AlertLine, ResolvedLine, Template};
 use crate::settings::Stored;
 
 use super::Monitor;
@@ -211,7 +211,7 @@ pub async fn run(monitor: &Arc<Monitor>, stored: &Stored, obs: &Observations) ->
                 if let Some(row) = rows.iter().find(|r| r.id == id) {
                     tracing::info!(kind = %row.kind, subject = %row.subject, "alert resolved");
                     let resolved = line(&row.kind, &row.subject, &row.severity, row.details.clone());
-                    batch.resolved.push(resolved.clone());
+                    batch.resolved.push(ResolvedLine { line: resolved.clone(), lasted: now - row.raised_at });
                     events.push(WebhookEvent { event: "resolved", id, line: resolved, raised_at: row.raised_at, resolved_at: Some(now) });
                 }
             }

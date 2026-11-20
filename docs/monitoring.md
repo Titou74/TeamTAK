@@ -49,6 +49,10 @@ once when it is resolved, and at most once a day while it lasts. Everything rais
 the same look goes in one message. A problem must be seen twice in a row before it is an alert, so
 a service that restarts does not write to anyone.
 
+A resolved alert is marked as such, in green on the page and in place of its severity in the
+e-mail, with how long the problem lasted: its sentence still describes the problem as it was. On
+the page, the list of resolved alerts opens by itself for a day after a resolution.
+
 | Alert | Severity |
 |---|---|
 | A filesystem nearly full (90 % by default) | warning, then critical |

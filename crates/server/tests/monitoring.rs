@@ -78,16 +78,26 @@ async fn mails_to(to: &str) -> Vec<Mail> {
 
 /// Waits for a message to `to` whose text contains `needle`.
 async fn mail_containing(to: &str, needle: &str, timeout: Duration) -> Mail {
+    mail_where(to, &format!("containing {needle:?}"), |text| text.contains(needle), timeout).await
+}
+
+/// The first e-mail to `to` whose text passes `test`, waiting for it up to `timeout`.
+async fn mail_where(to: &str, what: &str, test: impl Fn(&str) -> bool, timeout: Duration) -> Mail {
     let deadline = Instant::now() + timeout;
     loop {
         let mails = mails_to(to).await;
-        if let Some(found) = mails.iter().find(|m| m.text.contains(needle)) {
+        if let Some(found) = mails.iter().find(|m| test(&m.text)) {
             return Mail { subject: found.subject.clone(), text: found.text.clone() };
         }
         let subjects: Vec<&str> = mails.iter().map(|m| m.subject.as_str()).collect();
-        assert!(Instant::now() < deadline, "no e-mail containing {needle:?} received by {to} in {timeout:?}; it has: {subjects:?}");
+        assert!(Instant::now() < deadline, "no e-mail {what} received by {to} in {timeout:?}; it has: {subjects:?}");
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
+}
+
+/// Whether `text` lists `sentence` as resolved: "  - [resolved after 41 seconds] <sentence>".
+fn lists_as_resolved(text: &str, tag: &str, sentence: &str) -> bool {
+    text.lines().any(|line| line.starts_with(&format!("  - [{tag} ")) && line.ends_with(&format!("] {sentence}")))
 }
 
 /// Polls the monitoring until `ready` says so.
@@ -269,9 +279,11 @@ async fn a_stopped_service_raises_an_alert_by_email_and_its_resolution() {
 
     // Back up (the guard started it): the alert resolves, and says so once.
     start_platform().await;
-    let resolved = mail_containing(&french.email, &format!("Résolues :\n  - [critique] {down_fr}"), ALERT_WAIT).await;
+    let resolved = mail_where(&french.email, "saying caddy is back", |text| lists_as_resolved(text, "résolue après", down_fr), ALERT_WAIT).await;
+    assert!(resolved.text.contains("Résolues (le problème a disparu) :\n"), "{}", resolved.text);
     assert!(resolved.subject.starts_with("[TeamTAK] Résolu") || resolved.subject.starts_with("[TeamTAK] Alertes"), "{}", resolved.subject);
-    mail_containing(&english.email, &format!("Resolved:\n  - [critical] {down_en}"), Duration::from_secs(20)).await;
+    let resolved = mail_where(&english.email, "saying caddy is back", |text| lists_as_resolved(text, "resolved after", down_en), Duration::from_secs(20)).await;
+    assert!(resolved.text.contains("Resolved (the problem is gone):\n"), "{}", resolved.text);
 
     let after = fresh_look(&french).await;
     assert!(!open_alerts(&after).contains(&("service_down".to_string(), "caddy".to_string())));
