@@ -48,7 +48,8 @@ This is what sets TeamTAK apart from a plain TAK Server: the server is shared by
 each team runs itself. The administrator approves new teams; everything else happens without them.
 
 1. **Sign in with an e-mail address.** No password to remember: a six-digit code arrives by e-mail.
-   Anyone can sign in, but an account gets no TAK access until it belongs to a team.
+   Anyone can sign in, but an account gets no TAK access until it belongs to a team. An invisible
+   anti-bot check and a countdown between two codes keep scripts from flooding the mail server.
 2. **Ask for a team.** A future leader asks for one and an administrator approves it, with a cap on
    its members. It is the only step that needs an administrator.
 3. **Bring the team in.** The leader invites the members by e-mail, removes them, and chooses how

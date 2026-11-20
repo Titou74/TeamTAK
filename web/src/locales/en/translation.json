@@ -39,8 +39,10 @@
     "code": "Code",
     "verify": "Sign in",
     "resend": "Send a new code",
+    "resendIn": "New code in {{seconds}} s",
     "changeEmail": "Use another address",
-    "codeSent": "A new code is on its way."
+    "codeSent": "A new code is on its way.",
+    "codeAlreadySent": "A code was just sent to this address: enter it below."
   },
   "home": {
     "title": "My teams",
@@ -1075,6 +1077,8 @@
     "invalid_email": "This e-mail address is not valid.",
     "invalid_team_name": "This name cannot be used for a team. Use at least two letters or digits.",
     "rate_limited": "Too many attempts. Please wait a while before trying again.",
+    "resend_too_soon": "A code was just sent to this address. Wait a moment before asking for another one.",
+    "challenge_failed": "The page's security check did not go through. Please try again.",
     "invalid_code": "This code is wrong or has expired. Check it, or ask for a new one.",
     "mail_unavailable": "The e-mail could not be sent. Please try again in a moment.",
     "team_name_taken": "A team with this name already exists.",

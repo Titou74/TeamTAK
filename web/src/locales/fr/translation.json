@@ -40,8 +40,10 @@
     "code": "Code",
     "verify": "Se connecter",
     "resend": "Envoyer un nouveau code",
+    "resendIn": "Nouveau code dans {{seconds}} s",
     "changeEmail": "Utiliser une autre adresse",
-    "codeSent": "Un nouveau code vient d'être envoyé."
+    "codeSent": "Un nouveau code vient d'être envoyé.",
+    "codeAlreadySent": "Un code vient d'être envoyé à cette adresse : saisissez-le ci-dessous."
   },
   "home": {
     "title": "Mes équipes",
@@ -1111,6 +1113,8 @@
     "invalid_email": "Cette adresse e-mail n'est pas valide.",
     "invalid_team_name": "Ce nom ne peut pas être utilisé pour une équipe. Utilisez au moins deux lettres ou chiffres.",
     "rate_limited": "Trop de tentatives. Veuillez patienter avant de réessayer.",
+    "resend_too_soon": "Un code vient d'être envoyé à cette adresse. Patientez un instant avant d'en demander un autre.",
+    "challenge_failed": "La vérification de sécurité de la page n'a pas abouti. Veuillez réessayer.",
     "invalid_code": "Ce code est incorrect ou a expiré. Vérifiez-le, ou demandez-en un nouveau.",
     "mail_unavailable": "L'e-mail n'a pas pu être envoyé. Veuillez réessayer dans un instant.",
     "team_name_taken": "Une équipe porte déjà ce nom.",

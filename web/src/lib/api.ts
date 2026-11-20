@@ -19,6 +19,8 @@ import type {
   AdminTeam,
   AdminTeams,
   InvitableTeam,
+  LoginChallenge,
+  LoginProof,
   Me,
   PublicConfig,
   Reconciliation,
@@ -33,11 +35,14 @@ import type {
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
+  /** Seconds after which the same request will be accepted, when the API says so. */
+  readonly retryAfter: number | null;
 
-  constructor(code: string, status: number) {
+  constructor(code: string, status: number, retryAfter: number | null = null) {
     super(code);
     this.code = code;
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -60,13 +65,15 @@ async function request(method: string, path: string, body?: unknown): Promise<Re
   }
   if (!response.ok) {
     let code = "unknown";
+    let retryAfter: number | null = null;
     try {
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as { error?: string; retry_after?: number };
       if (typeof data.error === "string") code = data.error;
+      if (typeof data.retry_after === "number") retryAfter = data.retry_after;
     } catch {
       // Not JSON (proxy error page): keep "unknown".
     }
-    throw new ApiError(code, response.status);
+    throw new ApiError(code, response.status, retryAfter);
   }
   return response;
 }
@@ -84,7 +91,9 @@ export interface Synced {
 export const api = {
   config: () => json<PublicConfig>("GET", "/config"),
   me: () => json<Me>("GET", "/me"),
-  requestCode: (email: string, language: string) => json<void>("POST", "/auth/request-code", { email, language }),
+  loginChallenge: () => json<LoginChallenge>("GET", "/auth/challenge"),
+  requestCode: (email: string, language: string, proof: LoginProof) =>
+    json<void>("POST", "/auth/request-code", { email, language, proof }),
   verifyCode: (email: string, code: string, language: string) => json<Me>("POST", "/auth/verify", { email, code, language }),
   logout: () => json<void>("POST", "/auth/logout"),
   updateMe: (changes: { display_name?: string; language?: string }) => json<Me>("PATCH", "/me", changes),

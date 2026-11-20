@@ -399,10 +399,41 @@ impl Session {
         self.call("DELETE", path, None).await
     }
 
+    /// A solved anti-bot challenge, the way the sign-in page makes one in the background.
+    pub async fn proof(&self) -> Value {
+        let c = self.get("/auth/challenge").await.ok();
+        let (salt, challenge) = (c["salt"].as_str().unwrap(), c["challenge"].as_str().unwrap());
+        let number = teamtak_core::challenge::solve(salt, challenge, c["max_number"].as_u64().unwrap())
+            .unwrap_or_else(|| panic!("no solution to {c}"));
+        json!({ "salt": salt, "challenge": challenge, "number": number, "signature": c["signature"] })
+    }
+
+    /// Asks once for a login code, with a solved challenge, the way the sign-in page does.
+    pub async fn request_code_once(&self, email: &str, language: Option<&str>) -> Answer {
+        let mut body = json!({ "email": email, "proof": self.proof().await });
+        if let Some(language) = language {
+            body["language"] = json!(language);
+        }
+        self.post("/auth/request-code", body).await
+    }
+
+    /// Asks for a login code; when one was sent to the address moments ago, waits for the
+    /// countdown the way a user does, and asks again.
+    pub async fn request_code(&self, email: &str, language: Option<&str>) -> Answer {
+        loop {
+            let answer = self.request_code_once(email, language).await;
+            if answer.error() != "resend_too_soon" {
+                return answer;
+            }
+            let wait = answer.body["retry_after"].as_u64().unwrap_or_else(|| panic!("no retry_after: {}", answer.body));
+            tokio::time::sleep(Duration::from_secs(wait)).await;
+        }
+    }
+
     /// Signs in the way a user does: asks for a code, reads it in the mail, submits it.
     pub async fn login(email: &str, language: &str) -> Self {
         let mut session = Self::anonymous();
-        session.post("/auth/request-code", json!({ "email": email, "language": language })).await.ok();
+        session.request_code(email, Some(language)).await.ok();
         let code = code_in(&latest_mail(email).await);
         session.post("/auth/verify", json!({ "email": email, "code": code, "language": language })).await.ok();
         session.email = email.to_string();

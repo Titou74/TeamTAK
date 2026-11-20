@@ -35,7 +35,9 @@ container: TAK Server itself has a single input, and the monitoring watches that
 
 - **Accounts.** Sign-in is passwordless: a six-digit code sent by e-mail, valid ten minutes, usable
   once, rate-limited per address and per IP. Anyone can sign in; an account without a team can do
-  nothing and has no TAK access.
+  nothing and has no TAK access. Before a code is sent, the sign-in page passes an invisible
+  anti-bot check, and a new code for the same address waits for a countdown (see
+  [Login protections](#login-protections)).
 - **Teams.** One team is one TAK group (its name is the channel shown in ATAK). An administrator
   approves team requests and sets the member cap; that is the only approval step. A team leader
   invites members by e-mail, up to the cap.
@@ -60,6 +62,31 @@ container: TAK Server itself has a single input, and the monitoring watches that
   the difference: accounts, group memberships, passwords, certificates that should not work,
   sessions left with no group. What a pass corrects without the platform having asked for it is
   reported as drift in the administration area.
+
+## Login protections
+
+Asking for a login code sends an e-mail, so `POST /api/auth/request-code` is what a script would
+hammer. Four layers stand in front of the mail server, checked in this order:
+
+1. **An invisible anti-bot check.** As soon as the sign-in page opens, it fetches a challenge
+   (`GET /api/auth/challenge`) and solves it in a Web Worker while the address is typed: find the
+   number `n ≤ max_number` such that `SHA-256(salt + n)` equals the given hash. That is half a
+   million hashes on average with the default `LOGIN_CHALLENGE_DIFFICULTY` (a fraction of a
+   second on a computer, about a second on a phone), with no picture to click and no third-party
+   service. The challenge is signed with `APP_SECRET`, expires after ten minutes and is accepted
+   once (`login_challenges` table). A request without a valid solution gets `challenge_failed`.
+   The page solves the next challenge in advance, for a "send a new code". SHA-256 is written in
+   [`web/src/lib/proof-of-work.ts`](../web/src/lib/proof-of-work.ts) rather than taken from
+   `crypto.subtle`, which only exists on HTTPS pages.
+2. **A countdown per address.** Another code goes to the same address only
+   `LOGIN_RESEND_COOLDOWN_SECONDS` after the previous one (60 by default). Earlier, the answer is
+   `429 resend_too_soon` with the seconds left (`Retry-After` header, `retry_after` in the body),
+   and the page counts them down on its "send a new code" button.
+3. **Hourly limits** per address and per IP (`LOGIN_MAX_CODES_PER_EMAIL`, `LOGIN_MAX_CODES_PER_IP`).
+4. **Wrong codes** burn the code after five tries, and an IP that submits too many wrong codes is
+   blocked for the hour (`LOGIN_MAX_FAILURES_PER_IP`).
+
+Codes made by the rescue command (`teamtak grant-admin`) go through none of these.
 
 ## QR codes and port 8446
 

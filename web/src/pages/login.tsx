@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MailIcon } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -12,15 +12,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { adoptAccountLanguage, currentLanguage } from "@/i18n";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useErrorText } from "@/lib/hooks";
+import { useLoginProofs } from "@/lib/login-proof";
 
-/** Passwordless sign-in: an e-mail address, then the one-time code sent to it. */
+/** The address as the server compares it. */
+const normalized = (email: string) => email.trim().toLowerCase();
+
+/**
+ * Passwordless sign-in: an e-mail address, then the one-time code sent to it. An invisible
+ * anti-bot challenge is solved in the background while the address is typed, and another
+ * code for the same address can only be asked for once a countdown has run out.
+ */
 export function LoginPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const errorText = useErrorText();
   const config = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
+  const proofs = useLoginProofs();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -28,18 +37,59 @@ export function LoginPage() {
   const [codeSent, setCodeSent] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Until when no new code can be sent to this address.
+  const [cooldown, setCooldown] = useState<{ email: string; until: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const waitSeconds =
+    cooldown && cooldown.email === normalized(email) ? Math.max(0, Math.ceil((cooldown.until - now) / 1000)) : 0;
+
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = window.setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= cooldown.until) setCooldown(null);
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [cooldown]);
+
+  function startCooldown(seconds: number) {
+    const current = Date.now();
+    setNow(current);
+    setCooldown({ email: normalized(email), until: current + seconds * 1000 });
+  }
+
+  function showCodeStep() {
+    setCodeSent(true);
+    setStep("code");
+    setCode("");
+  }
 
   async function sendCode(event?: FormEvent) {
     event?.preventDefault();
-    setPending(true);
     setError(null);
+    // The code sent moments ago to this address is still good: no need for another one.
+    if (step === "email" && waitSeconds > 0) {
+      showCodeStep();
+      return;
+    }
+    setPending(true);
     try {
-      await api.requestCode(email, currentLanguage());
+      const proof = await proofs.take();
+      await api.requestCode(email, currentLanguage(), proof);
+      startCooldown(config.data?.resend_cooldown_seconds ?? 60);
       if (step === "code") toast.success(t("login.codeSent"));
-      setCodeSent(true);
-      setStep("code");
-      setCode("");
+      showCodeStep();
     } catch (e) {
+      if (e instanceof ApiError && e.code === "resend_too_soon") {
+        startCooldown(e.retryAfter ?? config.data?.resend_cooldown_seconds ?? 60);
+        // Asked from another tab, or before the page was reloaded: that code is the one to type.
+        if (step === "email") {
+          toast.info(t("login.codeAlreadySent"));
+          showCodeStep();
+          return;
+        }
+      }
       setError(errorText(e));
     } finally {
       setPending(false);
@@ -146,8 +196,14 @@ export function LoginPage() {
                   {pending ? t("common.working") : t("login.verify")}
                 </Button>
                 <div className="flex justify-between text-sm">
-                  <Button type="button" variant="link" className="px-0" disabled={pending} onClick={() => void sendCode()}>
-                    {t("login.resend")}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="px-0 tabular-nums"
+                    disabled={pending || waitSeconds > 0}
+                    onClick={() => void sendCode()}
+                  >
+                    {waitSeconds > 0 ? t("login.resendIn", { seconds: waitSeconds }) : t("login.resend")}
                   </Button>
                   <Button
                     type="button"

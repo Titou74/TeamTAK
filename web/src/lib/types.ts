@@ -46,6 +46,27 @@ export interface PublicConfig {
   languages: string[];
   default_language: string;
   code_ttl_minutes: number;
+  /** Seconds before another code can be sent to the same address. */
+  resend_cooldown_seconds: number;
+}
+
+/** Anti-bot challenge solved before asking for a login code (lib/login-proof.ts). */
+export interface LoginChallenge {
+  algorithm: string;
+  salt: string;
+  challenge: string;
+  max_number: number;
+  signature: string;
+  /** Seconds it can be used from now. */
+  expires_in: number;
+}
+
+/** A solved challenge, sent with the request for a code. */
+export interface LoginProof {
+  salt: string;
+  challenge: string;
+  number: number;
+  signature: string;
 }
 
 export interface Team {

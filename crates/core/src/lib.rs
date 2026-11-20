@@ -6,6 +6,7 @@
 
 pub mod alerts;
 pub mod certs;
+pub mod challenge;
 pub mod directory;
 pub mod events;
 pub mod login;

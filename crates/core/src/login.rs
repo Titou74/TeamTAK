@@ -23,6 +23,11 @@ pub struct LoginPolicy {
     pub max_codes_per_ip: i64,
     /// Wrong codes one IP address can submit per window, all addresses together.
     pub max_failures_per_ip: i64,
+    /// Seconds to wait after a code was sent to an address before another one can be sent
+    /// to it. The page shows the countdown on its "send a new code" button.
+    pub resend_cooldown_secs: i64,
+    /// Upper bound of the secret number of the anti-bot challenge (`challenge` module).
+    pub challenge_max_number: u64,
 }
 
 impl Default for LoginPolicy {
@@ -34,6 +39,8 @@ impl Default for LoginPolicy {
             max_codes_per_email: 5,
             max_codes_per_ip: 30,
             max_failures_per_ip: 30,
+            resend_cooldown_secs: 60,
+            challenge_max_number: crate::challenge::DEFAULT_MAX_NUMBER,
         }
     }
 }
@@ -45,18 +52,28 @@ pub enum RequestDecision {
     EmailLimited,
     /// Too many codes requested from this IP address in the window.
     IpLimited,
+    /// A code was sent to this address less than `resend_cooldown_secs` ago: another one may
+    /// be sent in `wait_secs` seconds.
+    TooSoon { wait_secs: i64 },
 }
 
 impl LoginPolicy {
     /// Decides whether a new code may be sent, from the number of codes already requested in
-    /// the current window for this address and from this IP address.
-    pub fn check_request(&self, codes_for_email: i64, codes_from_ip: i64) -> RequestDecision {
+    /// the current window for this address and from this IP address, and from the seconds
+    /// since the last code was sent to this address (`None`: none in the window).
+    pub fn check_request(&self, codes_for_email: i64, codes_from_ip: i64, secs_since_last: Option<f64>) -> RequestDecision {
         if codes_from_ip >= self.max_codes_per_ip {
-            RequestDecision::IpLimited
-        } else if codes_for_email >= self.max_codes_per_email {
-            RequestDecision::EmailLimited
-        } else {
-            RequestDecision::Send
+            return RequestDecision::IpLimited;
+        }
+        if codes_for_email >= self.max_codes_per_email {
+            return RequestDecision::EmailLimited;
+        }
+        match secs_since_last {
+            // Rounded up: the page waits a whole second too many rather than one too few.
+            Some(elapsed) if elapsed < self.resend_cooldown_secs as f64 => {
+                RequestDecision::TooSoon { wait_secs: ((self.resend_cooldown_secs as f64 - elapsed).ceil() as i64).max(1) }
+            }
+            _ => RequestDecision::Send,
         }
     }
 
@@ -136,11 +153,26 @@ mod tests {
     #[test]
     fn request_limits() {
         let p = LoginPolicy { max_codes_per_email: 3, max_codes_per_ip: 10, ..Default::default() };
-        assert_eq!(p.check_request(0, 0), RequestDecision::Send);
-        assert_eq!(p.check_request(2, 9), RequestDecision::Send);
-        assert_eq!(p.check_request(3, 0), RequestDecision::EmailLimited);
-        assert_eq!(p.check_request(0, 10), RequestDecision::IpLimited);
-        assert_eq!(p.check_request(3, 10), RequestDecision::IpLimited);
+        assert_eq!(p.check_request(0, 0, None), RequestDecision::Send);
+        assert_eq!(p.check_request(2, 9, Some(600.0)), RequestDecision::Send);
+        assert_eq!(p.check_request(3, 0, Some(600.0)), RequestDecision::EmailLimited);
+        assert_eq!(p.check_request(0, 10, None), RequestDecision::IpLimited);
+        assert_eq!(p.check_request(3, 10, None), RequestDecision::IpLimited);
+    }
+
+    #[test]
+    fn resend_cooldown() {
+        let p = LoginPolicy { resend_cooldown_secs: 60, ..Default::default() };
+        assert_eq!(p.check_request(1, 1, Some(0.2)), RequestDecision::TooSoon { wait_secs: 60 });
+        assert_eq!(p.check_request(1, 1, Some(18.0)), RequestDecision::TooSoon { wait_secs: 42 });
+        assert_eq!(p.check_request(1, 1, Some(59.9)), RequestDecision::TooSoon { wait_secs: 1 });
+        assert_eq!(p.check_request(1, 1, Some(60.0)), RequestDecision::Send);
+        // The hourly limit is the longer wait: it is the one reported.
+        let p = LoginPolicy { max_codes_per_email: 1, ..p };
+        assert_eq!(p.check_request(1, 1, Some(5.0)), RequestDecision::EmailLimited);
+        // No cooldown at all.
+        let p = LoginPolicy { resend_cooldown_secs: 0, ..Default::default() };
+        assert_eq!(p.check_request(1, 1, Some(0.0)), RequestDecision::Send);
     }
 
     #[test]

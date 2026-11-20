@@ -123,6 +123,7 @@ fn api_router(state: SharedState) -> Router {
     Router::new()
         .route("/health", get(|| async { Json(json!({ "status": "ok" })) }))
         .route("/config", get(auth::public_config))
+        .route("/auth/challenge", get(auth::challenge))
         .route("/auth/request-code", post(auth::request_code))
         .route("/auth/verify", post(auth::verify))
         .route("/auth/logout", post(auth::logout))

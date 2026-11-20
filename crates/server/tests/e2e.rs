@@ -36,7 +36,7 @@ async fn login_by_one_time_code() {
     browser.get("/me").await.expect_error(401, "unauthenticated");
 
     // The code arrives by e-mail, in the language of the page it was asked from.
-    browser.post("/auth/request-code", json!({ "email": address, "language": "fr" })).await.ok();
+    browser.request_code(&address, Some("fr")).await.ok();
     let mail = latest_mail(&address).await;
     assert!(mail.subject.starts_with("Votre code de connexion"), "{}", mail.subject);
     assert!(mail.text.contains("valable 10 minutes"), "{}", mail.text);
@@ -71,7 +71,7 @@ async fn emails_follow_the_language_saved_on_the_account() {
     account.patch("/me", json!({ "language": "xx" })).await.expect_error(400, "invalid_input");
 
     // The next code is written in French, whatever the page it is asked from.
-    Session::anonymous().post("/auth/request-code", json!({ "email": account.email, "language": "en" })).await.ok();
+    Session::anonymous().request_code(&account.email, Some("en")).await.ok();
     assert!(latest_mail(&account.email).await.subject.starts_with("Votre code de connexion"));
 }
 
@@ -82,14 +82,14 @@ async fn login_codes_are_rate_limited_per_address() {
     let browser = Session::anonymous();
     let allowed: u64 = setting("LOGIN_MAX_CODES_PER_EMAIL").parse().unwrap();
     for _ in 0..allowed {
-        browser.post("/auth/request-code", json!({ "email": address })).await.ok();
+        browser.request_code(&address, None).await.ok();
     }
-    browser.post("/auth/request-code", json!({ "email": address })).await.expect_error(429, "rate_limited");
+    browser.request_code(&address, None).await.expect_error(429, "rate_limited");
     assert_eq!(mail_count(&address).await, allowed, "no e-mail leaves once the limit is reached");
 
     // A code stops working after too many wrong guesses, even when the right one follows.
     let victim = email("guess");
-    browser.post("/auth/request-code", json!({ "email": victim })).await.ok();
+    browser.request_code(&victim, None).await.ok();
     let code = code_in(&latest_mail(&victim).await);
     for guess in 0..5 {
         let wrong = format!("{:06}", (code.parse::<u32>().unwrap() + 1 + guess) % 1_000_000);
@@ -97,7 +97,65 @@ async fn login_codes_are_rate_limited_per_address() {
     }
     browser.post("/auth/verify", json!({ "email": victim, "code": code })).await.expect_error(400, "invalid_code");
 
-    browser.post("/auth/request-code", json!({ "email": "not-an-address" })).await.expect_error(400, "invalid_email");
+    browser.request_code("not-an-address", None).await.expect_error(400, "invalid_email");
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn a_new_code_waits_for_the_countdown() {
+    let address = email("again");
+    let browser = Session::anonymous();
+    let cooldown: u64 = setting("LOGIN_RESEND_COOLDOWN_SECONDS").parse().unwrap();
+    assert!(cooldown > 0, "LOGIN_RESEND_COOLDOWN_SECONDS=0 turns the countdown off: nothing to test");
+    // The page is told how long the countdown lasts, to show it.
+    assert_eq!(browser.get("/config").await.ok()["resend_cooldown_seconds"], cooldown);
+
+    browser.request_code_once(&address, None).await.ok();
+    // Straight away: refused, with the time left, and no second e-mail.
+    let refused = browser.request_code_once(&address, None).await;
+    refused.expect_error(429, "resend_too_soon");
+    let wait = refused.body["retry_after"].as_u64().unwrap();
+    assert!((1..=cooldown).contains(&wait), "retry_after {wait}, cooldown {cooldown}");
+    assert_eq!(mail_count(&address).await, 1);
+    // Another address is not held back.
+    browser.request_code_once(&email("other"), None).await.ok();
+
+    // Once the countdown has run out, a new code goes.
+    tokio::time::sleep(Duration::from_secs(wait)).await;
+    browser.request_code_once(&address, None).await.ok();
+    assert_eq!(mail_count(&address).await, 2);
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn asking_for_a_code_needs_a_solved_challenge() {
+    use sha2::{Digest, Sha256};
+
+    let address = email("bot");
+    let browser = Session::anonymous();
+    // A script that only posts addresses gets nothing.
+    browser.post("/auth/request-code", json!({ "email": address })).await.expect_error(400, "challenge_failed");
+
+    // Nor with a number it did not search for.
+    let mut wrong = browser.proof().await;
+    wrong["number"] = json!(wrong["number"].as_u64().unwrap() + 1);
+    browser.post("/auth/request-code", json!({ "email": address, "proof": wrong })).await.expect_error(400, "challenge_failed");
+
+    // Nor with an easy challenge of its own under the server's signature.
+    let mut forged = browser.proof().await;
+    let salt = forged["salt"].as_str().unwrap().to_string();
+    forged["challenge"] = json!(hex::encode(Sha256::digest(format!("{salt}0"))));
+    forged["number"] = json!(0);
+    browser.post("/auth/request-code", json!({ "email": address, "proof": forged })).await.expect_error(400, "challenge_failed");
+    assert_eq!(mail_count(&address).await, 0);
+
+    // A solved challenge is good for one code.
+    let proof = browser.proof().await;
+    browser.post("/auth/request-code", json!({ "email": address, "proof": proof })).await.ok();
+    let other = email("bot");
+    browser.post("/auth/request-code", json!({ "email": other, "proof": proof })).await.expect_error(400, "challenge_failed");
+    assert_eq!(mail_count(&address).await, 1);
+    assert_eq!(mail_count(&other).await, 0);
 }
 
 #[tokio::test]

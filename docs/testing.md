@@ -6,7 +6,7 @@
 scripts/test-unit.sh
 ```
 
-Runs the Rust unit tests (domain rules, authorisation, login-code limits, the rules of events and
+Runs the Rust unit tests (domain rules, authorisation, login-code limits and the anti-bot challenge, the rules of events and
 which groups an account gets at a given time, reconciliation against in-memory backends, zip and
 PKCS#12 generation, e-mail texts, the alert rules, the reading of what a host reports with output
 captured from real Debian and Ubuntu systems, what the host agent refuses, and the check that

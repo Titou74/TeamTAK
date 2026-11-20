@@ -11,6 +11,7 @@ use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use teamtak_core::challenge;
 use teamtak_core::login::{self, RequestDecision};
 use teamtak_core::names::normalize_email;
 use teamtak_core::policy::{can, Action, Actor};
@@ -18,7 +19,7 @@ use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::audit::{self, AuditAction, Details, Target};
-use crate::error::{ApiError, ApiResult};
+use crate::error::{ApiError, ApiResult, Refusal};
 use crate::locale::{self, Template};
 use crate::state::SharedState;
 
@@ -119,6 +120,56 @@ impl FromRequestParts<SharedState> for AdminAccount {
     }
 }
 
+/// `GET /api/auth/challenge`: a new anti-bot challenge, which the page solves in the
+/// background while the address is typed and sends back with `request-code`. Nothing is
+/// stored until it comes back.
+pub async fn challenge(State(state): State<SharedState>) -> Json<Value> {
+    let c = challenge::issue(state.secrets.mac_key(), OffsetDateTime::now_utc().unix_timestamp(), state.config.login.challenge_max_number);
+    Json(json!({
+        "algorithm": challenge::ALGORITHM,
+        "salt": c.salt,
+        "challenge": c.challenge,
+        "max_number": c.max_number,
+        "signature": c.signature,
+        // Relative, so that a wrong clock on the phone does not matter.
+        "expires_in": challenge::TTL_SECS,
+    }))
+}
+
+/// A solved challenge, sent back with the request for a code.
+#[derive(Deserialize)]
+pub struct Proof {
+    salt: String,
+    challenge: String,
+    number: u64,
+    signature: String,
+}
+
+/// Accepts a solved challenge once: it is recorded until it expires.
+async fn redeem(state: &SharedState, proof: Option<&Proof>) -> ApiResult<()> {
+    let Some(proof) = proof else {
+        return Err(ApiError::ChallengeFailed);
+    };
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    let expires = challenge::verify(state.secrets.mac_key(), &proof.salt, &proof.challenge, proof.number, &proof.signature, now)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "login code refused: anti-bot challenge");
+            ApiError::ChallengeFailed
+        })?;
+    let first_use = sqlx::query(
+        "INSERT INTO login_challenges (salt, expires_at) VALUES ($1, to_timestamp($2)) ON CONFLICT (salt) DO NOTHING",
+    )
+    .bind(&proof.salt)
+    .bind(expires as f64)
+    .execute(&state.db)
+    .await?;
+    if first_use.rows_affected() != 1 {
+        tracing::warn!("login code refused: anti-bot challenge used twice");
+        return Err(ApiError::ChallengeFailed);
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 pub struct RequestCodeBody {
     email: String,
@@ -126,6 +177,9 @@ pub struct RequestCodeBody {
     /// has no account yet.
     #[serde(default)]
     language: Option<String>,
+    /// The solved anti-bot challenge; refused when missing.
+    #[serde(default)]
+    proof: Option<Proof>,
 }
 
 /// `POST /api/auth/request-code`: e-mails a one-time code. The answer does not tell whether
@@ -135,15 +189,17 @@ pub async fn request_code(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Json(body): Json<RequestCodeBody>,
-) -> ApiResult<StatusCode> {
+) -> Result<StatusCode, Refusal> {
     let email = normalize_email(&body.email).ok_or(ApiError::InvalidEmail)?;
     let ip = client_ip(&headers, peer);
     let policy = state.config.login;
+    redeem(&state, body.proof.as_ref()).await?;
 
-    let (for_email, from_ip): (i64, i64) = sqlx::query_as(
+    let (for_email, from_ip, since_last): (i64, i64, Option<f64>) = sqlx::query_as(
         // Codes made by the server-side rescue command are not requests from the network
         // and do not count: an administrator locked out by the limit could not be rescued.
-        "SELECT count(*) FILTER (WHERE email = $1 AND ip <> 'rescue-command'), count(*) FILTER (WHERE ip = $2)
+        "SELECT count(*) FILTER (WHERE email = $1 AND ip <> 'rescue-command'), count(*) FILTER (WHERE ip = $2),
+                EXTRACT(EPOCH FROM now() - max(created_at) FILTER (WHERE email = $1 AND ip <> 'rescue-command'))::float8
            FROM login_codes WHERE created_at > now() - make_interval(secs => $3)",
     )
     .bind(&email)
@@ -151,9 +207,16 @@ pub async fn request_code(
     .bind(policy.window_secs as f64)
     .fetch_one(&state.db)
     .await?;
-    if policy.check_request(for_email, from_ip) != RequestDecision::Send {
-        tracing::warn!(email, ip, for_email, from_ip, "login code refused: rate limit");
-        return Err(ApiError::RateLimited);
+    match policy.check_request(for_email, from_ip, since_last) {
+        RequestDecision::Send => {}
+        RequestDecision::TooSoon { wait_secs } => {
+            tracing::info!(email, ip, wait_secs, "login code refused: one was sent moments ago");
+            return Err(Refusal::retry_after(ApiError::ResendTooSoon, wait_secs));
+        }
+        RequestDecision::EmailLimited | RequestDecision::IpLimited => {
+            tracing::warn!(email, ip, for_email, from_ip, "login code refused: rate limit");
+            return Err(ApiError::RateLimited.into());
+        }
     }
 
     let code = login::generate_code();
@@ -176,7 +239,7 @@ pub async fn request_code(
     let minutes = (policy.code_ttl_secs / 60).to_string();
     state.mailer.send(&email, &language, Template::LoginCode, &[("code", &code), ("minutes", &minutes)]).await.map_err(|e| {
         tracing::error!(email, error = %format!("{e:#}"), "login code not sent");
-        ApiError::MailUnavailable
+        Refusal::from(ApiError::MailUnavailable)
     })?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -293,6 +356,7 @@ async fn housekeeping(state: &SharedState) {
     for sql in [
         "DELETE FROM login_codes WHERE created_at < now() - interval '2 days'",
         "DELETE FROM login_failures WHERE created_at < now() - interval '2 days'",
+        "DELETE FROM login_challenges WHERE expires_at < now()",
         "DELETE FROM sessions WHERE expires_at < now()",
     ] {
         if let Err(e) = sqlx::query(sql).execute(&state.db).await {
@@ -407,6 +471,7 @@ pub async fn public_config(State(state): State<SharedState>) -> Json<Value> {
         "languages": locale::languages(),
         "default_language": locale::DEFAULT_LANGUAGE,
         "code_ttl_minutes": state.config.login.code_ttl_secs / 60,
+        "resend_cooldown_seconds": state.config.login.resend_cooldown_secs,
     }))
 }
 

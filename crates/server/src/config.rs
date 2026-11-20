@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
+use teamtak_core::challenge;
 use teamtak_core::directory::ldap::LdapConfig;
 use teamtak_core::login::LoginPolicy;
 use teamtak_core::package::P12Format;
@@ -265,6 +266,10 @@ impl Config {
                 max_codes_per_email: parsed("LOGIN_MAX_CODES_PER_EMAIL", &defaults.max_codes_per_email.to_string())?,
                 max_codes_per_ip: parsed("LOGIN_MAX_CODES_PER_IP", &defaults.max_codes_per_ip.to_string())?,
                 max_failures_per_ip: parsed("LOGIN_MAX_FAILURES_PER_IP", &defaults.max_failures_per_ip.to_string())?,
+                resend_cooldown_secs: parsed::<i64>("LOGIN_RESEND_COOLDOWN_SECONDS", &defaults.resend_cooldown_secs.to_string())?
+                    .clamp(0, 3600),
+                challenge_max_number: parsed::<u64>("LOGIN_CHALLENGE_DIFFICULTY", &defaults.challenge_max_number.to_string())?
+                    .clamp(*challenge::MAX_NUMBER_RANGE.start(), *challenge::MAX_NUMBER_RANGE.end()),
             },
             reconcile_interval: Duration::from_secs(parsed("RECONCILE_INTERVAL_SECONDS", "60")?),
             session_ttl_days: parsed("SESSION_TTL_DAYS", "30")?,

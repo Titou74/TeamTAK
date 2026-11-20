@@ -42,6 +42,11 @@ api_errors! {
     InvalidTeamName => ("invalid_team_name", BAD_REQUEST),
     /// Too many login codes or attempts; try again later.
     RateLimited => ("rate_limited", TOO_MANY_REQUESTS),
+    /// A login code was sent to this address moments ago; the answer says when another one
+    /// can be (`retry_after`).
+    ResendTooSoon => ("resend_too_soon", TOO_MANY_REQUESTS),
+    /// The anti-bot challenge is missing, wrong, expired or already used.
+    ChallengeFailed => ("challenge_failed", BAD_REQUEST),
     /// Wrong, expired or already used login code.
     InvalidCode => ("invalid_code", BAD_REQUEST),
     /// The e-mail could not be handed to the mail server.
@@ -101,6 +106,46 @@ api_errors! {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (self.status(), Json(json!({ "error": self.code() }))).into_response()
+    }
+}
+
+/// An `ApiError` that may tell when the same request will be accepted: in seconds, in the
+/// `Retry-After` header and as `retry_after` in the body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Refusal {
+    pub error: ApiError,
+    pub retry_after: Option<i64>,
+}
+
+impl Refusal {
+    pub fn retry_after(error: ApiError, secs: i64) -> Self {
+        Self { error, retry_after: Some(secs) }
+    }
+}
+
+impl From<ApiError> for Refusal {
+    fn from(error: ApiError) -> Self {
+        Self { error, retry_after: None }
+    }
+}
+
+impl From<sqlx::Error> for Refusal {
+    fn from(e: sqlx::Error) -> Self {
+        ApiError::from(e).into()
+    }
+}
+
+impl IntoResponse for Refusal {
+    fn into_response(self) -> Response {
+        match self.retry_after {
+            None => self.error.into_response(),
+            Some(secs) => (
+                self.error.status(),
+                [(axum::http::header::RETRY_AFTER, secs.to_string())],
+                Json(json!({ "error": self.error.code(), "retry_after": secs })),
+            )
+                .into_response(),
+        }
     }
 }
 

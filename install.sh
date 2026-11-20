@@ -494,6 +494,7 @@ if [ ! -f "$ENV_FILE" ]; then
     MAIL_FROM="${MAIL_FROM:-TeamTAK <no-reply@$DOMAIN>}"
     LOGIN_MAX_CODES_PER_IP=30
     LOGIN_MAX_FAILURES_PER_IP=30
+    LOGIN_RESEND_COOLDOWN_SECONDS=60
     MONITOR_INTERVAL_SECONDS=60
   else
     PUBLIC_HOST="${CLIENT_HOST:-localhost}"
@@ -508,9 +509,10 @@ if [ ! -f "$ENV_FILE" ]; then
     MAIL_FROM="${MAIL_FROM:-TeamTAK <teamtak@localhost>}"
     # The integration tests sign in many accounts, and submit wrong codes, from one address;
     # replaying them must not lock that address out. The per-address limit stays as in
-    # production, and is tested.
+    # production, and is tested; the wait between two codes to one address is shortened.
     LOGIN_MAX_CODES_PER_IP=1000
     LOGIN_MAX_FAILURES_PER_IP=1000
+    LOGIN_RESEND_COOLDOWN_SECONDS=5
     # The integration tests wait for alerts to be raised and resolved.
     MONITOR_INTERVAL_SECONDS=10
   fi
@@ -616,6 +618,8 @@ DEFAULT_MEMBER_CAP=10
 LOGIN_MAX_CODES_PER_EMAIL=5
 LOGIN_MAX_CODES_PER_IP=$LOGIN_MAX_CODES_PER_IP
 LOGIN_MAX_FAILURES_PER_IP=$LOGIN_MAX_FAILURES_PER_IP
+# Seconds before another login code can be sent to the same address
+LOGIN_RESEND_COOLDOWN_SECONDS=$LOGIN_RESEND_COOLDOWN_SECONDS
 RECONCILE_INTERVAL_SECONDS=60
 # How often the platform looks at the machine, the services and TAK Server, and evaluates
 # the alerts. Seconds.
@@ -662,6 +666,10 @@ if [ -z "$(env_get AGENT_TOKEN)" ]; then
 fi
 if [ -z "$(env_get MONITOR_INTERVAL_SECONDS)" ]; then
   if [ "$(env_get MODE)" = local ]; then env_set MONITOR_INTERVAL_SECONDS 10; else env_set MONITOR_INTERVAL_SECONDS 60; fi
+fi
+# Wait between two login codes to one address (an installation made before it existed, 1.0.4 and older).
+if [ -z "$(env_get LOGIN_RESEND_COOLDOWN_SECONDS)" ]; then
+  if [ "$(env_get MODE)" = local ]; then env_set LOGIN_RESEND_COOLDOWN_SECONDS 5; else env_set LOGIN_RESEND_COOLDOWN_SECONDS 60; fi
 fi
 # Ports of TAK clients: 8089 until now, published through a generated Compose file.
 if [ -z "$(env_get TAK_CLIENT_PORTS)" ]; then
