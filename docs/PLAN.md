@@ -345,8 +345,11 @@ Server upgrade.
 Host agent, administrator dashboard, alerts, updates, backup and restore, audit log.
 
 ### Phase 4 — extensions (not started, to be confirmed)
-CloudTAK wired to the same accounts, MediaMTX video, a Data Sync mission per event, per-team
-distribution of maps and plugins, federation.
+CloudTAK wired to the same accounts, MediaMTX video, per-team distribution of maps and plugins,
+federation.
+
+Dropped: a Data Sync mission created automatically for each event. Users create their own missions
+(decided by the user).
 
 ## 6. Working rules
 
