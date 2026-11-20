@@ -151,6 +151,16 @@ export const api = {
   adminTeams: () => json<AdminTeams>("GET", "/admin/teams"),
   adminEvents: () => json<{ events: TeamEvent[] }>("GET", "/admin/events"),
   adminCancelEvent: (eventId: string) => json<Synced>("POST", `/admin/events/${eventId}/cancel`),
+  // Events the administrators organise: no host team, the teams are put in directly.
+  adminCreateEvent: (body: { name: string; starts_at?: string; ends_at: string; team_ids: string[] }) =>
+    json<Synced & { id: string; group_name: string }>("POST", "/admin/events", body),
+  adminUpdateEvent: (eventId: string, dates: { starts_at?: string; ends_at?: string }) =>
+    json<Synced>("PATCH", `/admin/events/${eventId}`, dates),
+  adminEndEvent: (eventId: string) => json<Synced>("POST", `/admin/events/${eventId}/end`),
+  adminAssignTeam: (eventId: string, teamId: string) =>
+    json<Synced & { team_id: string; name: string }>("POST", `/admin/events/${eventId}/teams`, { team_id: teamId }),
+  adminRemoveTeamFromEvent: (eventId: string, teamId: string) =>
+    json<Synced>("DELETE", `/admin/events/${eventId}/teams/${teamId}`),
   decideTeam: (id: string, approve: boolean, options: { member_cap?: number; note?: string }) =>
     json<Team>("POST", `/admin/teams/${id}/decision`, { approve, ...options }),
   adminUpdateTeam: (id: string, changes: { member_cap?: number; suspended?: boolean }) =>

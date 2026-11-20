@@ -97,6 +97,8 @@ audit_actions! {
 
     EventCreated => "event_created",
     EventTeamInvited => "event_team_invited",
+    /// An administrator put a team in an event they organise: it takes part at once.
+    EventTeamAssigned => "event_team_assigned",
     EventTeamRemoved => "event_team_removed",
     EventInvitationAccepted => "event_invitation_accepted",
     EventInvitationDeclined => "event_invitation_declined",

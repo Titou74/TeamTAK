@@ -28,7 +28,7 @@ mail catcher, read what was written to OpenLDAP, and connect scripted TAK client
 They prove, among other things, that two members of a team see each other, that another team does
 not see them, that regenerating a shared identity cuts every old certificate, and that two teams
 see each other from the scheduled start of an event to its scheduled end and not a moment outside
-it, without reconnecting. For the monitoring they prove that the host agent reports this stack and
+it, without reconnecting, and that teams an administrator puts in an event see each other at once. For the monitoring they prove that the host agent reports this stack and
 refuses every other container, that a stopped service raises one alert e-mail in each
 administrator's language and one more when it is back, who sees which connected devices, what the
 audit log records, that a backup asked from the API is written and readable, and that the test

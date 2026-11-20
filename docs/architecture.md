@@ -57,6 +57,12 @@ container: TAK Server itself has a single input, and the monitoring watches that
   other. The group appears at the start and disappears at the end by itself, on devices that stay
   connected; nothing is added to any zip. A team that leaves, is removed or is suspended loses it
   at once. Dates are entered and shown in the browser's time zone and stored in UTC.
+  An administrator can also organise an event from the administration area (`organizer = admin`
+  in the `events` table): it has no host team, and the administrator puts active teams in it
+  directly, with no invitation to answer, takes them out, changes the dates, ends it or cancels
+  it. The leaders of a team put in are told by e-mail and can still make their team leave; the
+  administrators are then told. An event hosted by a team stays the team's to run: an
+  administrator can only cancel it.
 - **Reconciliation.** PostgreSQL is the source of truth. After every change, every minute, and at
   the instant an event starts or ends, a pass compares it with OpenLDAP and TAK Server and corrects
   the difference: accounts, group memberships, passwords, certificates that should not work,

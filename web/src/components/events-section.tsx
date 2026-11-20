@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClockIcon, CalendarPlusIcon, ChevronDownIcon, ChevronRightIcon, LogOutIcon, MailIcon, SquareIcon, XIcon } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { CalendarClockIcon, CalendarPlusIcon, ChevronDownIcon, ChevronRightIcon, LogOutIcon, MailIcon, SquareIcon, UserPlusIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -19,10 +19,49 @@ import { currentLanguage } from "@/i18n";
 import { useErrorText, useNotifyError } from "@/lib/hooks";
 import type { EventTeam, InvitableTeam, Team, TeamEvent } from "@/lib/types";
 
-type Reload = () => Promise<unknown>;
+export type Reload = () => Promise<unknown>;
+
+/**
+ * The calls that act on one event: through the routes of the team the user acts for, or
+ * through those of the administration area. Each is only called when the event's
+ * permissions allow it.
+ */
+export interface EventActions {
+  /** A host invites a team; an administrator puts it in an event they organise. */
+  addTeam: (teamId: string) => Promise<{ name: string }>;
+  removeTeam: (teamId: string) => Promise<Synced>;
+  updateDates: (dates: { starts_at?: string; ends_at?: string }) => Promise<Synced>;
+  end: () => Promise<Synced>;
+  cancel: () => Promise<Synced>;
+  leave: () => Promise<Synced>;
+}
+
+function teamEventActions(teamId: string, eventId: string): EventActions {
+  return {
+    addTeam: (otherTeamId) => api.inviteTeamToEvent(teamId, eventId, otherTeamId),
+    removeTeam: (otherTeamId) => api.removeTeamFromEvent(teamId, eventId, otherTeamId),
+    updateDates: (dates) => api.updateEvent(teamId, eventId, dates),
+    end: () => api.endEvent(teamId, eventId),
+    cancel: () => api.cancelEvent(teamId, eventId),
+    leave: () => api.leaveEvent(teamId, eventId),
+  };
+}
+
+/** The administration area: it cancels any event and runs the ones the administrators organise. */
+export function adminEventActions(eventId: string): EventActions {
+  return {
+    addTeam: (teamId) => api.adminAssignTeam(eventId, teamId),
+    removeTeam: (teamId) => api.adminRemoveTeamFromEvent(eventId, teamId),
+    updateDates: (dates) => api.adminUpdateEvent(eventId, dates),
+    end: () => api.adminEndEvent(eventId),
+    cancel: () => api.adminCancelEvent(eventId),
+    // An administrator organises; leaving is for the teams.
+    leave: () => Promise.reject(new Error("an administrator does not leave an event")),
+  };
+}
 
 /** The date that says where an event stands: its start, its end, or when it was called off. */
-function turningPoint(event: TeamEvent): string {
+export function turningPoint(event: TeamEvent): string {
   if (event.phase === "scheduled") return event.starts_at;
   if (event.phase === "cancelled") return event.cancelled_at ?? event.ends_at;
   return event.ends_at;
@@ -76,13 +115,70 @@ function nextHour(offsetHours: number): string {
   return toLocalInput(date);
 }
 
-function CreateEventDialog({ team, open, onOpenChange, reload }: { team: Team; open: boolean; onOpenChange: (open: boolean) => void; reload: Reload }) {
+/** A team to pick in a list: its identifier and its name, nothing else. */
+type TeamChoice = InvitableTeam;
+
+/** Ticks the teams an administrator puts in a new event. */
+function TeamPicker({ teams, chosen, onChange }: { teams: TeamChoice[]; chosen: Set<string>; onChange: (chosen: Set<string>) => void }) {
+  const { t } = useTranslation();
+  const sorted = [...teams].sort((a, b) => a.name.localeCompare(b.name, currentLanguage()));
+  function toggle(id: string, on: boolean) {
+    const next = new Set(chosen);
+    if (on) next.add(id);
+    else next.delete(id);
+    onChange(next);
+  }
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-sm font-medium">{t("events.assign.teams")}</legend>
+      {sorted.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("events.assign.noTeam")}</p>
+      ) : (
+        <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2">
+          {sorted.map((team) => (
+            <li key={team.id}>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="size-4 accent-primary" checked={chosen.has(team.id)} onChange={(e) => toggle(team.id, e.target.checked)} />
+                {team.name}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">{t("events.assign.help")}</p>
+    </fieldset>
+  );
+}
+
+/**
+ * The form of a new event. A team creates one it hosts; an administrator creates one they
+ * organise, and picks the teams that take part (`teams`) at once.
+ */
+export function CreateEventDialog({
+  open,
+  onOpenChange,
+  description,
+  teams,
+  create,
+  createdText,
+  reload,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  description: ReactNode;
+  /** The teams an administrator can put in the event; absent for a team's own event. */
+  teams?: TeamChoice[];
+  create: (body: { name: string; starts_at?: string; ends_at: string; team_ids: string[] }) => Promise<Synced>;
+  createdText: string;
+  reload: Reload;
+}) {
   const { t } = useTranslation();
   const notifyError = useNotifyError();
   const [name, setName] = useState("");
   const [startNow, setStartNow] = useState(false);
   const [start, setStart] = useState(() => nextHour(0));
   const [end, setEnd] = useState(() => nextHour(4));
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState(false);
 
   const startsAt = startNow ? null : fromLocalInput(start);
@@ -96,12 +192,15 @@ function CreateEventDialog({ team, open, onOpenChange, reload }: { team: Team; o
     if (!endsAt) return;
     setPending(true);
     try {
-      const created = await api.createEvent(team.id, { name, ends_at: endsAt, ...(startsAt ? { starts_at: startsAt } : {}) });
+      // A team that stopped being active since the list was read would be refused.
+      const teamIds = teams ? [...chosen].filter((id) => teams.some((team) => team.id === id)) : [];
+      const created = await create({ name, ends_at: endsAt, team_ids: teamIds, ...(startsAt ? { starts_at: startsAt } : {}) });
       await reload();
-      if (created.synced) toast.success(t("events.create.created"));
+      if (created.synced) toast.success(createdText);
       else toast.warning(t("events.pendingSync"));
       onOpenChange(false);
       setName("");
+      setChosen(new Set());
     } catch (e) {
       notifyError(e);
     } finally {
@@ -115,7 +214,7 @@ function CreateEventDialog({ team, open, onOpenChange, reload }: { team: Team; o
         <form onSubmit={(e) => void submit(e)} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{t("events.create.title")}</DialogTitle>
-            <DialogDescription>{t("events.create.description", { team: team.name })}</DialogDescription>
+            <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="event-name">{t("events.create.name")}</Label>
@@ -128,6 +227,7 @@ function CreateEventDialog({ team, open, onOpenChange, reload }: { team: Team; o
           </label>
           <DateFields idPrefix="event-new" start={startNow ? "" : start} end={end} onStart={setStart} onEnd={setEnd} startDisabled={startNow} />
           {!ordered && endsAt !== null && <p className="text-sm text-destructive">{t("events.form.endBeforeStart")}</p>}
+          {teams && <TeamPicker teams={teams} chosen={chosen} onChange={setChosen} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
@@ -142,7 +242,7 @@ function CreateEventDialog({ team, open, onOpenChange, reload }: { team: Team; o
   );
 }
 
-function ChangeDatesDialog({ teamId, event, onClose, reload }: { teamId: string; event: TeamEvent; onClose: () => void; reload: Reload }) {
+function ChangeDatesDialog({ event, actions, onClose, reload }: { event: TeamEvent; actions: EventActions; onClose: () => void; reload: Reload }) {
   const { t } = useTranslation();
   const notifyError = useNotifyError();
   const running = event.phase === "running";
@@ -160,7 +260,7 @@ function ChangeDatesDialog({ teamId, event, onClose, reload }: { teamId: string;
     setPending(true);
     try {
       // Once the event runs its start is history: only the end is sent.
-      const result = await api.updateEvent(teamId, event.id, running ? { ends_at: endsAt } : { starts_at: startsAt, ends_at: endsAt });
+      const result = await actions.updateDates(running ? { ends_at: endsAt } : { starts_at: startsAt, ends_at: endsAt });
       await reload();
       if (result.synced) toast.success(t("events.dates.done"));
       else toast.warning(t("events.pendingSync"));
@@ -197,7 +297,7 @@ function ChangeDatesDialog({ teamId, event, onClose, reload }: { teamId: string;
 }
 
 /** The teams of an event. Those who run it also see who has not answered, and can take a team out. */
-export function EventTeams({ teams, onRemove }: { teams: EventTeam[]; onRemove?: (team: EventTeam) => void }) {
+function EventTeams({ teams, onRemove }: { teams: EventTeam[]; onRemove?: (team: EventTeam) => void }) {
   const { t } = useTranslation();
   return (
     <ul className="flex flex-wrap gap-1.5">
@@ -229,16 +329,28 @@ export function EventTeams({ teams, onRemove }: { teams: EventTeam[]; onRemove?:
 
 type Confirmation = { kind: "end" | "cancel" | "leave" } | { kind: "remove"; team: EventTeam };
 
-function EventItem({
-  team,
+/** Who runs an event, as its line says it. */
+function organizerText(t: ReturnType<typeof useTranslation>["t"], event: TeamEvent, isMember: boolean): string {
+  if (event.organizer === "admin") return t("events.organizedByAdmin");
+  if (event.relation === "host" && isMember) return t("events.hostedByUs");
+  return t("events.hostedBy", { team: event.host_team_name ?? "" });
+}
+
+/**
+ * One event, with what the viewer may do to it. `addable` lists the teams that can be added
+ * (invited by a host, put in directly by an administrator); `isMember` is false for an
+ * administrator, who is not in the team the event is looked at from.
+ */
+export function EventItem({
   event,
-  invitable,
+  actions,
+  addable,
   isMember,
   reload,
 }: {
-  team: Team;
   event: TeamEvent;
-  invitable: InvitableTeam[];
+  actions: EventActions;
+  addable: TeamChoice[];
   isMember: boolean;
   reload: Reload;
 }) {
@@ -247,13 +359,15 @@ function EventItem({
   const [confirming, setConfirming] = useState<Confirmation | null>(null);
   const [editing, setEditing] = useState(false);
   const [chosen, setChosen] = useState("");
-  const [inviting, setInviting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const { permissions } = event;
+  // In an event the administrators organise, a team is put in at once, not invited.
+  const assigns = event.organizer === "admin";
 
-  // A team already invited or taking part cannot be invited again; one that declined, left
+  // A team already invited or taking part cannot be added again; one that declined, left
   // or was removed can.
   const busy = new Set(event.teams.filter((x) => x.status === "invited" || x.status === "accepted").map((x) => x.team_id));
-  const candidates = invitable.filter((x) => !busy.has(x.id)).sort((a, b) => a.name.localeCompare(b.name, currentLanguage()));
+  const candidates = addable.filter((x) => !busy.has(x.id)).sort((a, b) => a.name.localeCompare(b.name, currentLanguage()));
 
   async function run(action: () => Promise<Synced>, done: string) {
     try {
@@ -267,29 +381,33 @@ function EventItem({
     }
   }
 
-  async function invite(submitted: FormEvent) {
+  async function add(submitted: FormEvent) {
     submitted.preventDefault();
     if (!chosen) return;
-    setInviting(true);
+    setAdding(true);
     try {
-      const invited = await api.inviteTeamToEvent(team.id, event.id, chosen);
+      const added = await actions.addTeam(chosen);
       await reload();
       setChosen("");
-      toast.success(t("events.invite.done", { team: invited.name }));
+      toast.success(assigns ? t("events.assign.done", { team: added.name }) : t("events.invite.done", { team: added.name }));
     } catch (e) {
       notifyError(e);
     } finally {
-      setInviting(false);
+      setAdding(false);
     }
   }
 
   const confirmations = {
     end: { title: t("events.end.title", { event: event.name }), text: t("events.end.text"), label: t("events.end.confirm") },
     cancel: { title: t("events.cancel.title", { event: event.name }), text: t("events.cancel.text"), label: t("events.cancel.confirm") },
-    leave: { title: t("events.leave.title", { event: event.name }), text: t("events.leave.text"), label: t("events.leave.confirm") },
+    leave: {
+      title: t("events.leave.title", { event: event.name }),
+      text: assigns ? t("events.leave.textAdmin") : t("events.leave.text"),
+      label: t("events.leave.confirm"),
+    },
     remove: {
       title: t("events.removeTeam.title", { team: confirming?.kind === "remove" ? confirming.team.name : "" }),
-      text: t("events.removeTeam.text"),
+      text: assigns ? t("events.removeTeam.textAdmin") : t("events.removeTeam.text"),
       label: t("events.removeTeam.confirm"),
     },
   };
@@ -298,16 +416,16 @@ function EventItem({
     if (!confirming) return Promise.resolve();
     switch (confirming.kind) {
       case "end":
-        return run(() => api.endEvent(team.id, event.id), t("events.end.done"));
+        return run(actions.end, t("events.end.done"));
       case "cancel":
-        return run(() => api.cancelEvent(team.id, event.id), t("events.cancel.done"));
+        return run(actions.cancel, t("events.cancel.done"));
       case "leave":
-        return run(() => api.leaveEvent(team.id, event.id), t("events.leave.done"));
+        return run(actions.leave, t("events.leave.done"));
       case "remove": {
         const removed = confirming.team;
         if (!removed.team_id) return Promise.resolve();
         const id = removed.team_id;
-        return run(() => api.removeTeamFromEvent(team.id, event.id, id), t("events.removeTeam.done", { team: removed.name }));
+        return run(() => actions.removeTeam(id), t("events.removeTeam.done", { team: removed.name }));
       }
     }
   }
@@ -319,9 +437,7 @@ function EventItem({
         <CalendarClockIcon className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">{event.name}</span>
         <EventPhaseBadge phase={event.phase} />
-        <span className="text-xs text-muted-foreground">
-          {event.relation === "host" && isMember ? t("events.hostedByUs") : t("events.hostedBy", { team: event.host_team_name })}
-        </span>
+        <span className="text-xs text-muted-foreground">{organizerText(t, event, isMember)}</span>
       </div>
       <p className="text-sm">
         {formatDateTimeRange(event.starts_at, event.ends_at)}
@@ -341,17 +457,19 @@ function EventItem({
       <EventTeams teams={event.teams} onRemove={permissions.manage ? (removed) => setConfirming({ kind: "remove", team: removed }) : undefined} />
 
       {permissions.manage && (
-        <form onSubmit={(e) => void invite(e)} className="flex flex-wrap items-end gap-2 pt-1">
+        <form onSubmit={(e) => void add(e)} className="flex flex-wrap items-end gap-2 pt-1">
           <div className="min-w-52 flex-1 space-y-1.5">
-            <Label htmlFor={`invite-${event.id}`}>{t("events.invite.label")}</Label>
+            <Label htmlFor={`add-${event.id}`}>{assigns ? t("events.assign.label") : t("events.invite.label")}</Label>
             <select
-              id={`invite-${event.id}`}
+              id={`add-${event.id}`}
               value={chosen}
               onChange={(e) => setChosen(e.target.value)}
               disabled={candidates.length === 0}
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
             >
-              <option value="">{candidates.length === 0 ? t("events.invite.noTeam") : t("events.invite.placeholder")}</option>
+              <option value="">
+                {candidates.length > 0 ? t("events.invite.placeholder") : assigns ? t("events.assign.noOtherTeam") : t("events.invite.noTeam")}
+              </option>
               {candidates.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
                   {candidate.name}
@@ -359,9 +477,9 @@ function EventItem({
               ))}
             </select>
           </div>
-          <Button type="submit" variant="outline" disabled={inviting || !chosen}>
-            <MailIcon />
-            {inviting ? t("common.working") : t("events.invite.submit")}
+          <Button type="submit" variant="outline" disabled={adding || !chosen}>
+            {assigns ? <UserPlusIcon /> : <MailIcon />}
+            {adding ? t("common.working") : assigns ? t("events.assign.submit") : t("events.invite.submit")}
           </Button>
         </form>
       )}
@@ -395,7 +513,7 @@ function EventItem({
         </div>
       )}
 
-      {editing && <ChangeDatesDialog teamId={team.id} event={event} onClose={() => setEditing(false)} reload={reload} />}
+      {editing && <ChangeDatesDialog event={event} actions={actions} onClose={() => setEditing(false)} reload={reload} />}
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(next) => !next && setConfirming(null)}
@@ -439,7 +557,7 @@ function InvitationItem({ team, event, reload }: { team: Team; event: TeamEvent;
       <div className="flex flex-wrap items-start gap-3">
         <MailIcon className="mt-0.5 size-4 text-primary" />
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-sm font-medium">{t("events.invitation.text", { host: event.host_team_name, event: event.name })}</p>
+          <p className="text-sm font-medium">{t("events.invitation.text", { host: event.host_team_name ?? "", event: event.name })}</p>
           <p className="text-sm">
             {formatDateTimeRange(event.starts_at, event.ends_at)}
             <span className="text-muted-foreground">
@@ -463,6 +581,37 @@ function InvitationItem({ team, event, reload }: { team: Team; event: TeamEvent;
       </div>
     </li>
   );
+}
+
+/**
+ * Keeps a list of events current: an event changes state at its start and at its end
+ * without anyone clicking, so the list is asked again right after the next of those
+ * moments; and "starts in 5 minutes" is drawn again now and then, so it does not go stale
+ * between two answers of the server.
+ */
+export function useEventClock(events: TeamEvent[] | undefined, refresh: () => unknown) {
+  const latestRefresh = useRef(refresh);
+  useEffect(() => {
+    latestRefresh.current = refresh;
+  });
+  const nextChange = events
+    ?.filter((event) => event.phase === "scheduled" || event.phase === "running")
+    .map((event) => new Date(turningPoint(event)).getTime())
+    .sort((a, b) => a - b)[0];
+  useEffect(() => {
+    if (nextChange === undefined) return;
+    const wait = nextChange - Date.now() + 1500;
+    // Longer waits are covered by the periodic refresh (and overflow a timer).
+    if (wait > 24 * 3600 * 1000) return;
+    const timer = window.setTimeout(() => void latestRefresh.current(), Math.max(wait, 1000));
+    return () => window.clearTimeout(timer);
+  }, [nextChange]);
+
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick((tick) => tick + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 }
 
 /**
@@ -490,28 +639,7 @@ export function EventsSection({ team, isMember }: { team: Team; isMember: boolea
       queryClient.invalidateQueries({ queryKey: ["me"] }),
     ]);
 
-  // An event changes state at its start and at its end without anyone clicking: look again
-  // right after the next of those moments.
-  const nextChange = events
-    ?.filter((event) => event.phase === "scheduled" || event.phase === "running")
-    .map((event) => new Date(turningPoint(event)).getTime())
-    .sort((a, b) => a - b)[0];
-  useEffect(() => {
-    if (nextChange === undefined) return;
-    const wait = nextChange - Date.now() + 1500;
-    // Longer waits are covered by the periodic refresh (and overflow a timer).
-    if (wait > 24 * 3600 * 1000) return;
-    const timer = window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["team-events", team.id] }), Math.max(wait, 1000));
-    return () => window.clearTimeout(timer);
-  }, [nextChange, queryClient, team.id]);
-
-  // "Starts in 5 minutes" is computed when the list is drawn: draw it again now and then, so
-  // it does not go stale between two answers of the server.
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => setTick((tick) => tick + 1), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
+  useEventClock(events, () => queryClient.invalidateQueries({ queryKey: ["team-events", team.id] }));
 
   const invitations = events?.filter((event) => event.relation === "invited") ?? [];
   const current = events?.filter((event) => event.relation !== "invited" && (event.phase === "scheduled" || event.phase === "running")) ?? [];
@@ -554,9 +682,9 @@ export function EventsSection({ team, isMember }: { team: Team; isMember: boolea
                   {current.map((event) => (
                     <EventItem
                       key={event.id}
-                      team={team}
                       event={event}
-                      invitable={invitable.data?.teams ?? []}
+                      actions={teamEventActions(team.id, event.id)}
+                      addable={invitable.data?.teams ?? []}
                       isMember={isMember}
                       reload={reload}
                     />
@@ -585,7 +713,7 @@ export function EventsSection({ team, isMember }: { team: Team; isMember: boolea
                 {showPast && (
                   <ul className="mt-3 divide-y">
                     {past.map((event) => (
-                      <EventItem key={event.id} team={team} event={event} invitable={[]} isMember={isMember} reload={reload} />
+                      <EventItem key={event.id} event={event} actions={teamEventActions(team.id, event.id)} addable={[]} isMember={isMember} reload={reload} />
                     ))}
                   </ul>
                 )}
@@ -594,7 +722,14 @@ export function EventsSection({ team, isMember }: { team: Team; isMember: boolea
           </>
         )}
       </CardContent>
-      <CreateEventDialog team={team} open={creating} onOpenChange={setCreating} reload={reload} />
+      <CreateEventDialog
+        open={creating}
+        onOpenChange={setCreating}
+        description={t("events.create.description", { team: team.name })}
+        create={(body) => api.createEvent(team.id, { name: body.name, starts_at: body.starts_at, ends_at: body.ends_at })}
+        createdText={t("events.create.created")}
+        reload={reload}
+      />
     </Card>
   );
 }

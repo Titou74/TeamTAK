@@ -162,7 +162,8 @@ pub fn end_now(
 }
 
 /// Where an invited team stands in an event. The host team is not in this list: it takes
-/// part by definition.
+/// part by definition. In an event the administrators organise, which has no host, every
+/// team they put in it is `Accepted` at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Participation {
@@ -213,6 +214,9 @@ pub enum ParticipationChange {
     Leave,
     /// The host withdraws the invitation or takes the team out.
     Remove,
+    /// An administrator puts the team in an event they organise: it takes part at once,
+    /// with no invitation to answer.
+    Assign,
 }
 
 /// The single rule for how a team's participation moves. `current` is `None` for a team the
@@ -236,6 +240,8 @@ pub fn next_participation(
         (ParticipationChange::Leave, _) => Err(EventError::NotParticipating),
         (ParticipationChange::Remove, Some(Invited | Accepted)) => Ok(Removed),
         (ParticipationChange::Remove, _) => Err(EventError::NotParticipating),
+        (ParticipationChange::Assign, None | Some(Invited | Declined | Left | Removed)) => Ok(Accepted),
+        (ParticipationChange::Assign, Some(Accepted)) => Err(EventError::AlreadyInEvent),
     }
 }
 
@@ -501,11 +507,27 @@ mod tests {
     }
 
     #[test]
+    fn a_team_put_in_an_event_by_an_administrator_takes_part_at_once() {
+        use Participation::*;
+        use ParticipationChange as C;
+        for phase in [EventPhase::Scheduled, EventPhase::Running] {
+            // Whatever happened before, even a team that left: the administrator decides.
+            for previous in [None, Some(Invited), Some(Declined), Some(Left), Some(Removed)] {
+                assert_eq!(next_participation(phase, previous, C::Assign), Ok(Accepted), "{phase:?} {previous:?}");
+            }
+            assert_eq!(next_participation(phase, Some(Accepted), C::Assign), Err(EventError::AlreadyInEvent));
+        }
+        // Once in, the team can leave and the administrator can take it out, as in any event.
+        assert_eq!(next_participation(EventPhase::Running, Some(Accepted), C::Leave), Ok(Left));
+        assert_eq!(next_participation(EventPhase::Running, Some(Accepted), C::Remove), Ok(Removed));
+    }
+
+    #[test]
     fn nothing_moves_once_the_event_is_over() {
         use ParticipationChange as C;
         for closed in [EventPhase::Ended, EventPhase::Cancelled] {
             for current in [None, Some(Participation::Invited), Some(Participation::Accepted), Some(Participation::Declined)] {
-                for change in [C::Invite, C::Accept, C::Decline, C::Leave, C::Remove] {
+                for change in [C::Invite, C::Accept, C::Decline, C::Leave, C::Remove, C::Assign] {
                     assert_eq!(next_participation(closed, current, change), Err(EventError::Closed), "{closed:?} {current:?} {change:?}");
                 }
             }

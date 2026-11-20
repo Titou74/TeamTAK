@@ -67,6 +67,16 @@ pub fn format_datetime(language: &str, at: OffsetDateTime) -> String {
     time::format_description::parse_borrowed::<2>(pattern).ok().and_then(|format| utc.format(&format).ok()).unwrap_or_else(|| utc.to_string())
 }
 
+/// Who organises an event, as an e-mail names them in the middle of a sentence: its host
+/// team, or the administrators of the platform when no team hosts it.
+pub fn event_organizer(language: &str, host_team: Option<&str>) -> String {
+    let language = resolve(language);
+    match host_team {
+        Some(host) => fill(text(language, &["event_organizer", "team"]), &[("host", host)]),
+        None => text(language, &["event_organizer", "admin"]).to_string(),
+    }
+}
+
 fn fill(template: &str, vars: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
     for (name, value) in vars {
@@ -96,6 +106,8 @@ pub enum Template {
     EventEndedEarly,
     /// To the leaders of a team the host took out of an event.
     EventTeamRemoved,
+    /// To the leaders of a team an administrator put in an event they organise.
+    EventAssigned,
     /// To every administrator: alerts raised, resolved, or still open. Its subject and its
     /// list are built by [`render_alerts`].
     AlertDigest,
@@ -122,6 +134,7 @@ impl Template {
         Template::EventRescheduled,
         Template::EventEndedEarly,
         Template::EventTeamRemoved,
+        Template::EventAssigned,
         Template::AlertDigest,
         Template::CertificateNotice,
         Template::MailTest,
@@ -142,6 +155,7 @@ impl Template {
             Template::EventRescheduled => "event_rescheduled",
             Template::EventEndedEarly => "event_ended_early",
             Template::EventTeamRemoved => "event_team_removed",
+            Template::EventAssigned => "event_assigned",
             Template::AlertDigest => "alert_digest",
             Template::CertificateNotice => "certificate_notice",
             Template::MailTest => "mail_test",
@@ -384,13 +398,14 @@ mod tests {
             ("event", "Exercice Mont-Blanc"),
             ("channel", "evt-exercice-mont-blanc"),
             ("host", "Alpha"),
+            ("organizer", "the team \"Alpha\""),
             ("team", "Bravo"),
             ("start", "20/11/2026 à 14:05 UTC"),
             ("end", "21/11/2026 à 18:00 UTC"),
             ("url", "https://tak.example.org/teams/1"),
         ];
         let event_templates: Vec<Template> = Template::ALL.iter().copied().filter(|t| t.key().starts_with("event_")).collect();
-        assert_eq!(event_templates.len(), 8);
+        assert_eq!(event_templates.len(), 9);
         for template in event_templates {
             for language in languages() {
                 let mail = render(template, language, &vars, "https://tak.example.org");
@@ -404,6 +419,28 @@ mod tests {
         assert!(fr.subject.contains("Alpha") && fr.body.contains("20/11/2026 à 14:05 UTC") && fr.body.contains("evt-exercice-mont-blanc"));
         let en = render(Template::EventAccepted, "en", &vars, "u");
         assert!(en.subject.contains("Bravo"), "{}", en.subject);
+    }
+
+    #[test]
+    fn an_email_names_who_organises_the_event() {
+        assert_eq!(event_organizer("en", Some("Alpha")), "the team \"Alpha\"");
+        assert_eq!(event_organizer("fr", Some("Alpha")), "l'équipe « Alpha »");
+        assert_eq!(event_organizer("en", None), "the platform administration");
+        assert_eq!(event_organizer("fr", None), "l'administration de la plateforme");
+        for language in languages() {
+            for host in [Some("Alpha"), None] {
+                let organizer = event_organizer(language, host);
+                assert!(!organizer.is_empty() && !organizer.contains("{{"), "{language} {host:?}: {organizer}");
+            }
+            // The texts that can be about an event without a host say who runs it.
+            use Template::*;
+            for template in [EventCancelled, EventRescheduled, EventEndedEarly, EventTeamRemoved] {
+                let organizer = event_organizer(language, None);
+                let vars = [("event", "Rassemblement"), ("organizer", organizer.as_str()), ("url", "u")];
+                let mail = render(template, language, &vars, "u");
+                assert!(mail.body.contains(&organizer), "{language} {}: {}", template.key(), mail.body);
+            }
+        }
     }
 
     /// One finding of every kind, with the details the rules really produce.

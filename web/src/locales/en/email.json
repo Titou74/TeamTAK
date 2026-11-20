@@ -22,6 +22,10 @@
     "subject": "Your team request {{team}} was not approved",
     "body": "Hello,\n\nYour request to create the team \"{{team}}\" was not approved.\n\nReason given: {{note}}"
   },
+  "event_organizer": {
+    "team": "the team \"{{host}}\"",
+    "admin": "the platform administration"
+  },
   "event_invitation": {
     "subject": "{{host}} invites your team to the event {{event}}",
     "body": "Hello,\n\nThe team \"{{host}}\" invites your team \"{{team}}\" to the event \"{{event}}\".\n\n    Start: {{start}}\n    End:   {{end}}\n\nIf you accept, the members of your team and those of the other participating teams see each other on the TAK server for the duration of the event, through a channel named {{channel}} that appears by itself in ATAK and iTAK and disappears at the end. Nothing has to be installed or set up on the devices.\n\nAs a team leader, accept or decline on your team's page (the dates are shown there in your own time zone):\n\n    {{url}}"
@@ -40,19 +44,23 @@
   },
   "event_cancelled": {
     "subject": "The event {{event}} is cancelled",
-    "body": "Hello,\n\nThe event \"{{event}}\" hosted by the team \"{{host}}\" ({{start}} to {{end}}) has been cancelled.\n\nIts channel {{channel}} no longer exists: the teams that took part no longer see each other on the TAK server.\n\n    {{url}}"
+    "body": "Hello,\n\nThe event \"{{event}}\" organised by {{organizer}} ({{start}} to {{end}}) has been cancelled.\n\nIts channel {{channel}} no longer exists: the teams that took part no longer see each other on the TAK server.\n\n    {{url}}"
   },
   "event_rescheduled": {
     "subject": "New dates for the event {{event}}",
-    "body": "Hello,\n\nThe team \"{{host}}\" changed the dates of the event \"{{event}}\". It now runs:\n\n    Start: {{start}}\n    End:   {{end}}\n\nThe channel {{channel}} appears and disappears by itself at these times. Your team's page shows them in your own time zone:\n\n    {{url}}"
+    "body": "Hello,\n\nThe dates of the event \"{{event}}\" have been changed by {{organizer}}. It now runs:\n\n    Start: {{start}}\n    End:   {{end}}\n\nThe channel {{channel}} appears and disappears by itself at these times. Your team's page shows them in your own time zone:\n\n    {{url}}"
   },
   "event_ended_early": {
     "subject": "The event {{event}} has ended",
-    "body": "Hello,\n\nThe team \"{{host}}\" ended the event \"{{event}}\" before its planned end.\n\nIts channel {{channel}} no longer exists: the teams that took part no longer see each other on the TAK server.\n\n    {{url}}"
+    "body": "Hello,\n\nThe event \"{{event}}\" has been ended before its planned end by {{organizer}}.\n\nIts channel {{channel}} no longer exists: the teams that took part no longer see each other on the TAK server.\n\n    {{url}}"
   },
   "event_team_removed": {
     "subject": "Your team is no longer part of the event {{event}}",
-    "body": "Hello,\n\nThe team \"{{host}}\" took your team \"{{team}}\" out of the event \"{{event}}\" ({{start}} to {{end}}).\n\nIf your team was taking part, its members stopped seeing the other teams, and being seen by them, at once.\n\n    {{url}}"
+    "body": "Hello,\n\nYour team \"{{team}}\" has been taken out of the event \"{{event}}\" ({{start}} to {{end}}) by {{organizer}}.\n\nIf your team was taking part, its members stopped seeing the other teams, and being seen by them, at once.\n\n    {{url}}"
+  },
+  "event_assigned": {
+    "subject": "Your team takes part in the event {{event}}",
+    "body": "Hello,\n\nThe platform administration has added your team \"{{team}}\" to the event \"{{event}}\".\n\n    Start: {{start}}\n    End:   {{end}}\n\nFor the duration of the event, the members of your team and those of the other participating teams see each other on the TAK server, through a channel named {{channel}} that appears by itself in ATAK and iTAK and disappears at the end. Nothing has to be installed or set up on the devices.\n\nYour team's page shows the event, the other teams and the dates in your own time zone. As a team leader, you can also make your team leave the event there:\n\n    {{url}}"
   },
   "alert_digest": {
     "subject": "{{subject}}",

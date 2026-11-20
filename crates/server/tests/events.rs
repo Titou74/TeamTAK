@@ -628,3 +628,126 @@ async fn event_rules_invitations_and_emails() {
     assert_eq!(row["phase"], "cancelled");
     alpha.leader.get("/admin/events").await.expect_error(403, "forbidden");
 }
+
+// ------------------------------------------------------------- events of the administrators
+
+/// An administrator organises an event and puts teams in it: no host team, no invitation to
+/// answer. The teams see each other at once, an administrator runs the event from the
+/// administration area, and a team can still leave it.
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn an_administrator_organises_an_event_and_puts_teams_in_it() {
+    let admin = Session::admin().await;
+    let (alpha, _, a1) = team_with_device(&admin, "alpha").await;
+    let (bravo, _, b1) = team_with_device(&admin, "bravo").await;
+    let (charlie, _, c1) = team_with_device(&admin, "charlie").await;
+    let alpha_member = add_member(&alpha).await;
+    let pending = Session::new_account("pending").await;
+    let pending_id = pending.post("/teams", json!({ "name": unique("Waiting "), "mode": "shared" })).await.ok()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let name = unique("Rassemblement ");
+    let in_an_hour = iso(utc_in(3600));
+    let body = |teams: Vec<&str>| json!({ "name": name, "ends_at": in_an_hour, "team_ids": teams });
+
+    // Only an administrator organises, only active teams can be put in.
+    alpha.leader.post("/admin/events", body(vec![&alpha.id])).await.expect_error(403, "forbidden");
+    admin.post("/admin/events", body(vec![&alpha.id, &pending_id])).await.expect_error(404, "not_found");
+    admin
+        .post("/admin/events", json!({ "name": name, "ends_at": iso(utc_in(-60)), "team_ids": [alpha.id] }))
+        .await
+        .expect_error(400, "invalid_event_dates");
+
+    // Created to start now, with two teams: they see each other when the call returns.
+    let created = admin.post("/admin/events", body(vec![&alpha.id, &bravo.id, &alpha.id])).await.ok();
+    assert_eq!(created["synced"], true);
+    let event_id = created["id"].as_str().unwrap().to_string();
+    let group = created["group_name"].as_str().unwrap().to_string();
+    assert!(group.starts_with("evt-rassemblement-"), "{group}");
+    assert!(a1.sees(&b1, SEES).await && b1.sees(&a1, SEES).await, "the teams put in take part at once");
+    let crossed = crossings(&[("alpha", &a1), ("bravo", &b1)], &[("charlie", &c1)], SILENCE).await;
+    assert!(crossed.is_empty(), "a team left out crossed into the event: {crossed:?}");
+    let mut expected = vec![format!("{}-shared", alpha.slug), format!("{}-shared", bravo.slug)];
+    expected.sort();
+    assert_eq!(ldap_group_members(&group), expected);
+    // The name is taken, for the teams too.
+    admin.post("/admin/events", body(vec![])).await.expect_error(409, "event_name_taken");
+    alpha.leader.post(&format!("/teams/{}/events", alpha.id), body(vec![])).await.expect_error(409, "event_name_taken");
+
+    // The leaders of each team are told; their members are not.
+    let mail = mail_about(&alpha.leader.email, "takes part in the event").await;
+    assert!(mail.subject.contains(&name) && mail.text.contains(&group), "{}", mail.text);
+    assert!(mail.text.contains(&format!("/teams/{}", alpha.id)), "{}", mail.text);
+    assert!(!mail_subjects(&alpha_member.email).await.iter().any(|s| s.contains(&name)));
+
+    // Seen from a team: who takes part, no host, and leaving is all a leader can do.
+    let seen = event_seen_by(&alpha.leader, &alpha.id, &event_id).await;
+    assert_eq!((seen["organizer"].as_str(), seen["relation"].as_str()), (Some("admin"), Some("accepted")));
+    assert!(seen["host_team_name"].is_null());
+    assert_eq!(event_teams(&seen), teams([format!("{}:accepted", alpha.name), format!("{}:accepted", bravo.name)]));
+    assert_eq!(seen["permissions"], json!({ "manage": false, "end": false, "cancel": false, "answer": false, "leave": true }));
+    assert_eq!(event_seen_by(&alpha_member, &alpha.id, &event_id).await["permissions"]["leave"], false);
+    let on = |team: &TeamFixture, action: &str| format!("/teams/{}/events/{event_id}{action}", team.id);
+    alpha.leader.post(&on(&alpha, "/teams"), json!({ "team_id": charlie.id })).await.expect_error(403, "forbidden");
+    alpha.leader.post(&on(&alpha, "/cancel"), json!({})).await.expect_error(403, "forbidden");
+    alpha.leader.post(&on(&alpha, "/end"), json!({})).await.expect_error(403, "forbidden");
+
+    // Seen from the administration area: the administrator runs it.
+    let admin_row = |list: &Value| list["events"].as_array().unwrap().iter().find(|e| e["id"] == event_id.as_str()).cloned().unwrap();
+    let row = admin_row(&admin.get("/admin/events").await.ok());
+    assert_eq!(row["permissions"], json!({ "manage": true, "end": true, "cancel": true, "answer": false, "leave": false }));
+    assert!(row["teams"].as_array().unwrap().iter().all(|t| t["team_id"].is_string()));
+    let path = |action: &str| format!("/admin/events/{event_id}{action}");
+
+    // A team added while the event runs joins at once; twice is refused.
+    let added = admin.post(&path("/teams"), json!({ "team_id": charlie.id })).await.ok();
+    assert_eq!((added["name"].as_str(), added["synced"].as_bool()), (Some(charlie.name.as_str()), Some(true)));
+    assert!(c1.sees(&a1, SEES).await && a1.sees(&c1, SEES).await, "charlie joins without reconnecting");
+    admin.post(&path("/teams"), json!({ "team_id": charlie.id })).await.expect_error(409, "team_already_in_event");
+    admin.post(&path("/teams"), json!({ "team_id": pending_id })).await.expect_error(404, "not_found");
+    alpha.leader.post(&path("/teams"), json!({ "team_id": charlie.id })).await.expect_error(403, "forbidden");
+
+    // A team leaves: the administrators are told, and can put it back.
+    bravo.leader.post(&on(&bravo, "/leave"), json!({})).await.ok();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let crossed = crossings(&[("alpha", &a1), ("charlie", &c1)], &[("bravo", &b1)], SILENCE).await;
+    assert!(crossed.is_empty(), "bravo left the event but: {crossed:?}");
+    let left = mail_about(&admin.email, "left your event").await;
+    assert!(left.subject.contains(&bravo.name) && left.text.contains("/admin"), "{}", left.text);
+    admin.post(&path("/teams"), json!({ "team_id": bravo.id })).await.ok();
+    assert!(b1.sees(&a1, SEES).await, "put back in by the administrator");
+
+    // Taking a team out: it stops seeing the others at once, and its leaders are told.
+    assert_eq!(admin.delete(&path(&format!("/teams/{}", charlie.id))).await.ok()["synced"], true);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let crossed = crossings(&[("alpha", &a1), ("bravo", &b1)], &[("charlie", &c1)], SILENCE).await;
+    assert!(crossed.is_empty(), "charlie was taken out but: {crossed:?}");
+    let removed = mail_about(&charlie.leader.email, "no longer part of the event").await;
+    assert!(removed.text.contains("platform administration"), "{}", removed.text);
+    open_connections(&[("alpha", &a1), ("bravo", &b1), ("charlie", &c1)]);
+
+    // New dates: every team is told who changed them.
+    admin.patch(&path(""), json!({ "ends_at": iso(utc_in(7200)) })).await.ok();
+    let moved = mail_about(&alpha.leader.email, "New dates").await;
+    assert!(moved.text.contains("platform administration"), "{}", moved.text);
+
+    // An event hosted by a team stays the team's: the administrator only cancels it.
+    let hosted = create_event(&alpha, Some(3600), 3600).await;
+    let hosted_path = |action: &str| format!("/admin/events/{}{action}", hosted.id);
+    admin.post(&hosted_path("/teams"), json!({ "team_id": charlie.id })).await.expect_error(403, "forbidden");
+    admin.patch(&hosted_path(""), json!({ "ends_at": iso(utc_in(9000)) })).await.expect_error(403, "forbidden");
+    admin.post(&hosted_path("/cancel"), json!({})).await.ok();
+
+    // Ending it now: the group is gone when the call returns; then nothing moves.
+    assert_eq!(admin.post(&path("/end"), json!({})).await.ok()["synced"], true);
+    assert!(ldap_group_members(&group).is_empty(), "no group left once the event is over");
+    assert!(mail_about(&bravo.leader.email, "has ended").await.text.contains("platform administration"));
+    assert_eq!(admin_row(&admin.get("/admin/events").await.ok())["phase"], "ended");
+    admin.post(&path("/teams"), json!({ "team_id": charlie.id })).await.expect_error(409, "event_closed");
+    admin.post(&path("/end"), json!({})).await.expect_error(409, "event_closed");
+
+    // None of this was drift.
+    let journal = journal_of_group(&admin, &group).await;
+    assert!(!journal.is_empty() && journal.iter().all(|e| e["is_drift"] == false), "{journal:?}");
+}
