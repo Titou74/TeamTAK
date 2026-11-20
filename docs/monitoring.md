@@ -36,7 +36,10 @@ them. If the page says the lists are old, the server's own daily `apt update` is
 
 "A newer image exists" means, for an image pulled by tag (Caddy, PostgreSQL), that the registry now
 serves another image under the same tag. The directory's image is pinned to one exact build; a
-newer build is shown for information. Registries are asked twice a day at most.
+newer build is shown for information. Registries are asked twice a day at most. The images built on
+the server carry their version: TAK Server's (`teamtak/takserver:5.8-RELEASE-103`), and for the
+platform and the agent the version of the checkout given by git (`teamtak/app:1.0.1`, or
+`teamtak/app:1.0.1-3-g28f8b1b` three commits after that release).
 
 **TeamTAK's own version.** The platform asks GitHub, twice a day at most (every hour while GitHub
 does not answer), which release of TeamTAK is the latest: one anonymous request to

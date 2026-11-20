@@ -29,7 +29,8 @@ services:
       - ./data/caddy/config:/config
 
   app:
-    image: teamtak/app:local
+    # TEAMTAK_VERSION: written into .env by install.sh at every run, from git.
+    image: teamtak/app:${TEAMTAK_VERSION:-local}
     build:
       context: ..
       dockerfile: deploy/app/Dockerfile
@@ -95,7 +96,7 @@ services:
       start_period: 10s
 
   agent:
-    image: teamtak/agent:local
+    image: teamtak/agent:${TEAMTAK_VERSION:-local}
     build:
       context: ..
       dockerfile: deploy/agent/Dockerfile

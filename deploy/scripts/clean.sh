@@ -27,6 +27,8 @@ fi
 
 TAK_IMAGE_NAME="$(env_get TAK_IMAGE)"
 TAK_DB_IMAGE_NAME="$(env_get TAK_DB_IMAGE)"
+# Every version of the platform and agent images (teamtak/app:<version>).
+PLATFORM_IMAGES="$(docker image ls --filter reference=teamtak/app --filter reference=teamtak/agent --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$' || true)"
 if [ -f "$ENV_FILE" ]; then
   compose down -v --remove-orphans
 else
@@ -34,11 +36,11 @@ else
 fi
 # deploy/data holds files owned by container users: remove them from a container.
 if [ -d "$DATA_DIR" ]; then
-  docker run --rm -u 0 --entrypoint sh -v "$DEPLOY_DIR:/deploy" "${TAK_IMAGE_NAME:-teamtak/app:local}" -c 'rm -rf /deploy/data' 2>/dev/null || rm -rf "$DATA_DIR"
+  docker run --rm -u 0 --entrypoint sh -v "$DEPLOY_DIR:/deploy" "${TAK_IMAGE_NAME:-$(printf '%s\n' "$PLATFORM_IMAGES" | grep '^teamtak/app:' | head -n 1)}" -c 'rm -rf /deploy/data' 2>/dev/null || rm -rf "$DATA_DIR"
 fi
 rm -f "$ENV_FILE"
 if [ "$IMAGES" = 1 ]; then
-  for image in "$TAK_IMAGE_NAME" "$TAK_DB_IMAGE_NAME" teamtak/app:local teamtak/agent:local; do
+  for image in "$TAK_IMAGE_NAME" "$TAK_DB_IMAGE_NAME" $PLATFORM_IMAGES; do
     [ -n "$image" ] && docker image rm "$image" 2>/dev/null || true
   done
 fi

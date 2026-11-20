@@ -263,7 +263,9 @@ sudo ./install.sh
 
 No option is needed: the script reads `deploy/.env`. It keeps the settings, the secrets, the
 certificate authority and the TAK Server images, adds to `deploy/.env` the settings a new version
-introduces, rebuilds the platform and agent images, and restarts the services that changed. The
+introduces, rebuilds the platform and agent images, tagged with the new version taken from git
+(`teamtak/app:<version>`), and restarts the services that changed; the images of the previous
+version are removed at the end. The
 platform applies its database migrations by itself when it starts. The script then runs the same
 checks as a first install and stops with an error if the platform cannot reach the directory or
 TAK Server.

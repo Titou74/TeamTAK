@@ -189,7 +189,7 @@ mod tests {
             parse_image("vegardit/openldap@sha256:f6e74dd8"),
             Some(ImageSource::Digest { registry: DOCKER_HUB.into(), repository: "vegardit/openldap".into(), digest: "sha256:f6e74dd8".into() })
         );
-        for local in ["teamtak/app:local", "teamtak/takserver:5.8-RELEASE-103", "teamtak/agent:local"] {
+        for local in ["teamtak/app:1.0.1", "teamtak/agent:1.0.1-3-g28f8b1b", "teamtak/app:local", "teamtak/takserver:5.8-RELEASE-103"] {
             assert_eq!(parse_image(local), Some(ImageSource::Local), "{local}");
         }
         assert_eq!(parse_image(""), None);

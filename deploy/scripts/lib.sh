@@ -66,6 +66,25 @@ version_newer() {
   [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
 }
 
+# ----------------------------------------------------------------------------- TeamTAK version
+
+# Version of this checkout, which tags the platform and agent images (teamtak/app:<version>):
+# from git, the release tag the checkout is on without its "v" ("1.0.1"), or between two
+# releases the last one, the number of commits since and the commit ("1.0.1-3-g28f8b1b").
+# Without git or its tags (a ZIP of the sources, a shallow clone): the version of Cargo.toml.
+teamtak_version() {
+  local v=""
+  if command -v git > /dev/null; then
+    # safe.directory: install.sh runs as root in a checkout another user owns.
+    v="$(git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" describe --tags --match 'v[0-9]*' 2>/dev/null || true)"
+    v="${v#v}"
+  fi
+  [ -n "$v" ] || v="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$REPO_DIR/Cargo.toml" | head -n 1)"
+  # What Docker accepts as a tag.
+  case "$v" in ''|[!A-Za-z0-9_]*|*[!A-Za-z0-9_.-]*) v=local ;; esac
+  printf '%s\n' "${v:0:128}"
+}
+
 # Loads deploy/.env into the environment. The file is read as KEY=VALUE lines, the way
 # Docker Compose reads it, not executed: values may hold spaces and shell characters.
 load_env() {

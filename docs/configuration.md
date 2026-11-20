@@ -78,6 +78,11 @@ is not enough, and for the secrets and the names it breaks the installation:
 - `TAK_VERSION`, `TAK_IMAGE` and `TAK_DB_IMAGE`: `./install.sh --upgrade-tak` changes them (README,
   "Upgrading TAK Server").
 
+`TEAMTAK_VERSION` is not a setting: `install.sh` writes it at every run from git (the release tag
+the checkout is on, or the last one followed by the number of commits since and the commit), and
+the platform and agent images are tagged with it (`teamtak/app:1.0.1`). The images of other
+versions are removed once the stack runs on the new one.
+
 ## Monitoring, backups and the webhook
 
 Thresholds of the alerts, the backup schedule and passphrase, and the webhook are not in this file:
