@@ -134,7 +134,7 @@ export interface TeamDetail {
 }
 
 export type EventPhase = "scheduled" | "running" | "ended" | "cancelled";
-/** Where a team stands in an event; "host" is the team that created it. */
+/** Where a team stands in an event; "host" is the team that created it. An event organised by the administrators has no host. */
 export type EventTeamStatus = "host" | "accepted" | "invited" | "declined" | "left" | "removed";
 
 export interface EventTeam {
@@ -154,7 +154,10 @@ export interface TeamEvent {
   cancelled_at: string | null;
   cancel_reason: "host" | "admin" | "host_deleted" | null;
   phase: EventPhase;
-  host_team_name: string;
+  /** "admin": organised by the administrators, with no host team; they put the teams in it directly. */
+  organizer: "team" | "admin";
+  /** Null when the administrators organise the event. */
+  host_team_name: string | null;
   /** How the team the list was asked for relates to the event; null in the administration area. */
   relation: "host" | "invited" | "accepted" | null;
   teams: EventTeam[];

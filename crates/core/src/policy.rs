@@ -103,6 +103,9 @@ pub enum Action {
     ManageEvent,
     /// Call an event off. The actor is looked at in the host team.
     CancelEvent,
+    /// Create an event organised by the administrators, which no team hosts; put active
+    /// teams in it and take them out, change its dates, end it early.
+    OrganizeEvent,
     /// On an event the team is invited to: accept, decline, or leave after accepting.
     AnswerEventInvitation,
     /// See the devices connected to TAK Server with the accesses of the team: which access,
@@ -132,8 +135,10 @@ pub enum Action {
 ///   invitations it receives; a leader also sees the names of the other teams, to invite them;
 /// - a member sees the events of their team but manages nothing, and does not see the
 ///   invitations still waiting for an answer;
-/// - an administrator sees every event and can cancel one, nothing more: events need no
-///   approval, and inviting or answering belongs to the teams.
+/// - an administrator sees every event and can cancel one: events need no approval, and
+///   inviting or answering belongs to the teams. An administrator can also organise an
+///   event of their own, which no team hosts, and put teams in it directly; such a team
+///   takes part without answering, and its leaders can still make it leave.
 ///
 /// Monitoring belongs to the administrators: the machine, the services, the alerts, the
 /// audit log and the actions on the stack. One part of it is shared with team leaders, for
@@ -159,6 +164,7 @@ pub fn can(actor: Actor, action: Action) -> bool {
         Action::ViewEvents => actor.is_admin || actor.team_role.is_some(),
         Action::ViewEventInvitations => actor.is_admin || actor.team_role == Some(Leader),
         Action::CancelEvent => actor.is_admin || actor.team_role == Some(Leader),
+        Action::OrganizeEvent => actor.is_admin,
         Action::CreateEvent | Action::ListInvitableTeams | Action::ManageEvent | Action::AnswerEventInvitation => {
             actor.team_role == Some(Leader)
         }
@@ -217,6 +223,7 @@ mod tests {
             Action::ListInvitableTeams,
             Action::ManageEvent,
             Action::CancelEvent,
+            Action::OrganizeEvent,
             Action::AnswerEventInvitation,
             Action::ViewTeamDevices,
             Action::ViewAllDevices,
@@ -273,6 +280,7 @@ mod tests {
             Action::ListInvitableTeams,
             Action::ManageEvent,
             Action::CancelEvent,
+            Action::OrganizeEvent,
             Action::AnswerEventInvitation,
         ] {
             assert!(!can(MEMBER, action), "{action:?}");
@@ -280,14 +288,17 @@ mod tests {
     }
 
     #[test]
-    fn an_administrator_sees_every_event_and_can_only_cancel() {
+    fn an_administrator_cancels_any_event_and_runs_the_ones_they_organise() {
         assert!(can(ADMIN, Action::ViewEvents));
         assert!(can(ADMIN, Action::ViewEventInvitations));
         assert!(can(ADMIN, Action::CancelEvent));
+        assert!(can(ADMIN, Action::OrganizeEvent));
         // No approval of events, and no acting in a team's name.
         for action in [Action::CreateEvent, Action::ListInvitableTeams, Action::ManageEvent, Action::AnswerEventInvitation] {
             assert!(!can(ADMIN, action), "{action:?}");
         }
+        // Organising an event without a host is not for team leaders.
+        assert!(!can(LEADER, Action::OrganizeEvent));
     }
 
     #[test]

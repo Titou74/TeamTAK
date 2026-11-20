@@ -66,8 +66,9 @@ each team runs itself. The administrator approves new teams; everything else hap
    <img src="docs/images/access-dialog.png" width="560" alt="Connecting a device: QR codes for ATAK and iTAK, with the choice of the server port; the zip and the username and password are on the other tabs">
 
 5. **Work together at events.** A leader creates an event and invites other teams; each team
-   accepts or declines. From the start of the event to its end, a shared channel appears on every
-   device, then goes away, without anyone reconnecting.
+   accepts or declines. An administrator who organises a gathering can also create the event and
+   put the teams in it directly. From the start of the event to its end, a shared channel appears
+   on every device, then goes away, without anyone reconnecting.
 
    ![Cross-team events: one under way that another team has joined, one coming later](docs/images/events.png)
 

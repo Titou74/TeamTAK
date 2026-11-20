@@ -269,6 +269,12 @@ the end. Outside events, teams do not see each other.
   team. A leader of an invited team accepts or declines, and can make the team leave later. Members
   see the events their team takes part in (name, dates, participating teams, state) and manage
   nothing. An administrator sees every event and can cancel one; **events need no approval**.
+- **Events organised by an administrator** (added after phase 3). An administrator who organises
+  a gathering creates the event from the administration area and puts active teams in it
+  directly: there is no host team and no invitation to answer, each team takes part at once and
+  its leaders get an e-mail. The administrator adds and removes teams, changes the dates, ends the
+  event early or cancels it. A leader can still make their team leave; every administrator is
+  then told by e-mail. The rules of the group, the dates and the schedule are those of any event.
 - **Finding a team to invite.** A leader of an active team can list the names of the other active
   teams, for that purpose only. Nothing else about them is given out.
 - **The group** is named `evt-<slug of the event's name>` (32 characters at most, prefix included),

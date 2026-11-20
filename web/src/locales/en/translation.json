@@ -253,6 +253,7 @@
     "past_other": "{{count}} past events",
     "hostedByUs": "Hosted by your team",
     "hostedBy": "Hosted by {{team}}",
+    "organizedByAdmin": "Organised by the platform administration",
     "channel": "Channel in ATAK and iTAK during the event:",
     "pendingSync": "Saved, but the TAK server could not be reached: the change will be applied automatically within a minute.",
     "phase": {
@@ -314,10 +315,20 @@
       "submit": "Invite",
       "done": "{{team}} is invited. Its leaders receive an e-mail."
     },
+    "assign": {
+      "label": "Add a team",
+      "noOtherTeam": "No other active team to add",
+      "submit": "Add",
+      "done": "{{team}} takes part in the event. Its leaders receive an e-mail.",
+      "teams": "Teams taking part",
+      "noTeam": "No active team yet.",
+      "help": "Each team ticked takes part at once, without having to accept: its leaders receive an e-mail. You can add or remove teams later."
+    },
     "removeTeam": {
       "action": "Remove {{team}} from the event",
       "title": "Remove {{team}} from the event?",
       "text": "If the team takes part, its members stop seeing the other teams, and being seen by them, at once. Its leaders are told by e-mail. You can invite it again later.",
+      "textAdmin": "Its members stop seeing the other teams, and being seen by them, at once. Its leaders are told by e-mail. You can add it again later.",
       "confirm": "Remove the team",
       "done": "{{team}} is no longer in the event."
     },
@@ -348,6 +359,7 @@
       "action": "Leave the event",
       "title": "Leave “{{event}}”?",
       "text": "Your members stop seeing the other teams, and being seen by them, at once. The host team is told by e-mail and can invite you again.",
+      "textAdmin": "Your members stop seeing the other teams, and being seen by them, at once. The administrators are told by e-mail and can add your team again.",
       "confirm": "Leave the event",
       "done": "Your team left the event."
     }
@@ -370,7 +382,7 @@
   },
   "admin": {
     "title": "Administration",
-    "description": "Approve team requests, set member limits, keep an eye on events, and check that the TAK server matches this platform.",
+    "description": "Approve team requests, set member limits, organise events or keep an eye on those of the teams, and check that the TAK server matches this platform.",
     "memberCap": "Member limit",
     "memberCapFor": "Member limit of {{team}}",
     "tabs": {
@@ -412,12 +424,12 @@
     "events": {
       "title_one": "{{count}} event",
       "title_other": "{{count}} events",
-      "description": "Teams create and run their events themselves; nothing here needs approval. You can cancel an event: its channel then disappears from the TAK server at once.",
+      "description": "Teams create and run their own events; nothing here needs approval, and you can cancel any of them. You can also organise an event yourself and put teams in it directly: they take part without having to accept.",
       "none": "No event yet.",
-      "event": "Event",
-      "state": "State",
-      "dates": "Dates",
-      "teams": "Teams"
+      "create": {
+        "description": "You organise the event: no team hosts it. The teams you choose take part at once, without an invitation to accept; their leaders receive an e-mail.",
+        "created": "Event created. The teams chosen take part in it."
+      }
     },
     "accounts": {
       "title_one": "{{count}} account",
@@ -992,6 +1004,7 @@
       "access_package_downloaded": "Connection zip downloaded",
       "event_created": "Event created",
       "event_team_invited": "Team invited to an event",
+      "event_team_assigned": "Team added to an event",
       "event_team_removed": "Team removed from an event",
       "event_invitation_accepted": "Event invitation accepted",
       "event_invitation_declined": "Event invitation declined",

@@ -1,25 +1,37 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, CircleAlertIcon, CircleCheckIcon, PauseIcon, PlayIcon, RefreshCwIcon, Trash2Icon, XIcon } from "lucide-react";
+import {
+  CalendarPlusIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  PauseIcon,
+  PlayIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
-import { EventPhaseBadge, ModeBadge, StatusBadge } from "@/components/badges";
+import { ModeBadge, StatusBadge } from "@/components/badges";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { EventTeams } from "@/components/events-section";
+import { adminEventActions, CreateEventDialog, EventItem, useEventClock, type Reload } from "@/components/events-section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { formatDate, formatDateTime, formatDateTimeRange, formatNumber, formatRelative } from "@/lib/format";
+import { formatDate, formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import { useErrorText, useNotifyError } from "@/lib/hooks";
 import type { AdminTeam, AdminTeams, Me, TeamEvent } from "@/lib/types";
 
@@ -257,21 +269,19 @@ function EventsTab() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const errorText = useErrorText();
-  const notifyError = useNotifyError();
-  const [cancelling, setCancelling] = useState<TeamEvent | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [showPast, setShowPast] = useState(false);
   const query = useQuery({ queryKey: ["admin", "events"], queryFn: api.adminEvents, refetchInterval: 30_000 });
-
-  async function cancel(event: TeamEvent) {
-    try {
-      const result = await api.adminCancelEvent(event.id);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "events"] });
-      if (result.synced) toast.success(t("events.cancel.done"));
-      else toast.warning(t("events.pendingSync"));
-    } catch (e) {
-      notifyError(e);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "events"] });
-    }
-  }
+  // The teams an administrator can put in an event: the active ones.
+  const teamsQuery = useQuery({ queryKey: ["admin", "teams"], queryFn: api.adminTeams });
+  const activeTeams = (teamsQuery.data?.teams ?? []).filter((team) => team.status === "active").map(({ id, name }) => ({ id, name }));
+  const reload: Reload = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["admin", "events"] }),
+      // The teams put in an event see it on their page.
+      queryClient.invalidateQueries({ queryKey: ["team-events"] }),
+    ]);
+  useEventClock(query.data?.events, () => queryClient.invalidateQueries({ queryKey: ["admin", "events"] }));
 
   if (query.isPending) return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
   if (query.isError) {
@@ -282,66 +292,48 @@ function EventsTab() {
     );
   }
   const events = query.data.events;
+  const current = events.filter((event) => event.phase === "scheduled" || event.phase === "running");
+  const past = events.filter((event) => event.phase === "ended" || event.phase === "cancelled");
+  const item = (event: TeamEvent) => (
+    <EventItem key={event.id} event={event} actions={adminEventActions(event.id)} addable={activeTeams} isMember={false} reload={reload} />
+  );
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t("admin.events.title", { count: events.length })}</CardTitle>
         <CardDescription>{t("admin.events.description")}</CardDescription>
+        <CardAction>
+          <Button variant="outline" onClick={() => setCreating(true)}>
+            <CalendarPlusIcon />
+            {t("events.create.open")}
+          </Button>
+        </CardAction>
       </CardHeader>
-      <CardContent>
-        {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("admin.events.none")}</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("admin.events.event")}</TableHead>
-                <TableHead>{t("admin.events.state")}</TableHead>
-                <TableHead>{t("admin.events.dates")}</TableHead>
-                <TableHead>{t("admin.events.teams")}</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {events.map((event) => (
-                <TableRow key={event.id}>
-                  <TableCell>
-                    <span className="font-medium">{event.name}</span>
-                    <div className="font-mono text-xs text-muted-foreground">{event.group_name}</div>
-                  </TableCell>
-                  <TableCell>
-                    <EventPhaseBadge phase={event.phase} />
-                    {event.phase === "cancelled" && event.cancel_reason && (
-                      <div className="mt-1 max-w-48 text-xs whitespace-normal text-muted-foreground">{t(`events.cancelReason.${event.cancel_reason}`)}</div>
-                    )}
-                  </TableCell>
-                  <TableCell className="whitespace-normal">{formatDateTimeRange(event.starts_at, event.ends_at)}</TableCell>
-                  <TableCell className="whitespace-normal">
-                    <EventTeams teams={event.teams} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {event.permissions.cancel && (
-                      <Button variant="ghost" size="sm" onClick={() => setCancelling(event)}>
-                        <XIcon />
-                        {t("events.cancel.action")}
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      <CardContent className="space-y-4">
+        {current.length === 0 ? <p className="text-sm text-muted-foreground">{t("admin.events.none")}</p> : <ul className="divide-y">{current.map(item)}</ul>}
+        {past.length > 0 && (
+          <div className="border-t pt-3">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+              aria-expanded={showPast}
+              onClick={() => setShowPast(!showPast)}
+            >
+              {showPast ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
+              {t("events.past", { count: past.length })}
+            </button>
+            {showPast && <ul className="mt-3 divide-y">{past.map(item)}</ul>}
+          </div>
         )}
       </CardContent>
-      <ConfirmDialog
-        open={cancelling !== null}
-        onOpenChange={(open) => !open && setCancelling(null)}
-        title={t("events.cancel.title", { event: cancelling?.name ?? "" })}
-        description={<p>{t("events.cancel.text")}</p>}
-        confirmLabel={t("events.cancel.confirm")}
-        dismissLabel={t("events.cancel.keep")}
-        destructive
-        onConfirm={() => (cancelling ? cancel(cancelling) : Promise.resolve())}
+      <CreateEventDialog
+        open={creating}
+        onOpenChange={setCreating}
+        description={t("admin.events.create.description")}
+        teams={activeTeams}
+        create={api.adminCreateEvent}
+        createdText={t("admin.events.create.created")}
+        reload={reload}
       />
     </Card>
   );

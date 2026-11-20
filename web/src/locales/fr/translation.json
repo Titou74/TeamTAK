@@ -262,6 +262,7 @@
     "past_other": "{{count}} événements passés",
     "hostedByUs": "Organisé par votre équipe",
     "hostedBy": "Organisé par {{team}}",
+    "organizedByAdmin": "Organisé par l'administration de la plateforme",
     "channel": "Canal dans ATAK et iTAK pendant l'événement :",
     "pendingSync": "Enregistré, mais le serveur TAK est injoignable : la modification sera appliquée automatiquement dans la minute.",
     "phase": {
@@ -323,10 +324,20 @@
       "submit": "Inviter",
       "done": "{{team}} est invitée. Ses chefs d'équipe reçoivent un e-mail."
     },
+    "assign": {
+      "label": "Ajouter une équipe",
+      "noOtherTeam": "Aucune autre équipe active à ajouter",
+      "submit": "Ajouter",
+      "done": "{{team}} participe à l'événement. Ses chefs d'équipe reçoivent un e-mail.",
+      "teams": "Équipes participantes",
+      "noTeam": "Aucune équipe active pour l'instant.",
+      "help": "Chaque équipe cochée participe immédiatement, sans avoir à accepter : ses chefs d'équipe reçoivent un e-mail. Vous pourrez ajouter ou retirer des équipes ensuite."
+    },
     "removeTeam": {
       "action": "Retirer {{team}} de l'événement",
       "title": "Retirer {{team}} de l'événement ?",
       "text": "Si l'équipe participe, ses membres cessent immédiatement de voir les autres équipes et d'être vus par elles. Ses chefs d'équipe sont prévenus par e-mail. Vous pourrez l'inviter de nouveau.",
+      "textAdmin": "Ses membres cessent immédiatement de voir les autres équipes et d'être vus par elles. Ses chefs d'équipe sont prévenus par e-mail. Vous pourrez l'ajouter de nouveau.",
       "confirm": "Retirer l'équipe",
       "done": "{{team}} ne fait plus partie de l'événement."
     },
@@ -357,6 +368,7 @@
       "action": "Quitter l'événement",
       "title": "Quitter l'événement « {{event}} » ?",
       "text": "Vos membres cessent immédiatement de voir les autres équipes et d'être vus par elles. L'équipe organisatrice est prévenue par e-mail et pourra vous inviter de nouveau.",
+      "textAdmin": "Vos membres cessent immédiatement de voir les autres équipes et d'être vus par elles. Les administrateurs sont prévenus par e-mail et pourront ajouter votre équipe de nouveau.",
       "confirm": "Quitter l'événement",
       "done": "Votre équipe a quitté l'événement."
     }
@@ -379,7 +391,7 @@
   },
   "admin": {
     "title": "Administration",
-    "description": "Approuvez les demandes d'équipe, fixez les limites de membres, gardez un œil sur les événements, et vérifiez que le serveur TAK correspond à cette plateforme.",
+    "description": "Approuvez les demandes d'équipe, fixez les limites de membres, organisez des événements ou gardez un œil sur ceux des équipes, et vérifiez que le serveur TAK correspond à cette plateforme.",
     "memberCap": "Limite de membres",
     "memberCapFor": "Limite de membres de {{team}}",
     "tabs": {
@@ -424,12 +436,12 @@
       "title_one": "{{count}} événement",
       "title_many": "{{count}} événements",
       "title_other": "{{count}} événements",
-      "description": "Les équipes créent et gèrent elles-mêmes leurs événements ; rien ici ne demande d'approbation. Vous pouvez annuler un événement : son canal disparaît alors immédiatement du serveur TAK.",
+      "description": "Les équipes créent et gèrent elles-mêmes leurs événements ; rien ici ne demande d'approbation, et vous pouvez annuler n'importe lequel. Vous pouvez aussi organiser vous-même un événement et y mettre directement des équipes : elles y participent sans avoir à accepter.",
       "none": "Aucun événement pour l'instant.",
-      "event": "Événement",
-      "state": "État",
-      "dates": "Dates",
-      "teams": "Équipes"
+      "create": {
+        "description": "Vous organisez l'événement : aucune équipe ne l'accueille. Les équipes que vous choisissez y participent immédiatement, sans invitation à accepter ; leurs chefs d'équipe reçoivent un e-mail.",
+        "created": "Événement créé. Les équipes choisies y participent."
+      }
     },
     "accounts": {
       "title_one": "{{count}} compte",
@@ -1031,6 +1043,7 @@
       "access_package_downloaded": "Zip de connexion téléchargé",
       "event_created": "Événement créé",
       "event_team_invited": "Équipe invitée à un événement",
+      "event_team_assigned": "Équipe ajoutée à un événement",
       "event_team_removed": "Équipe retirée d'un événement",
       "event_invitation_accepted": "Invitation à un événement acceptée",
       "event_invitation_declined": "Invitation à un événement refusée",
