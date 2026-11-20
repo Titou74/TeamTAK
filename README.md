@@ -1,63 +1,69 @@
 # TeamTAK
 
-**One TAK Server, shared by a whole community of teams.**
+**Install an official TAK Server, keep watch over it and keep it up to date, then share it with a
+community of teams.**
 
-TeamTAK runs a [TAK Server](https://tak.gov) for a community (an association, a network of
-volunteer teams, a group of clubs or units) and gives each team its own space on it. Teams organise
-themselves: a leader invites the members and hands out their accesses, without waiting for anyone.
-Each team keeps to itself by default, and teams meet on a common channel for the time of an event
-they agree to share.
+TeamTAK sets up an official [TAK Server](https://tak.gov), the Docker release published on tak.gov,
+on one Linux server. One script does the whole install, TAK Server included: it asks a few
+questions, shows a summary, and does the rest. Afterwards, TeamTAK keeps watch over the server,
+warns the administrator when something goes wrong, and says when an update is waiting, for TAK
+Server as for the rest, with the command that applies it.
 
-The administrator welcomes new teams and looks after the server. TeamTAK takes care of the rest:
-TAK accounts, groups and certificates, monitoring, alerts, backups and an audit log.
+On top of that server, TeamTAK adds what a community needs (an association, a network of volunteer
+teams, a group of clubs or units): people sign in with their e-mail, teams form and run themselves,
+connection files are generated ready to import into ATAK and iTAK, and events bring teams together
+for a time.
 
-One script installs everything on one server with Docker Compose, TAK Server included: it asks a
-few questions, shows a summary, and does the rest.
+## Install, watch, update
 
-## How a community uses it
+For whoever runs the server, this is the heart of TeamTAK: getting TAK Server running without
+reading its whole installation guide, and keeping it healthy and current afterwards.
 
-1. **Someone asks for a team.** Anyone can sign in with their e-mail address; an administrator
-   approves the new team. It is the only step that needs one.
-2. **The leader brings the team in.** They invite the members by e-mail and choose how the team
-   connects: one shared identity, one account per member, or named accesses for people outside
-   the platform.
-3. **Everyone gets connected.** Each access is handed over as a QR code, a username and password,
-   or a ready-made zip. In ATAK and iTAK the team is one channel.
-4. **Teams work together when they choose to.** A leader creates an event and invites other teams;
-   each team accepts or declines. From the start of the event to its end, a shared channel appears
-   on every device, then goes away, without anyone reconnecting.
-5. **The server stays healthy.** The administrator sees the machine, the services and the connected
-   devices, gets an e-mail when something goes wrong, and has a backup every day.
-
-## Features
-
-**For teams**
-
-- **Passwordless sign-in**: a six-digit code sent by e-mail. No password to remember.
-- **Self-service**: team leaders invite and remove members, and create, regenerate or withdraw
-  accesses themselves.
-- **Three connection modes**: a shared identity for the team, one account per member, or named
-  accesses for guests.
-- **Three ways to hand an access over**: QR code, username and password, or a zip (data package),
-  with or without a client certificate.
-- **Private by default**: a team never sees another team outside an event they share.
-
-**For working together**
-
-- **Cross-team events**: teams see each other from the start to the end of an event, then stop,
-  with no administrator involved.
-- **Leaders see who is on**: the devices connected with their team's accesses.
-- **English and French**, in the UI and in the e-mails; other languages are two files away.
-
-**For the administrator**
-
-- **One approval step**: new teams, with a member cap per team.
+- **A guided install.** One script, questions with a default for each, and nothing written before
+  you confirm the summary. It builds the TAK Server images from the ZIP you downloaded from tak.gov
+  (the version is read from the ZIP), creates the certificate authority, TAK Server's certificates
+  and its configuration, puts HTTPS in front with Let's Encrypt, starts everything with Docker
+  Compose and creates the first administrator. If a step fails, it says which and resumes from
+  there on the next run.
+- **Guided TAK Server upgrades.** Put the ZIP of a newer version next to the installed one and run
+  `sudo ./install.sh --upgrade-tak`: it takes a backup, builds the new images, checks that the
+  database can follow before changing anything, restarts and checks that TAK Server answers.
+- **Told when an update is waiting.** The monitoring page lists what can be updated (TeamTAK, TAK
+  Server, the other images, the server's packages) with the command for each, and an e-mail goes
+  out when a new TeamTAK release is out. Nothing is updated from the web UI, on purpose.
+- **Monitoring and alerts**: the machine, the services, TAK Server, the certificates and the
+  connected devices, with e-mail alerts and an optional webhook.
+- **Daily backups**, optionally encrypted, and a tested restore.
 - **Always in line**: the platform's database is the reference; the directory and TAK Server are
   corrected to match it, and any drift is reported.
-- **Monitoring and alerts**: machine, services, TAK Server, certificates and connected devices,
-  with e-mail alerts and an optional webhook.
-- **Daily backups**, optionally encrypted, and a tested restore.
+- **TAK Server's own administration pages** stay within reach of the platform's administrators,
+  behind their sign-in.
 - **Audit log** of every action that changes something.
+
+## Built for a community of teams
+
+This is what sets TeamTAK apart from a plain TAK Server: the server is shared by many teams, and
+each team runs itself. The administrator approves new teams; everything else happens without them.
+
+1. **Sign in with an e-mail address.** No password to remember: a six-digit code arrives by e-mail.
+   Anyone can sign in, but an account gets no TAK access until it belongs to a team.
+2. **Ask for a team.** A future leader asks for one and an administrator approves it, with a cap on
+   its members. It is the only step that needs an administrator.
+3. **Bring the team in.** The leader invites the members by e-mail, removes them, and chooses how
+   the team connects: one shared identity, one account per member, or named accesses for people
+   outside the platform.
+4. **Connect without setting anything up.** TeamTAK generates each access ready to use: a QR code
+   to scan, a zip (data package) to import into ATAK or iTAK, with or without a client
+   certificate, or a username and password. The leader creates, regenerates or withdraws them, and
+   sees which devices are connected. In ATAK and iTAK the team is one channel, private to it.
+5. **Work together at events.** A leader creates an event and invites other teams; each team
+   accepts or declines. From the start of the event to its end, a shared channel appears on every
+   device, then goes away, without anyone reconnecting.
+
+The UI and the e-mails are in English and French; other languages are two files away.
+
+If you are the one installing TeamTAK, the [Installation](#installation) and
+[Updating](#updating) guides below are all you need.
 
 ## Requirements
 
