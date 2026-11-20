@@ -10,7 +10,7 @@ probed while a page loads.
 | The server: processor, load, memory, swap, each filesystem (Docker's data included), uptime, whether the clock is synchronised, pending system updates with the security ones apart, "restart required" | The host agent |
 | The services of this stack: state, health, restarts, image, and whether a newer image exists | The host agent, and the registries for the last point |
 | TAK Server: ports 8089, 8443 and 8446, version, its five processes, connected devices | The platform itself, over the Docker network; the processes from the agent |
-| Certificates: root and intermediate authority, TAK Server's, the platform's, the Let's Encrypt ones, client certificates | The platform's files, what each port presents, and its database |
+| Certificates: root and intermediate authority, TAK Server's, the platform's, the one of TAK Server's administration pages (when they are open), the Let's Encrypt ones, client certificates | The platform's files, what each port presents, and its database |
 | The platform: last clean synchronisation, drift, whether the starts and ends of events were applied, e-mails that failed | The platform's database |
 | TeamTAK's version, and the latest release published on GitHub | The platform itself, and GitHub for the last point |
 | A history of processor, memory, disk and connected devices | One sample every five minutes, kept 14 days |
@@ -132,5 +132,7 @@ is not retried; the next event is sent normally.
 **Monitoring, Audit log** lists who did what, when, on which team or object, and from which
 address: every state-changing action (requests and approvals, invitations, roles, modes, accesses
 created, regenerated or removed, credentials shown and zips downloaded, events), administrator
-sign-ins, uses of the rescue command, and what the host agent did. It can be filtered by period,
+sign-ins, visits to [TAK Server's administration](configuration.md#tak-servers-administration) (at
+most one entry an hour per administrator), uses of the rescue command, and what the host agent
+did. It can be filtered by period,
 team, actor and action. No secret is ever recorded. Entries are kept one year by default.

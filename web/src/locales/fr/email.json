@@ -99,6 +99,7 @@
       "intermediate_ca": "l'autorité de certification intermédiaire (signe les certificats clients)",
       "tak_server": "TAK Server",
       "platform_api": "l'accès de la plateforme à TAK Server",
+      "tak_admin_ui": "l'accès à l'administration de TAK Server",
       "enrollment": "le port d'enrôlement (8446)",
       "web": "le site web (Let's Encrypt)"
     },

@@ -87,8 +87,10 @@ sudo apt update && sudo apt install -y git unzip openssl
 
 **2. Point the domain and open the ports.** Create a DNS record for the domain (for example
 `tak.example.org`) that points to the server, and open these ports in the firewall: 80/tcp,
-443/tcp and 443/udp (web), 8089/tcp (TAK clients, plus any other client port you choose at step 5)
-and 8446/tcp (enrollment). The domain must
+443/tcp and 443/udp (web), 8089/tcp (TAK clients, plus any other client port you choose at step 5),
+8446/tcp (enrollment) and 8443/tcp (TAK Server's administration pages, for the platform's
+administrators: [TAK Server's administration](docs/configuration.md#tak-servers-administration)).
+The domain must
 resolve before the install runs, because Caddy asks Let's Encrypt for the certificate as soon as it
 starts.
 
@@ -197,6 +199,7 @@ Without questions:
 | `--admin-email <address>` | First administrator | none |
 | `--cert-validity-days <n>` | Validity of TAK client certificates | 365 |
 | `--tak-client-ports <list>` | Ports TAK clients connect to, separated by commas; the first goes into the zips and QR codes ([Client ports](docs/configuration.md#client-ports)) | `8089` |
+| `--tak-admin-port <port\|off>` | Port where the platform's administrators open TAK Server's own administration pages, after signing in ([TAK Server's administration](docs/configuration.md#tak-servers-administration)) | `8443` |
 | `--tak-enroll-letsencrypt` | Production: Let's Encrypt certificate on port 8446 | off |
 | `--smtp-host`, `--smtp-port`, `--smtp-username`, `--smtp-password`, `--smtp-tls`, `--mail-from` | Outgoing e-mail | mail catcher in local mode |
 | `--acme-email <address>` | Contact given to Let's Encrypt | the administrator's |

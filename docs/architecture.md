@@ -25,9 +25,10 @@ Everything runs with Docker Compose, in the project `teamtak`.
 | 8480 | Web UI in local mode |
 | 8089, and any other port of `TAK_CLIENT_PORTS` | TAK clients, mutual TLS ([Client ports](configuration.md#client-ports)) |
 | 8446 | TAK certificate enrollment |
+| 8443, or `TAK_ADMIN_PORT` | TAK Server's own administration pages, served by Caddy to the platform's administrators ([TAK Server's administration](configuration.md#tak-servers-administration)) |
 
-Port 8443 (TAK Server API) is not published: the platform reaches it over the Docker network.
-Every client port of the machine leads to the same TLS input of TAK Server, 8089 inside its
+TAK Server's own port 8443 (its API and administration pages) is not published: the platform and
+Caddy reach it over the Docker network. Every client port of the machine leads to the same TLS input of TAK Server, 8089 inside its
 container: TAK Server itself has a single input, and the monitoring watches that one.
 
 ## How it works

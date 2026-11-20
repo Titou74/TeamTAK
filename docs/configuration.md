@@ -21,6 +21,7 @@ The settings worth knowing:
 | `TAK_API_MAX_HEAP`, `TAK_MESSAGING_MAX_HEAP`, … | Java heap sizes of TAK Server in MB; empty lets it size them from the machine's RAM |
 | `TAK_CONNECTION_NAME` | Name of the server shown in ATAK and iTAK (`TeamTAK` by default) |
 | `TAK_CLIENT_PORTS` | Ports of the machine TAK clients connect to, separated by commas (`8089` by default). See [Client ports](#client-ports) |
+| `TAK_ADMIN_PORT` | Port of the machine where the platform's administrators open TAK Server's own administration pages (`8443` by default; `off`: not published). See [TAK Server's administration](#tak-servers-administration) |
 | `SMTP_*`, `MAIL_FROM` | Outgoing e-mail; check it with `docker compose exec app teamtak send-test-mail you@example.org` |
 
 The settings `install.sh` asks for, or reads from its options, are used on the first run only;
@@ -35,7 +36,7 @@ TAK clients connect to TAK Server on port 8089 by default. Two situations call f
 - **Another program of the machine already uses 8089.** Give another port instead of 8089.
 
 ```
-TAK_CLIENT_PORTS=8089,8443,4443
+TAK_CLIENT_PORTS=8089,4443
 ```
 
 The first port of the list is the default one: it goes into the zips and QR codes. The others are
@@ -62,12 +63,50 @@ What is refused:
 - 8446 (enrollment) and the web interface's ports: 80 and 443 in production, 8480 and 8025 in
   local mode. In production, 443, the port almost every network lets through, belongs to the web
   interface.
+- The port of TAK Server's administration (`TAK_ADMIN_PORT`, 8443 by default).
 - A port another program of the machine listens on: the install says which, before building
   anything. Ports this stack already publishes are not counted.
 
-Port 8443 is free on the machine (TAK Server's API is not published), so it can be one of the
-client ports. Enrollment stays on 8446 only: a device on a network that also blocks 8446 needs
+To give 8443 to TAK clients, move TAK Server's administration first: `TAK_ADMIN_PORT` set to
+another port, or to `off`. Enrollment stays on 8446 only: a device on a network that also blocks 8446 needs
 the zip with certificate, which connects without enrolling.
+
+## TAK Server's administration
+
+TAK Server has administration pages of its own: the metrics dashboard, inputs and data feeds,
+missions, data packages, WebTAK. TeamTAK opens them to its administrators, and to nobody else,
+without any certificate in the browser:
+
+- Open the **TAK Server** link of the web UI's navigation (shown to administrators only), or
+  `https://tak.example.org:8443` directly (`http://localhost:8443` in local mode).
+- Without a session, or with the session of an account that is not an administrator, the browser
+  is sent to the web UI, where the sign-in page is: nothing of TAK Server is shown. The session is
+  the web UI's own, so signing in there is enough.
+- Caddy serves that port. For each request it asks the platform whether the session belongs to an
+  administrator, then passes the request on to TAK Server's 8443 over the Docker network,
+  presenting a certificate of its own (`teamtak-admin-ui`, signed by the platform's authority and
+  declared administrator in TAK Server by the install). TAK Server's own 8443 stays unpublished,
+  and no administrator certificate leaves the server.
+- The [audit log](monitoring.md#audit-log) records who opened these pages, at most once an hour
+  per administrator.
+
+What to know:
+
+- In TAK Server, every administrator acts under the one name `teamtak-admin-ui`: its logs cannot
+  tell them apart. The audit log of the platform says who opened the pages, and when.
+- The platform is the source of truth for TAK accounts, groups and client certificates. What is
+  changed by hand in TAK Server's user and group pages is put back by the reconciliation, and a
+  certificate revoked there is unknown to the platform. Use these pages to look, and to set up TAK
+  Server itself.
+- WebTAK needs HTTPS: it works in production, not in local mode, where this port is plain HTTP
+  like the web UI.
+- The certificate is valid two years, like the platform's own; the monitoring warns before it
+  expires. To renew it, delete `deploy/data/tak/certs/teamtak-admin-ui*` and run `./install.sh`
+  again.
+- Another port: `TAK_ADMIN_PORT=9443`; none: `TAK_ADMIN_PORT=off`. Then run `./install.sh` again,
+  and open or close the port in the firewall. An installation made before this setting existed
+  gets `8443`, or `off` when 8443 is already one of its TAK client ports or taken by another
+  program.
 
 ## Settings fixed at install
 
@@ -79,7 +118,7 @@ is not enough, and for the secrets and the names it breaks the installation:
   keystores were created with them, and without `APP_SECRET` the stored TAK passwords and zip
   certificates cannot be read;
 - `LDAP_BASE_DN` and the certificate names (`ROOT_CA_NAME`, `INT_CA_NAME`, `SERVER_CERT_NAME`,
-  `TAK_API_CERT_NAME`);
+  `TAK_API_CERT_NAME`, `TAK_ADMIN_UI_CERT_NAME`);
 - `PUBLIC_HOST`: TAK Server's certificate names the host given at install, and `install.sh` does
   not issue a new one;
 - `TAK_VERSION`, `TAK_IMAGE` and `TAK_DB_IMAGE`: `./install.sh --upgrade-tak` changes them (README,

@@ -13,6 +13,7 @@ mod monitor;
 mod reconciler;
 mod settings;
 mod state;
+mod tak_admin;
 mod teams;
 
 use std::net::SocketAddr;
@@ -166,6 +167,8 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/settings/webhook-test", post(monitor::api::webhook_test))
         .route("/admin/settings/mail-test", post(monitor::api::mail_test))
         .route("/admin/audit", get(audit::list))
+        // Asked by Caddy about each request to TAK Server's administration pages.
+        .route("/tak-admin/authorize", get(tak_admin::authorize))
         .fallback(|| async { ApiError::NotFound })
         // The client's address, for the audit log.
         .layer(middleware::from_fn(audit::with_request_ip))

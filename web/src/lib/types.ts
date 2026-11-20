@@ -36,6 +36,8 @@ export interface Me {
   account: Account;
   teams: MyTeam[];
   invitations: MyInvitation[];
+  /** TAK Server's own administration pages, behind the platform's sign-in: administrators only, null when turned off. */
+  tak_admin_url: string | null;
 }
 
 export interface PublicConfig {

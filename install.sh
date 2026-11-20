@@ -41,6 +41,10 @@ Settings (first run only):
   --tak-client-ports <list>  Ports of this machine TAK clients connect to, separated by
                              commas (default: 8089). The first goes into the zips and QR
                              codes; the others are alternatives for networks that block it.
+  --tak-admin-port <port|off>
+                             Port of this machine where the platform's administrators open
+                             TAK Server's own administration pages, after signing in to the
+                             platform (default: 8443). off: not published.
   --tak-enroll-letsencrypt   Production: also give the Let's Encrypt certificate to TAK
                              Server's enrollment port (8446), which QR-code enrollment needs.
   --smtp-host <host> --smtp-port <port> --smtp-username <u> --smtp-password <p>
@@ -66,13 +70,13 @@ EOF
 }
 
 MODE_ARG="" DOMAIN_ARG="" HOST_ARG="" ADMIN_EMAIL_ARG="" ACME_EMAIL_ARG="" VALIDITY_ARG=""
-ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0 TAK_PORTS_ARG=""
+ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0 TAK_PORTS_ARG="" TAK_ADMIN_PORT_ARG=""
 SMTP_HOST_ARG="" SMTP_PORT_ARG="" SMTP_USERNAME_ARG="" SMTP_PASSWORD_ARG="" SMTP_TLS_ARG="" MAIL_FROM_ARG=""
 # Options given on the command line, between spaces: they are not asked.
 GIVEN=" "
 while [ $# -gt 0 ]; do
   case "$1" in
-    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--smtp-*|--mail-from|--zip)
+    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--tak-admin-port|--smtp-*|--mail-from|--zip)
       [ $# -ge 2 ] || { usage >&2; die "$1 needs a value"; } ;;
   esac
   GIVEN="$GIVEN${1#--} "
@@ -85,6 +89,7 @@ while [ $# -gt 0 ]; do
     --cert-validity-days) VALIDITY_ARG="$2"; shift ;;
     --tak-enroll-letsencrypt) ENROLL_LE_ARG=true ;;
     --tak-client-ports) TAK_PORTS_ARG="$2"; shift ;;
+    --tak-admin-port) TAK_ADMIN_PORT_ARG="$2"; shift ;;
     --smtp-host) SMTP_HOST_ARG="$2"; shift ;;
     --smtp-port) SMTP_PORT_ARG="$2"; shift ;;
     --smtp-username) SMTP_USERNAME_ARG="$2"; shift ;;
@@ -187,6 +192,17 @@ client_ports_text() {
   local others
   others="$(port_list "$1" | sed 1d | paste -s -d , - | sed 's/,/, /g')"
   printf '%s:%s%s' "$PUBLIC_HOST" "$(port_list "$1" | sed -n 1p)" "${others:+, also $others}"
+}
+
+# Address of TAK Server's administration pages: the web UI's host, on TAK_ADMIN_PORT.
+admin_url() {
+  local base="${PUBLIC_URL%/}"
+  case "$base" in *://*:*) base="${base%:*}" ;; esac
+  printf '%s:%s' "$base" "$1"
+}
+admin_text() {
+  if [ -n "$(admin_port "$1")" ]; then printf '%s (administrators, after signing in)' "$(admin_url "$1")"
+  else printf 'not published (TAK_ADMIN_PORT=off)'; fi
 }
 
 # Valid for the mode, and free: no other program of this machine listens on them.
@@ -317,6 +333,8 @@ if [ ! -f "$ENV_FILE" ]; then
   DOMAIN="$DOMAIN_ARG" CLIENT_HOST="$HOST_ARG"
   ADMIN_EMAIL="$ADMIN_EMAIL_ARG" ACME_EMAIL="$ACME_EMAIL_ARG" VALIDITY="$VALIDITY_ARG"
   ENROLL_LE="${ENROLL_LE_ARG:-false}" TAK_PORTS="$TAK_PORTS_ARG"
+  # Not asked: refused as a client port while the questions run.
+  TAK_ADMIN_PORT="${TAK_ADMIN_PORT_ARG:-8443}"
   SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="$SMTP_PORT_ARG" SMTP_TLS="$SMTP_TLS_ARG"
   SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG" MAIL_FROM="$MAIL_FROM_ARG"
 
@@ -419,6 +437,7 @@ if [ ! -f "$ENV_FILE" ]; then
   fi
   check_port "$SMTP_PORT" > /dev/null || die "--smtp-port: not a port number: $SMTP_PORT"
   check_tls "$SMTP_TLS" > /dev/null || die "--smtp-tls must be starttls, tls or none"
+  why="$(admin_port_problem "$TAK_ADMIN_PORT" "$MODE")" || die "--tak-admin-port: $why"
   TAK_PORTS="$(normalize_ports "${TAK_PORTS:-8089}")"
   why="$(client_ports_problem "$TAK_PORTS" "$MODE")" || die "--tak-client-ports: $why"
 
@@ -427,6 +446,7 @@ if [ ! -f "$ENV_FILE" ]; then
     info "Mode:                  $MODE"
     info "Web:                   $PUBLIC_URL"
     info "TAK clients:           $(client_ports_text "$TAK_PORTS"), enrollment $PUBLIC_HOST:8446"
+    info "TAK Server admin:      $(admin_text "$TAK_ADMIN_PORT")"
     info "Administrator:         ${ADMIN_EMAIL:-none (later: docker compose exec app teamtak grant-admin <email>)}"
     if [ "$MODE" = production ]; then
       info "Let's Encrypt contact: ${ACME_EMAIL:-none}"
@@ -467,6 +487,9 @@ BIND_ADDRESS=$BIND_ADDRESS
 # Ports of this machine TAK clients connect to, separated by commas. The first goes into the
 # zips and QR codes; the others are alternatives for networks that block it.
 TAK_CLIENT_PORTS=$TAK_PORTS
+# Port of this machine where the platform's administrators open TAK Server's own
+# administration pages, after signing in to the platform; off: not published
+TAK_ADMIN_PORT=$TAK_ADMIN_PORT
 COOKIE_SECURE=$COOKIE_SECURE
 ADMIN_EMAIL=$ADMIN_EMAIL
 ACME_EMAIL=$ACME_EMAIL
@@ -483,6 +506,8 @@ ROOT_CA_NAME=teamtak-root-ca
 INT_CA_NAME=teamtak-ca
 SERVER_CERT_NAME=takserver
 TAK_API_CERT_NAME=teamtak-api
+# Certificate Caddy presents to TAK Server for its administration pages
+TAK_ADMIN_UI_CERT_NAME=teamtak-admin-ui
 # true: port 8446 presents the Let's Encrypt certificate (needed by QR-code enrollment)
 TAK_ENROLL_LETSENCRYPT=$ENROLL_LE
 TAK_ENROLL_URL=$TAK_ENROLL_URL
@@ -535,7 +560,7 @@ ENVEOF
   chmod 600 "$ENV_FILE"
 else
   info "keeping existing settings: $ENV_FILE"
-  for option in local domain host admin-email acme-email cert-validity-days tak-client-ports tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
+  for option in local domain host admin-email acme-email cert-validity-days tak-client-ports tak-admin-port tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
     if given "$option"; then
       info "note: --$option and the other settings options are only read on the first run; edit $ENV_FILE to change them"
       break
@@ -564,12 +589,30 @@ if [ -z "$(env_get TAK_CLIENT_PORTS)" ]; then
   env_set TAK_CLIENT_PORTS 8089
   info "added to $ENV_FILE: TAK_CLIENT_PORTS=8089 (ports TAK clients connect to; add others there)"
 fi
+# TAK Server's administration pages, through Caddy: 8443, unless a TAK client port or another
+# program of this machine already has it.
+if [ -z "$(env_get TAK_ADMIN_UI_CERT_NAME)" ]; then
+  env_set TAK_ADMIN_UI_CERT_NAME teamtak-admin-ui
+fi
+if [ -z "$(env_get TAK_ADMIN_PORT)" ]; then
+  if port_list "$(env_get TAK_CLIENT_PORTS)" | grep -qx 8443; then
+    env_set TAK_ADMIN_PORT off
+    info "added to $ENV_FILE: TAK_ADMIN_PORT=off (8443 is a TAK client port here; give another free port to open TAK Server's administration)"
+  elif [ -n "$(client_ports_taken 8443)" ]; then
+    env_set TAK_ADMIN_PORT off
+    info "added to $ENV_FILE: TAK_ADMIN_PORT=off (another program of this machine uses 8443; give another free port to open TAK Server's administration)"
+  else
+    env_set TAK_ADMIN_PORT 8443
+    info "added to $ENV_FILE: TAK_ADMIN_PORT=8443 (TAK Server's administration pages, for the platform's administrators)"
+  fi
+fi
 compose_files="$(env_get COMPOSE_FILE)"
 case ":$compose_files:" in
   *":$PORTS_COMPOSE_FILE:"*) ;;
   *) env_set COMPOSE_FILE "${compose_files:+$compose_files:}$PORTS_COMPOSE_FILE" ;;
 esac
 load_env
+why="$(admin_port_problem "$TAK_ADMIN_PORT" "$MODE")" || die "TAK_ADMIN_PORT in $ENV_FILE: $why"
 why="$(client_ports_problem "$TAK_CLIENT_PORTS" "$MODE")" || die "TAK_CLIENT_PORTS in $ENV_FILE: $why"
 render_ports_compose
 # Backup archives are written here by the host agent. They hold every secret.
@@ -653,11 +696,14 @@ if [ -z "$ZIP" ]; then
 fi
 info "mode: $MODE — public host: $PUBLIC_HOST — web: $PUBLIC_URL — client certificates: $CERT_VALIDITY_DAYS days"
 info "TAK clients: $(client_ports_text "$TAK_CLIENT_PORTS")"
+info "TAK Server admin: $(admin_text "$TAK_ADMIN_PORT")"
 if [ "$NO_START" = 0 ]; then
   # Docker cannot publish a port another program holds, and would only say so once
   # everything is built.
   taken="$(client_ports_taken "$TAK_CLIENT_PORTS")"
   [ -z "$taken" ] || die "TAK clients' port(s) $taken already used on this machine by another program. Choose other ports in TAK_CLIENT_PORTS ($ENV_FILE), then run ./install.sh again"
+  taken="$(client_ports_taken "$(admin_port "$TAK_ADMIN_PORT")")"
+  [ -z "$taken" ] || die "port $taken of TAK Server's administration already used on this machine by another program. Choose another port in TAK_ADMIN_PORT ($ENV_FILE), or off, then run ./install.sh again"
 fi
 if [ "$MODE" = production ] && [ -z "$SMTP_HOST" ]; then
   info "WARNING: SMTP_HOST is empty in $ENV_FILE: login codes cannot be e-mailed until it is set."
@@ -717,6 +763,39 @@ cp "$DATA_DIR/tak/certs/$INT_CA_NAME.pem" "$DATA_DIR/app/tak/ca-chain.pem"
 cp "$DATA_DIR/tak/certs/$TAK_API_CERT_NAME.pem" "$DATA_DIR/app/tak/api-cert.pem"
 cp "$DATA_DIR/tak/certs/$TAK_API_CERT_NAME-plain.key" "$DATA_DIR/app/tak/api-key.pem"
 
+# The certificate Caddy presents to TAK Server for the administration pages. Made apart from
+# the others, with TAK Server's own script and CA, so an installation made before it existed
+# gets it too.
+if [ ! -f "$DATA_DIR/tak/certs/$TAK_ADMIN_UI_CERT_NAME-plain.key" ]; then
+  log "Generating the certificate of TAK Server's administration pages"
+  if ! docker run --rm -i -u 0 --entrypoint bash -w /opt/tak/certs \
+      -v "$DATA_DIR/tak/certs:/opt/tak/certs/files" \
+      -e NAME="$TAK_ADMIN_UI_CERT_NAME" -e CAPASS="$TAK_CERT_PASSWORD" -e PASS="$TAK_CERT_PASSWORD" \
+      -e STATE=XX -e CITY=TAK -e ORGANIZATIONAL_UNIT=TeamTAK \
+      "$TAK_IMAGE" -s > "$DATA_DIR/certs.log" 2>&1 <<'CERTEOF'
+set -euo pipefail
+./makeCert.sh client "$NAME"
+cd files
+openssl pkcs8 -topk8 -nocrypt -in "$NAME.key" -passin "pass:$PASS" -out "$NAME-plain.key"
+openssl x509 -in "$NAME.pem" -noout -subject -enddate | tr '\n' ' '
+CERTEOF
+  then
+    tail -n 30 "$DATA_DIR/certs.log" >&2
+    die "certificate generation failed"
+  fi
+  info "$(tail -n 1 "$DATA_DIR/certs.log")"
+  rm -f "$DATA_DIR/certs.log"
+fi
+# The platform watches its expiry: the certificate alone, never the key.
+cp "$DATA_DIR/tak/certs/$TAK_ADMIN_UI_CERT_NAME.pem" "$DATA_DIR/app/tak/admin-ui-cert.pem"
+# Read by Caddy only: its own copy, like the platform's above.
+mkdir -p "$DEPLOY_DIR/$ADMIN_UI_CADDY_DIR"
+chmod 700 "$DEPLOY_DIR/$ADMIN_UI_CADDY_DIR"
+cp "$DATA_DIR/tak/certs/$INT_CA_NAME.pem" "$DEPLOY_DIR/$ADMIN_UI_CADDY_DIR/ca-chain.pem"
+cp "$DATA_DIR/tak/certs/$TAK_ADMIN_UI_CERT_NAME.pem" "$DEPLOY_DIR/$ADMIN_UI_CADDY_DIR/cert.pem"
+cp "$DATA_DIR/tak/certs/$TAK_ADMIN_UI_CERT_NAME-plain.key" "$DEPLOY_DIR/$ADMIN_UI_CADDY_DIR/key.pem"
+chmod 600 "$DEPLOY_DIR/$ADMIN_UI_CADDY_DIR/key.pem"
+
 # ----------------------------------------------------------------------------- TAK Server configuration
 
 log "TAK Server configuration"
@@ -725,7 +804,7 @@ log "TAK Server configuration"
 if [ ! -f "$DATA_DIR/tak/TAKIgniteConfig.xml" ]; then
   docker run --rm --entrypoint cat "$TAK_IMAGE" /opt/tak/TAKIgniteConfig.example.xml > "$DATA_DIR/tak/TAKIgniteConfig.xml"
 fi
-# Starts empty; grant_api_certificate fills it. Kept here so the administrator role of the
+# Starts empty; grant_admin_certificates fills it. Kept here so the administrator role of the
 # platform's certificate survives a re-creation of the container.
 if [ ! -f "$DATA_DIR/tak/UserAuthenticationFile.xml" ]; then
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' \
@@ -770,8 +849,8 @@ fi
 
 info "waiting for TAK Server (about a minute)"
 wait_healthy takserver 420 || { compose logs --tail 40 takserver >&2; die "TAK Server did not become healthy"; }
-log "Declaring the platform's certificate as TAK Server administrator"
-grant_api_certificate
+log "Declaring the platform's certificates as TAK Server administrators"
+grant_admin_certificates
 
 info "waiting for the platform"
 wait_healthy app 120 || { compose logs --tail 40 app >&2; die "the platform did not become healthy"; }
@@ -812,6 +891,7 @@ done
 log "TeamTAK $TEAMTAK_VERSION is running"
 info "Web:               $PUBLIC_URL"
 info "TAK clients:       $(client_ports_text "$TAK_CLIENT_PORTS") (TLS)   enrollment: $PUBLIC_HOST:8446"
+info "TAK Server admin:  $(admin_text "$TAK_ADMIN_PORT")"
 if [ "$MODE" = local ]; then
   info "Mail catcher:      http://localhost:${MAILPIT_PORT:-8025} (login codes arrive here)"
 fi

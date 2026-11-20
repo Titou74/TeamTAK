@@ -17,6 +17,7 @@ use crate::config::Config;
 use crate::mail::Mailer;
 use crate::monitor::Monitor;
 use crate::reconciler::Reconciler;
+use crate::tak_admin::Visits;
 
 pub struct AppState {
     pub config: Config,
@@ -29,6 +30,8 @@ pub struct AppState {
     pub monitor: Arc<Monitor>,
     /// Truststore shipped in every zip: the CA certificates of TAK Server.
     pub truststore_p12: Vec<u8>,
+    /// When each administrator's visit to TAK Server's administration was last recorded.
+    pub tak_admin_visits: Visits,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -81,8 +84,9 @@ pub async fn build_state(config: Config) -> Result<SharedState> {
     let mailer = Arc::new(Mailer::new(&config.smtp, &config.public_url, Some(db.clone()))?);
     let Backends { directory, tak, ca_ders } = build_backends(&config)?;
     let truststore_p12 = build_truststore(&ca_ders, config.tak.p12_format).context("building the client truststore")?;
-    let protected = BTreeSet::from([config.tak.api_cert_name.clone()]);
+    // The platform's certificate, and the one Caddy uses for the administrators' pages.
+    let protected = BTreeSet::from([config.tak.api_cert_name.clone(), config.tak.admin_ui_cert_name.clone()]);
     let reconciler = Arc::new(Reconciler::new(db.clone(), directory.clone(), tak.clone(), secrets.clone(), protected));
     let monitor = Arc::new(Monitor::new(&config, db.clone(), tak.clone(), mailer.clone(), secrets.clone()));
-    Ok(Arc::new(AppState { config, db, secrets, mailer, tak, reconciler, monitor, truststore_p12 }))
+    Ok(Arc::new(AppState { config, db, secrets, mailer, tak, reconciler, monitor, truststore_p12, tak_admin_visits: Visits::default() }))
 }

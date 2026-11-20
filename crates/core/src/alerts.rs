@@ -195,7 +195,8 @@ pub struct ServiceObservation {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CertificateObservation {
-    /// `root_ca`, `intermediate_ca`, `tak_server`, `platform_api`, `enrollment`, `web`.
+    /// `root_ca`, `intermediate_ca`, `tak_server`, `platform_api`, `tak_admin_ui`,
+    /// `enrollment`, `web`.
     pub name: String,
     pub expires_at: OffsetDateTime,
 }

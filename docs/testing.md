@@ -32,7 +32,9 @@ it, without reconnecting. For the monitoring they prove that the host agent repo
 refuses every other container, that a stopped service raises one alert e-mail in each
 administrator's language and one more when it is back, who sees which connected devices, what the
 audit log records, that a backup asked from the API is written and readable, and that the test
-e-mail arrives, from the settings page and from the command line, or says why it could not.
+e-mail arrives, from the settings page and from the command line, or says why it could not. For
+TAK Server's administration pages they prove that nobody without an administrator's session gets
+anything of TAK Server, and that an administrator gets it with TAK Server's administrator role.
 
 The tests use random names and can be replayed on the same stack. A word after the command runs
 only the tests whose name contains it. The whole suite takes about ten minutes; it stops and

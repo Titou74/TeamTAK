@@ -49,6 +49,11 @@ pub struct TakConfig {
     pub api_key_file: PathBuf,
     /// CN of the platform's API certificate; never touched by the reconciliation.
     pub api_cert_name: String,
+    /// CN of the certificate Caddy presents to TAK Server for the administrators' pages;
+    /// never touched by the reconciliation either.
+    pub admin_ui_cert_name: String,
+    /// That certificate without its key, for the monitoring of its expiry.
+    pub admin_ui_cert_file: Option<PathBuf>,
     /// Host name or address written in zips and QR codes.
     pub public_host: String,
     /// Ports of the machine that lead to the TLS input for TAK clients, never empty. The
@@ -95,6 +100,9 @@ pub struct Config {
     pub reconcile_interval: Duration,
     pub session_ttl_days: i64,
     pub monitor: MonitorConfig,
+    /// Address of TAK Server's own administration pages, served by Caddy to the platform's
+    /// administrators (`TAK_ADMIN_PORT`); `None` when that port is turned off.
+    pub tak_admin_url: Option<String>,
 }
 
 /// Where the monitoring looks.
@@ -151,6 +159,27 @@ pub fn parse_release_repository(raw: &str) -> Result<Option<String>> {
     }
 }
 
+/// Address of TAK Server's administration pages: the host of the web UI, on the port of
+/// `TAK_ADMIN_PORT`, with the web UI's scheme (Caddy serves both). `None` for `off`.
+pub fn tak_admin_url(public_url: &str, raw_port: &str) -> Result<Option<String>> {
+    let raw_port = raw_port.trim();
+    if raw_port.is_empty() || raw_port.eq_ignore_ascii_case("off") || raw_port.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    let port: u16 = raw_port.parse().ok().filter(|p| *p != 0).ok_or_else(|| anyhow!("expected a port number or off"))?;
+    let (scheme, rest) = public_url.split_once("://").ok_or_else(|| anyhow!("PUBLIC_URL {public_url:?} has no scheme"))?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    // Without its port; an IPv6 address keeps its brackets.
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => format!("[{}]", v6.split(']').next().unwrap_or_default()),
+        None => authority.split(':').next().unwrap_or_default().to_string(),
+    };
+    if host.is_empty() || host == "[]" {
+        bail!("PUBLIC_URL {public_url:?} has no host");
+    }
+    Ok(Some(format!("{scheme}://{host}:{port}")))
+}
+
 /// The ports of a list like `8089,8443` (commas or spaces): at least one, none twice, in
 /// the order given.
 pub fn parse_ports(raw: &str) -> Result<Vec<u16>> {
@@ -189,13 +218,16 @@ impl Config {
         let client_ports = parse_ports(&ports_raw).with_context(|| format!("TAK_CLIENT_PORTS={ports_raw:?}"))?;
         let repository_raw = var_or("RELEASE_REPOSITORY", DEFAULT_RELEASE_REPOSITORY);
         let release_repository = parse_release_repository(&repository_raw).with_context(|| format!("RELEASE_REPOSITORY={repository_raw:?}"))?;
+        let public_url = var("PUBLIC_URL")?.trim_end_matches('/').to_string();
+        let admin_port_raw = var_or("TAK_ADMIN_PORT", "off");
+        let tak_admin_url = tak_admin_url(&public_url, &admin_port_raw).with_context(|| format!("TAK_ADMIN_PORT={admin_port_raw:?}"))?;
 
         Ok(Self {
             listen_addr: parsed("LISTEN_ADDR", "0.0.0.0:8080")?,
             web_dir,
             database_url: var("DATABASE_URL")?,
             app_secret,
-            public_url: var("PUBLIC_URL")?.trim_end_matches('/').to_string(),
+            public_url,
             cookie_secure: parsed("COOKIE_SECURE", "true")?,
             smtp: SmtpConfig {
                 host: var_or("SMTP_HOST", ""),
@@ -218,6 +250,8 @@ impl Config {
                 api_cert_file: var("TAK_API_CERT_FILE")?.into(),
                 api_key_file: var("TAK_API_KEY_FILE")?.into(),
                 api_cert_name: var_or("TAK_API_CERT_NAME", "teamtak-api"),
+                admin_ui_cert_name: var_or("TAK_ADMIN_UI_CERT_NAME", "teamtak-admin-ui"),
+                admin_ui_cert_file: Some(var_or("TAK_ADMIN_UI_CERT_FILE", "")).filter(|f| !f.is_empty()).map(PathBuf::from),
                 public_host: var("TAK_PUBLIC_HOST")?,
                 client_ports,
                 connection_name: var_or("TAK_CONNECTION_NAME", "TeamTAK"),
@@ -241,13 +275,14 @@ impl Config {
                 web_tls_probe: Some(var_or("WEB_TLS_PROBE", "")).filter(|p| !p.is_empty()),
                 release_repository,
             },
+            tak_admin_url,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_ports, parse_release_repository, TakConfig, DEFAULT_RELEASE_REPOSITORY};
+    use super::{parse_ports, parse_release_repository, tak_admin_url, TakConfig, DEFAULT_RELEASE_REPOSITORY};
 
     #[test]
     fn release_repository() {
@@ -281,6 +316,8 @@ mod tests {
             api_cert_file: Default::default(),
             api_key_file: Default::default(),
             api_cert_name: String::new(),
+            admin_ui_cert_name: String::new(),
+            admin_ui_cert_file: None,
             public_host: "tak.example.org".into(),
             client_ports: vec![8089, 8443],
             connection_name: "TeamTAK".into(),
@@ -288,5 +325,21 @@ mod tests {
         };
         assert_eq!(tak.connection_name_on(8089), "TeamTAK");
         assert_eq!(tak.connection_name_on(8443), "TeamTAK (8443)");
+    }
+
+    #[test]
+    fn tak_admin_address() {
+        let url = |public: &str, port: &str| tak_admin_url(public, port).unwrap();
+        assert_eq!(url("https://tak.example.org", "8443").as_deref(), Some("https://tak.example.org:8443"));
+        assert_eq!(url("http://localhost:8480", "8443").as_deref(), Some("http://localhost:8443"), "the web UI's port is replaced");
+        assert_eq!(url("http://192.168.1.20:8480/", " 9443 ").as_deref(), Some("http://192.168.1.20:9443"));
+        assert_eq!(url("http://[::1]:8480", "8443").as_deref(), Some("http://[::1]:8443"));
+        for off in ["off", "OFF", "none", ""] {
+            assert_eq!(url("https://tak.example.org", off), None, "{off:?}");
+        }
+        for bad in ["0", "65536", "84a3", "-1"] {
+            assert!(tak_admin_url("https://tak.example.org", bad).is_err(), "{bad:?} accepted");
+        }
+        assert!(tak_admin_url("tak.example.org", "8443").is_err(), "no scheme");
     }
 }

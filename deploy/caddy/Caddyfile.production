@@ -7,3 +7,8 @@
 	encode zstd gzip
 	reverse_proxy app:8080
 }
+
+# TAK Server's administration pages, with the same certificate (see tak-admin.caddy).
+{$DOMAIN}:8443 {
+	import tak-admin.caddy
+}

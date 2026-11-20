@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ActivityIcon, LogOutIcon, ShieldCheckIcon, UserIcon, UsersIcon } from "lucide-react";
+import { ActivityIcon, ExternalLinkIcon, LogOutIcon, ShieldCheckIcon, UserIcon, UsersIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, useNavigate } from "react-router-dom";
@@ -105,6 +105,18 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
               </NavItem>
             )}
             {me.account.is_admin && <MonitoringNavItem />}
+            {me.account.is_admin && me.tak_admin_url && (
+              <a
+                href={me.tak_admin_url}
+                target="_blank"
+                rel="noopener"
+                title={t("nav.takAdminHint")}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLinkIcon className="size-4" />
+                {t("nav.takAdmin")}
+              </a>
+            )}
           </nav>
           <LanguageSwitcher />
           <DropdownMenu>

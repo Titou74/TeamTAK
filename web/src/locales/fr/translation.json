@@ -21,6 +21,8 @@
     "signOut": "Se déconnecter",
     "teams": "Mes équipes",
     "monitoring": "Supervision",
+    "takAdmin": "TAK Server",
+    "takAdminHint": "Administration propre à TAK Server, s'ouvre dans un nouvel onglet",
     "openAlerts_one": "{{count}} alerte en cours",
     "openAlerts_many": "{{count}} alertes en cours",
     "openAlerts_other": "{{count}} alertes en cours"
@@ -542,6 +544,7 @@
       "intermediate_ca": "l'autorité de certification intermédiaire (signe les certificats clients)",
       "tak_server": "TAK Server",
       "platform_api": "l'accès de la plateforme à TAK Server",
+      "tak_admin_ui": "l'accès à l'administration de TAK Server",
       "enrollment": "le port d'enrôlement (8446)",
       "web": "le site web (Let's Encrypt)"
     }
@@ -721,6 +724,7 @@
         "intermediate_ca": "Autorité intermédiaire (signe les certificats clients)",
         "tak_server": "TAK Server",
         "platform_api": "Accès de la plateforme à TAK Server",
+        "tak_admin_ui": "Accès à l'administration de TAK Server",
         "enrollment": "Port d'enrôlement (8446)",
         "web": "Site web (Let's Encrypt)"
       },
@@ -934,6 +938,7 @@
     "actions": {
       "admin_signed_in": "Connexion d'un administrateur",
       "rescue_code_issued": "Code de secours émis pour un administrateur",
+      "tak_admin_opened": "Ouverture de l'administration de TAK Server par un administrateur",
       "admin_granted": "Rôle d'administrateur accordé",
       "admin_revoked": "Rôle d'administrateur retiré",
       "team_requested": "Équipe demandée",

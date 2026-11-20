@@ -64,6 +64,9 @@ audit_actions! {
     AdminSignedIn => "admin_signed_in",
     /// `teamtak grant-admin` was run on the server.
     RescueCodeIssued => "rescue_code_issued",
+    /// An administrator opened TAK Server's own administration pages (at most one entry an
+    /// hour per administrator).
+    TakAdminOpened => "tak_admin_opened",
     AdminGranted => "admin_granted",
     AdminRevoked => "admin_revoked",
 

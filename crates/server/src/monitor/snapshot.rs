@@ -106,7 +106,8 @@ pub struct PortView {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CertificateView {
-    /// `root_ca`, `intermediate_ca`, `tak_server`, `platform_api`, `enrollment`, `web`.
+    /// `root_ca`, `intermediate_ca`, `tak_server`, `platform_api`, `tak_admin_ui`,
+    /// `enrollment`, `web`.
     pub id: &'static str,
     pub subject: String,
     pub issuer: String,

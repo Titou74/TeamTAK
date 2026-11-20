@@ -315,6 +315,8 @@ pub fn code_in(mail: &Mail) -> String {
 #[derive(Clone)]
 pub struct Session {
     http: reqwest::Client,
+    /// Same cookies, and redirects are not followed: to see where a page sends the browser.
+    no_redirect: reqwest::Client,
     pub email: String,
 }
 
@@ -345,8 +347,24 @@ impl Session {
     /// A browser that has not signed in.
     pub fn anonymous() -> Self {
         install_crypto();
-        let http = reqwest::Client::builder().cookie_store(true).timeout(Duration::from_secs(60)).build().unwrap();
-        Self { http, email: String::new() }
+        let jar = Arc::new(reqwest::cookie::Jar::default());
+        let http = reqwest::Client::builder().cookie_provider(jar.clone()).timeout(Duration::from_secs(60)).build().unwrap();
+        let no_redirect = reqwest::Client::builder()
+            .cookie_provider(jar)
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(60))
+            .build()
+            .unwrap();
+        Self { http, no_redirect, email: String::new() }
+    }
+
+    /// A page outside the API, the way the browser of this session gets it: status, where a
+    /// redirect sends it, and the body.
+    pub async fn fetch(&self, url: &str) -> (u16, String, String) {
+        let response = self.no_redirect.get(url).send().await.unwrap_or_else(|e| panic!("{url}: {e}"));
+        let status = response.status().as_u16();
+        let location = response.headers().get("location").and_then(|l| l.to_str().ok()).unwrap_or_default().to_string();
+        (status, location, response.text().await.unwrap_or_default())
     }
 
     pub async fn call(&self, method: &str, path: &str, body: Option<Value>) -> Answer {

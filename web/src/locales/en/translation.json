@@ -21,6 +21,8 @@
     "signOut": "Sign out",
     "teams": "My teams",
     "monitoring": "Monitoring",
+    "takAdmin": "TAK Server",
+    "takAdminHint": "TAK Server's own administration, opens in a new tab",
     "openAlerts_one": "{{count}} open alert",
     "openAlerts_other": "{{count}} open alerts"
   },
@@ -526,6 +528,7 @@
       "intermediate_ca": "the intermediate certificate authority (signs the client certificates)",
       "tak_server": "TAK Server",
       "platform_api": "the platform's access to TAK Server",
+      "tak_admin_ui": "the access to TAK Server's administration pages",
       "enrollment": "the enrollment port (8446)",
       "web": "the website (Let's Encrypt)"
     }
@@ -698,6 +701,7 @@
         "intermediate_ca": "Intermediate authority (signs client certificates)",
         "tak_server": "TAK Server",
         "platform_api": "The platform's access to TAK Server",
+        "tak_admin_ui": "Access to TAK Server's administration pages",
         "enrollment": "Enrollment port (8446)",
         "web": "Website (Let's Encrypt)"
       },
@@ -900,6 +904,7 @@
     "actions": {
       "admin_signed_in": "Administrator signed in",
       "rescue_code_issued": "Rescue code issued for an administrator",
+      "tak_admin_opened": "Administrator opened TAK Server's administration",
       "admin_granted": "Administrator role granted",
       "admin_revoked": "Administrator role withdrawn",
       "team_requested": "Team requested",

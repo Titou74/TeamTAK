@@ -7,3 +7,8 @@
 	encode zstd gzip
 	reverse_proxy app:8080
 }
+
+# TAK Server's administration pages, plain HTTP like the web UI (see tak-admin.caddy).
+:8443 {
+	import tak-admin.caddy
+}

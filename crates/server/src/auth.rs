@@ -358,7 +358,9 @@ pub async fn me_payload(state: &SharedState, account: &Account) -> ApiResult<Val
     .bind(&account.email)
     .fetch_all(&state.db)
     .await?;
-    Ok(json!({ "account": account, "teams": teams, "invitations": invitations }))
+    // Only administrators may open TAK Server's administration; nobody else is told where.
+    let tak_admin_url = if account.is_admin { state.config.tak_admin_url.clone() } else { None };
+    Ok(json!({ "account": account, "teams": teams, "invitations": invitations, "tak_admin_url": tak_admin_url }))
 }
 
 /// `GET /api/me`

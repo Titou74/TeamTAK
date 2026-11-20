@@ -3,11 +3,15 @@
 # COMPOSE_FILE in .env:
 #   docker-compose.production.yml   public ports 80/443, Let's Encrypt
 #   docker-compose.local.yml        plain HTTP on localhost, mail catcher
-#   data/docker-compose.ports.yml   the TAK client ports, generated from TAK_CLIENT_PORTS
+#   data/docker-compose.ports.yml   the TAK client ports and the port of TAK Server's
+#                                   administration, generated from TAK_CLIENT_PORTS and
+#                                   TAK_ADMIN_PORT
 #
-# Published ports: web (Caddy), the TAK client ports (TAK_CLIENT_PORTS, 8089 by default)
-# and 8446 (TAK enrollment).
-# 8443 (TAK Server API) is NOT published: the platform reaches it over the Docker network.
+# Published ports: web (Caddy), the TAK client ports (TAK_CLIENT_PORTS, 8089 by default),
+# 8446 (TAK enrollment) and TAK_ADMIN_PORT (8443 by default: Caddy serves TAK Server's
+# administration pages there, to the platform's administrators once signed in).
+# TAK Server's own 8443 (API) is NOT published: the platform and Caddy reach it over the
+# Docker network.
 #
 # The host agent is the only service that holds the Docker socket. It sits alone on a
 # network without any way out ("agent"), which only the platform also joins.
@@ -24,6 +28,10 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
       - ./caddy/Caddyfile.${MODE}:/etc/caddy/Caddyfile:ro
+      # TAK Server's administration pages: the site, and the certificate it presents to TAK
+      # Server (written by install.sh).
+      - ./caddy/tak-admin.caddy:/etc/caddy/tak-admin.caddy:ro
+      - ./data/caddy/tak-admin:/etc/caddy/tak-admin:ro
       # Bind mount: in production, scripts/sync-letsencrypt.sh reads the certificate here.
       - ./data/caddy/data:/data
       - ./data/caddy/config:/config
@@ -64,6 +72,10 @@ services:
       TAK_API_CERT_FILE: /data/tak/api-cert.pem
       TAK_API_KEY_FILE: /data/tak/api-key.pem
       TAK_API_CERT_NAME: ${TAK_API_CERT_NAME}
+      TAK_ADMIN_UI_CERT_NAME: ${TAK_ADMIN_UI_CERT_NAME:-teamtak-admin-ui}
+      TAK_ADMIN_UI_CERT_FILE: /data/tak/admin-ui-cert.pem
+      # Port of TAK Server's administration pages (served by Caddy), for the link in the web UI
+      TAK_ADMIN_PORT: ${TAK_ADMIN_PORT:-off}
       # What users are handed
       TAK_PUBLIC_HOST: ${PUBLIC_HOST}
       TAK_CLIENT_PORTS: ${TAK_CLIENT_PORTS:-8089}

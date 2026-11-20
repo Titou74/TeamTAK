@@ -68,6 +68,9 @@ struct Targets {
     ldap: Option<(String, u16)>,
     ca_file: std::path::PathBuf,
     api_cert_file: std::path::PathBuf,
+    /// The certificate Caddy presents for TAK Server's administration pages; `None` when
+    /// those pages are turned off, so an unused certificate raises no alert.
+    admin_ui_cert_file: Option<std::path::PathBuf>,
     /// Where the reverse proxy answers in TLS, and the name it serves; `None` in local mode.
     web: Option<(String, u16, String)>,
     smtp_configured: bool,
@@ -173,6 +176,7 @@ impl Monitor {
                 ldap: host_port(&config.ldap.url, 389),
                 ca_file: config.tak.ca_file.clone(),
                 api_cert_file: config.tak.api_cert_file.clone(),
+                admin_ui_cert_file: config.tak_admin_url.as_ref().and(config.tak.admin_ui_cert_file.clone()),
                 web,
                 smtp_configured: !config.smtp.host.is_empty(),
                 public_url: config.public_url.clone(),
@@ -240,6 +244,12 @@ impl Monitor {
         match std::fs::read(&self.targets.api_cert_file).map_err(|e| e.to_string()).and_then(|pem| parse_pem(&pem)) {
             Ok(certificates) => found.extend(certificates.into_iter().find(|c| !c.is_ca).map(|c| ("platform_api", c))),
             Err(e) => tracing::warn!(error = %e, "reading the platform's API certificate"),
+        }
+        if let Some(file) = &self.targets.admin_ui_cert_file {
+            match std::fs::read(file).map_err(|e| e.to_string()).and_then(|pem| parse_pem(&pem)) {
+                Ok(certificates) => found.extend(certificates.into_iter().find(|c| !c.is_ca).map(|c| ("tak_admin_ui", c))),
+                Err(e) => tracing::warn!(error = %e, "reading the certificate of TAK Server's administration pages"),
+            }
         }
         found
     }

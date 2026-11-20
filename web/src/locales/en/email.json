@@ -99,6 +99,7 @@
       "intermediate_ca": "the intermediate certificate authority (signs the client certificates)",
       "tak_server": "TAK Server",
       "platform_api": "the platform's access to TAK Server",
+      "tak_admin_ui": "the access to TAK Server's administration pages",
       "enrollment": "the enrollment port (8446)",
       "web": "the website (Let's Encrypt)"
     },
