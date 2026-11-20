@@ -365,7 +365,7 @@ pub mod tests {
         std::fs::write(root.join("repo/deploy/.env"), "MODE=local\nPUBLIC_HOST=localhost\nTAK_VERSION=5.8-RELEASE-103\nAPP_SECRET=not-in-any-report\n").unwrap();
         let config = AgentConfig {
             token: "t".repeat(40),
-            project: "tak-manager".into(),
+            project: "teamtak".into(),
             repo_dir: root.join("repo"),
             backup_dir: root.join("repo/deploy/backups"),
             host: HostPaths { root: root.join("host"), proc: PathBuf::from("/proc") },
@@ -381,7 +381,7 @@ pub mod tests {
             "mapping-db-1",          // a container of another project
             "silicate-db",
             "agent",                 // itself
-            "tak-manager-caddy-1",   // a container name instead of a service
+            "teamtak-caddy-1",   // a container name instead of a service
             FOREIGN_ID,              // an identifier
             "caddy; docker ps",
             "../caddy",
@@ -412,15 +412,15 @@ pub mod tests {
         let docker = Arc::new(FakeDocker { leaky_filter: true, ..Default::default() });
         let (agent, root) = test_agent(docker.clone(), "report");
         std::fs::write(root.join("repo/takserver-docker-hardened-5.9-RELEASE-7.zip"), "").unwrap();
-        std::fs::write(root.join("repo/deploy/backups/tak-manager-backup-20261119T031500Z.tar.gz.enc"), "12345").unwrap();
-        std::fs::write(root.join("repo/deploy/backups/tak-manager-backup-20261118T031500Z.tar.gz"), "123").unwrap();
+        std::fs::write(root.join("repo/deploy/backups/teamtak-backup-20261119T031500Z.tar.gz.enc"), "12345").unwrap();
+        std::fs::write(root.join("repo/deploy/backups/teamtak-backup-20261118T031500Z.tar.gz"), "123").unwrap();
         std::fs::write(root.join("repo/deploy/backups/unrelated.txt"), "x").unwrap();
 
         let report = agent.report().await;
         assert_eq!(report.mode, "local");
         let services: Vec<&str> = report.containers.containers.iter().map(|c| c.service.as_str()).collect();
         assert_eq!(services, vec!["caddy", "takserver"]);
-        assert!(report.containers.containers.iter().all(|c| c.name.starts_with("tak-manager-")), "nothing of the other project");
+        assert!(report.containers.containers.iter().all(|c| c.name.starts_with("teamtak-")), "nothing of the other project");
         assert!(report.containers.expected.contains(&"mailpit".to_string()), "local mode expects the mail catcher");
         assert_eq!(report.tak.installed_version, "5.8-RELEASE-103");
         assert_eq!(report.tak.zip_versions, vec!["5.9-RELEASE-7".to_string()]);
@@ -428,7 +428,7 @@ pub mod tests {
         let names: Vec<&str> = report.backups.files.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(
             names,
-            vec!["tak-manager-backup-20261119T031500Z.tar.gz.enc", "tak-manager-backup-20261118T031500Z.tar.gz"],
+            vec!["teamtak-backup-20261119T031500Z.tar.gz.enc", "teamtak-backup-20261118T031500Z.tar.gz"],
             "newest first, and only the script's archives"
         );
         assert_eq!((report.backups.files[0].encrypted, report.backups.total_bytes), (true, 8));
@@ -455,9 +455,9 @@ pub mod tests {
 
     #[test]
     fn script_results_are_read_from_their_last_line() {
-        let output = "dumping…\nBACKUP_RESULT file=old size=1\nmore\nBACKUP_RESULT file=tak-manager-backup-20261119T031500Z.tar.gz size=4096 encrypted=0 pruned=2\n";
+        let output = "dumping…\nBACKUP_RESULT file=old size=1\nmore\nBACKUP_RESULT file=teamtak-backup-20261119T031500Z.tar.gz size=4096 encrypted=0 pruned=2\n";
         let fields = result_line(output, "BACKUP_RESULT ").unwrap();
-        assert_eq!(fields[0], ("file", "tak-manager-backup-20261119T031500Z.tar.gz"));
+        assert_eq!(fields[0], ("file", "teamtak-backup-20261119T031500Z.tar.gz"));
         assert_eq!(fields[3], ("pruned", "2"));
         assert!(result_line("nothing here", "BACKUP_RESULT ").is_none());
         assert_eq!(tail("a\n\nb\nc\n", 2), "b\nc");

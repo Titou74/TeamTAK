@@ -1,4 +1,4 @@
-# TAK Manager — specification and roadmap
+# TeamTAK — specification and roadmap
 
 Reference document for the project. Each phase is developed in a separate session that starts from this
 file, then from the previous phase's report (`docs/phase-N-report.md`). If a decision changes, this file
@@ -225,7 +225,7 @@ Decided or established in phase 3 (details and evidence in `docs/phase-3-report.
 - The administrator approves team creation requests only.
 - An approved team leader invites members without administrator approval, up to a per-team member cap.
 - A server-side rescue command grants administrator access if e-mail is down: it flags the account
-  as administrator and prints a one-time login code (`tak-manager grant-admin <email>`).
+  as administrator and prints a one-time login code (`teamtak grant-admin <email>`).
 - Roles: platform administrator, team leader, member. A team can have several leaders and always
   keeps at least one. An administrator runs the platform (approval, member cap, suspension,
   deletion) but does not see a team's TAK credentials unless they are a member of it.

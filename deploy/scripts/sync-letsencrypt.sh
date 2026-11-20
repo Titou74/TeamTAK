@@ -72,7 +72,7 @@ log "Converting the Let's Encrypt certificate for TAK Server"
   printf '%s\n' "$TAK_CERT_PASSWORD"
   printf '%s\n' "$fingerprint"
   cat "$key"
-  echo "-----TAK-MANAGER-SEPARATOR-----"
+  echo "-----TEAMTAK-SEPARATOR-----"
   cat "$crt"
 } | svc_exec takserver bash -c '
     set -e
@@ -81,7 +81,7 @@ log "Converting the Let's Encrypt certificate for TAK Server"
     trap "rm -rf \"$work\"" EXIT
     IFS= read -r PASS
     IFS= read -r FINGERPRINT
-    awk -v dir="$work" "BEGIN { out = dir \"/cert.key\" } /^-----TAK-MANAGER-SEPARATOR-----\$/ { out = dir \"/cert.crt\"; next } { print > out }"
+    awk -v dir="$work" "BEGIN { out = dir \"/cert.key\" } /^-----TEAMTAK-SEPARATOR-----\$/ { out = dir \"/cert.crt\"; next } { print > out }"
     export PASS
     openssl pkcs12 -export -in "$work/cert.crt" -inkey "$work/cert.key" -name letsencrypt -out "$work/le.p12" -passout env:PASS
     out=/opt/tak/certs/files

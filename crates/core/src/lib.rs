@@ -1,4 +1,4 @@
-//! Domain rules and TAK/LDAP adapters of TAK Manager.
+//! Domain rules and TAK/LDAP adapters of TeamTAK.
 //!
 //! Nothing here knows about HTTP or PostgreSQL. The server crate loads the desired state from
 //! its database, asks [`reconcile`] what has to change, and applies the result through the
@@ -48,7 +48,7 @@ pub fn public_http_client(timeout: std::time::Duration) -> Result<reqwest::Clien
         .tls_backend_preconfigured(tls)
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(timeout)
-        .user_agent(concat!("tak-manager/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("teamtak/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| e.to_string())
 }

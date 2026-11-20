@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tak_manager_agent::report::{AgentError, BackupRequest, BackupResult, LetsEncryptResult, Report, RestartResult, RotateRequest, RotateResult};
+use teamtak_agent::report::{AgentError, BackupRequest, BackupResult, LetsEncryptResult, Report, RestartResult, RotateRequest, RotateResult};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentCallError {
@@ -44,7 +44,7 @@ impl AgentClient {
         // Plain HTTP on a private Docker network: no certificate is involved, but the client
         // is built like the platform's other ones, with its TLS set up explicitly. Each call
         // sets its own timeout.
-        let http = tak_manager_core::public_http_client(REPORT_TIMEOUT)?;
+        let http = teamtak_core::public_http_client(REPORT_TIMEOUT)?;
         Ok(Self { url: url.trim_end_matches('/').to_string(), token: token.to_string(), http })
     }
 

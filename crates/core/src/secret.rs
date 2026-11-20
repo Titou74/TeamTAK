@@ -27,7 +27,7 @@ pub struct SecretBox {
 
 fn derive(app_secret: &[u8], purpose: &[u8]) -> [u8; 32] {
     let mut h = Sha256::new();
-    h.update(b"tak-manager/");
+    h.update(b"teamtak/");
     h.update(purpose);
     h.update(b"/");
     h.update(app_secret);

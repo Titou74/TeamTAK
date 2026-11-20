@@ -1,5 +1,5 @@
 //! The reconciliation service: reads the desired state from PostgreSQL, runs a pass of
-//! `tak_manager_core::reconcile`, and records what it found.
+//! `teamtak_core::reconcile`, and records what it found.
 //!
 //! It runs after every change made through the API (so the change is live when the request
 //! returns), on a timer, at startup, on an administrator's request, and at the instant an
@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use sqlx::PgPool;
-use tak_manager_core::directory::Directory;
-use tak_manager_core::events::{clock_now, groups_due, next_boundary, team_groups, EventGroup};
-use tak_manager_core::reconcile::{run_pass_with, Change, DesiredAccount, DesiredState, PassOptions, PassReport};
-use tak_manager_core::secret::SecretBox;
-use tak_manager_core::tak::{IssuedCertificate, TakServer};
+use teamtak_core::directory::Directory;
+use teamtak_core::events::{clock_now, groups_due, next_boundary, team_groups, EventGroup};
+use teamtak_core::reconcile::{run_pass_with, Change, DesiredAccount, DesiredState, PassOptions, PassReport};
+use teamtak_core::secret::SecretBox;
+use teamtak_core::tak::{IssuedCertificate, TakServer};
 use time::OffsetDateTime;
 use tokio::sync::{Mutex, MutexGuard, Notify};
 use uuid::Uuid;

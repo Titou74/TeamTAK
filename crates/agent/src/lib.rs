@@ -1,4 +1,4 @@
-//! The host agent of TAK Manager.
+//! The host agent of TeamTAK.
 //!
 //! It is the only component that sees the machine and the Docker socket; the web application
 //! has neither. It answers the platform, and nobody else, with a read-only report (the

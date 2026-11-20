@@ -48,7 +48,7 @@ async function request(method: string, path: string, body?: unknown): Promise<Re
       headers: {
         Accept: "application/json",
         // Required by the API on every state-changing request (CSRF protection).
-        "X-Requested-With": "tak-manager",
+        "X-Requested-With": "teamtak",
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),

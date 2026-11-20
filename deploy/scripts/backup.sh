@@ -40,7 +40,7 @@ mkdir -p "$BACKUP_DIR"
 [ -w "$BACKUP_DIR" ] || die "cannot write to $BACKUP_DIR"
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-name="tak-manager-backup-$stamp.tar.gz"
+name="teamtak-backup-$stamp.tar.gz"
 [ -z "$PASSPHRASE" ] || name="$name.enc"
 # In the destination folder: the archive is moved into place at the end, never half-written
 # under its final name.
@@ -59,7 +59,7 @@ log "Dumping TAK Server's database"
 svc_exec takserver-db pg_dump -U postgres -d cot -Fc > "$work/takserver.dump" || die "could not dump TAK Server's database"
 
 log "Dumping the platform's database"
-svc_exec postgres pg_dump -U tak_manager -d tak_manager -Fc > "$work/platform.dump" || die "could not dump the platform's database"
+svc_exec postgres pg_dump -U teamtak -d teamtak -Fc > "$work/platform.dump" || die "could not dump the platform's database"
 
 for dump in takserver.dump platform.dump; do
   [ "$(head -c 5 "$work/$dump")" = PGDMP ] || die "$dump is not a PostgreSQL dump"
@@ -115,7 +115,7 @@ info "$BACKUP_DIR/$name ($size bytes$([ -n "$PASSPHRASE" ] && echo ', encrypted'
 # Retention: the newest $KEEP archives stay. Only files named by this script are counted
 # or deleted; anything else in the folder is left alone.
 pruned=0 seen=0
-for archive in $(ls -1 "$BACKUP_DIR" | grep -E '^tak-manager-backup-[0-9]{8}T[0-9]{6}Z\.tar\.gz(\.enc)?$' | sort -r); do
+for archive in $(ls -1 "$BACKUP_DIR" | grep -E '^teamtak-backup-[0-9]{8}T[0-9]{6}Z\.tar\.gz(\.enc)?$' | sort -r); do
   seen=$((seen + 1))
   if [ "$seen" -gt "$KEEP" ]; then
     rm -f "$BACKUP_DIR/$archive"

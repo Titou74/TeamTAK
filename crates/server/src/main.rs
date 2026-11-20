@@ -1,4 +1,4 @@
-//! TAK Manager server: the JSON API, the static web UI and the reconciliation loop.
+//! TeamTAK server: the JSON API, the static web UI and the reconciliation loop.
 
 mod accesses;
 mod admin;
@@ -34,7 +34,7 @@ use crate::error::ApiError;
 use crate::state::SharedState;
 
 #[derive(Parser)]
-#[command(name = "tak-manager", version, about = "Self-service team management for a TAK Server")]
+#[command(name = "teamtak", version, about = "Self-service team management for a TAK Server")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -61,7 +61,7 @@ enum Command {
 /// State-changing requests must carry this header. A page of another site cannot add a
 /// custom header to a cross-site request, so it cannot act with a visitor's session.
 const CSRF_HEADER: &str = "x-requested-with";
-const CSRF_VALUE: &str = "tak-manager";
+const CSRF_VALUE: &str = "teamtak";
 
 async fn require_csrf_header(request: Request, next: Next) -> Response {
     let safe = matches!(*request.method(), Method::GET | Method::HEAD | Method::OPTIONS);
@@ -184,7 +184,7 @@ async fn serve(config: Config) -> Result<()> {
     tokio::spawn(monitor::run_periodically(state.monitor.clone()));
 
     let listener = tokio::net::TcpListener::bind(listen_addr).await.with_context(|| format!("listening on {listen_addr}"))?;
-    tracing::info!(%listen_addr, languages = ?locale::languages(), "TAK Manager is listening");
+    tracing::info!(%listen_addr, languages = ?locale::languages(), "TeamTAK is listening");
     axum::serve(listener, app(state).into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(async {
             let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("signal handler");

@@ -2697,7 +2697,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tak-manager-agent"
+name = "teamtak-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2715,7 +2715,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tak-manager-core"
+name = "teamtak-core"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -2745,7 +2745,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tak-manager-server"
+name = "teamtak-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2766,8 +2766,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "sqlx",
- "tak-manager-agent",
- "tak-manager-core",
+ "teamtak-agent",
+ "teamtak-core",
  "thiserror",
  "time",
  "tokio",

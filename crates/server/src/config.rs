@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
-use tak_manager_core::directory::ldap::LdapConfig;
-use tak_manager_core::login::LoginPolicy;
-use tak_manager_core::package::P12Format;
+use teamtak_core::directory::ldap::LdapConfig;
+use teamtak_core::login::LoginPolicy;
+use teamtak_core::package::P12Format;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmtpTls {
@@ -130,7 +130,7 @@ impl Config {
                 username: var_or("SMTP_USERNAME", ""),
                 password: var_or("SMTP_PASSWORD", ""),
                 tls: smtp_tls,
-                from: var_or("MAIL_FROM", "TAK Manager <tak-manager@localhost>"),
+                from: var_or("MAIL_FROM", "TeamTAK <teamtak@localhost>"),
             },
             ldap: LdapConfig {
                 url: var("LDAP_URL")?,
@@ -144,10 +144,10 @@ impl Config {
                 ca_file: var("TAK_CA_FILE")?.into(),
                 api_cert_file: var("TAK_API_CERT_FILE")?.into(),
                 api_key_file: var("TAK_API_KEY_FILE")?.into(),
-                api_cert_name: var_or("TAK_API_CERT_NAME", "tak-manager-api"),
+                api_cert_name: var_or("TAK_API_CERT_NAME", "teamtak-api"),
                 public_host: var("TAK_PUBLIC_HOST")?,
                 client_port: parsed("TAK_CLIENT_PORT", "8089")?,
-                connection_name: var_or("TAK_CONNECTION_NAME", "TAK Manager"),
+                connection_name: var_or("TAK_CONNECTION_NAME", "TeamTAK"),
                 p12_format,
             },
             default_member_cap: parsed("DEFAULT_MEMBER_CAP", "10")?,

@@ -364,7 +364,7 @@ mod tests {
 
     /// One finding of every kind, with the details the rules really produce.
     fn every_kind_of_finding() -> Vec<AlertLine> {
-        use tak_manager_core::alerts::*;
+        use teamtak_core::alerts::*;
         use time::Duration;
         let now = time::macros::datetime!(2026-11-19 12:00 UTC);
         let service = |name: &str, state: Option<&str>, health: Option<&str>, restarts| ServiceObservation {
@@ -415,7 +415,7 @@ mod tests {
     /// (email.json) and for the dashboard (translation.json), and so has each severity.
     #[test]
     fn every_alert_kind_and_severity_is_translated_in_every_language() {
-        use tak_manager_core::alerts::{AlertKind, Severity};
+        use teamtak_core::alerts::{AlertKind, Severity};
         let locales = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/locales");
         for language in languages() {
             let ui: Value = serde_json::from_str(&std::fs::read_to_string(locales.join(language).join("translation.json")).unwrap()).unwrap();
@@ -448,7 +448,7 @@ mod tests {
         let locales = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/locales");
         for language in languages() {
             let ui: Value = serde_json::from_str(&std::fs::read_to_string(locales.join(language).join("translation.json")).unwrap()).unwrap();
-            for kind in tak_manager_core::alerts::AlertKind::ALL {
+            for kind in teamtak_core::alerts::AlertKind::ALL {
                 let mail = lookup(language, &["alerts", "kinds", kind.code()]).unwrap();
                 let page = ui.pointer(&format!("/alerts/kinds/{}", kind.code())).and_then(|v| v.as_str()).unwrap_or_default();
                 assert_eq!(placeholders(page), placeholders(mail), "{language}: alerts.kinds.{}", kind.code());
@@ -477,16 +477,16 @@ mod tests {
         let down = line("service_down", "caddy", "critical", serde_json::json!({ "state": "exited" }));
         let raised = AlertBatch { raised: vec![down.clone()], ..Default::default() };
         let en = render_alerts("en", &raised, "https://tak.example.org/monitoring");
-        assert_eq!(en.subject, "[TAK Manager] Alert: The service caddy is not running (state: exited).");
+        assert_eq!(en.subject, "[TeamTAK] Alert: The service caddy is not running (state: exited).");
         assert!(en.body.contains("New alerts:\n  - [critical] The service caddy is not running (state: exited)."), "{}", en.body);
         assert!(en.body.contains("https://tak.example.org/monitoring"));
         let fr = render_alerts("fr", &raised, "u");
-        assert_eq!(fr.subject, "[TAK Manager] Alerte : Le service caddy ne tourne pas (état : exited).");
+        assert_eq!(fr.subject, "[TeamTAK] Alerte : Le service caddy ne tourne pas (état : exited).");
         assert!(fr.body.contains("Nouvelles alertes :\n  - [critique] Le service caddy ne tourne pas"), "{}", fr.body);
 
         let resolved = AlertBatch { resolved: vec![down.clone()], ..Default::default() };
-        assert_eq!(render_alerts("fr", &resolved, "u").subject, "[TAK Manager] Résolu : Le service caddy ne tourne pas (état : exited).");
-        assert!(render_alerts("en", &resolved, "u").subject.starts_with("[TAK Manager] Resolved: "));
+        assert_eq!(render_alerts("fr", &resolved, "u").subject, "[TeamTAK] Résolu : Le service caddy ne tourne pas (état : exited).");
+        assert!(render_alerts("en", &resolved, "u").subject.starts_with("[TeamTAK] Resolved: "));
 
         // Everything fails at once: one message, counted in its subject, listed in its body.
         let storm = AlertBatch {
@@ -495,7 +495,7 @@ mod tests {
             reminded: vec![line("security_updates", "", "low", serde_json::json!({ "count": 4 }))],
         };
         let mail = render_alerts("en", &storm, "u");
-        assert_eq!(mail.subject, "[TAK Manager] Alerts — new: 3, resolved: 1, still open: 1");
+        assert_eq!(mail.subject, "[TeamTAK] Alerts — new: 3, resolved: 1, still open: 1");
         assert_eq!(mail.body.matches("\n  - [").count(), 5);
         assert!(mail.body.contains("Still open (reminder):\n  - [low] Security updates waiting to be installed on the server: 4."));
         assert!(!mail.subject.contains('\n') && !mail.body.contains("{{"));

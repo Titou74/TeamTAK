@@ -28,15 +28,15 @@ use std::time::Duration;
 use anyhow::Result;
 use serde_json::Value;
 use sqlx::PgPool;
-use tak_manager_agent::report::{Report, RESTARTABLE_SERVICES};
-use tak_manager_core::alerts::{
+use teamtak_agent::report::{Report, RESTARTABLE_SERVICES};
+use teamtak_core::alerts::{
     AgentState, BackupObservation, Boundary, CertificateObservation, MailObservation, Observations, OverdueEvent, ReconcileObservation,
     ServiceObservation, Streaks,
 };
-use tak_manager_core::certs::{days_left, parse_pem, CertificateInfo};
-use tak_manager_core::secret::SecretBox;
-use tak_manager_core::tak::{Subscription, TakServer};
-use tak_manager_core::versions::parse_tak_version;
+use teamtak_core::certs::{days_left, parse_pem, CertificateInfo};
+use teamtak_core::secret::SecretBox;
+use teamtak_core::tak::{Subscription, TakServer};
+use teamtak_core::versions::parse_tak_version;
 use time::OffsetDateTime;
 use tokio::sync::Notify;
 
@@ -177,7 +177,7 @@ impl Monitor {
             agent,
             mailer,
             secrets,
-            http: tak_manager_core::public_http_client(Duration::from_secs(10)).map_err(|e| tracing::error!(error = %e, "HTTPS client")).ok(),
+            http: teamtak_core::public_http_client(Duration::from_secs(10)).map_err(|e| tracing::error!(error = %e, "HTTPS client")).ok(),
             started_at: OffsetDateTime::now_utc(),
             latest: RwLock::new(None),
             devices: devices::DeviceBoard::default(),

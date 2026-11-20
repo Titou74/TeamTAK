@@ -114,30 +114,30 @@ impl From<sqlx::Error> for ApiError {
     }
 }
 
-impl From<tak_manager_core::secret::SecretError> for ApiError {
-    fn from(e: tak_manager_core::secret::SecretError) -> Self {
+impl From<teamtak_core::secret::SecretError> for ApiError {
+    fn from(e: teamtak_core::secret::SecretError) -> Self {
         tracing::error!(error = %e, "stored secret unreadable");
         ApiError::Internal
     }
 }
 
-impl From<tak_manager_core::package::PackageError> for ApiError {
-    fn from(e: tak_manager_core::package::PackageError) -> Self {
+impl From<teamtak_core::package::PackageError> for ApiError {
+    fn from(e: teamtak_core::package::PackageError) -> Self {
         tracing::error!(error = %e, "connection package");
         ApiError::Internal
     }
 }
 
-impl From<tak_manager_core::tak::TakError> for ApiError {
-    fn from(e: tak_manager_core::tak::TakError) -> Self {
+impl From<teamtak_core::tak::TakError> for ApiError {
+    fn from(e: teamtak_core::tak::TakError) -> Self {
         tracing::warn!(error = %e, "TAK Server call failed");
         ApiError::TakUnavailable
     }
 }
 
-impl From<tak_manager_core::events::EventError> for ApiError {
-    fn from(e: tak_manager_core::events::EventError) -> Self {
-        use tak_manager_core::events::EventError;
+impl From<teamtak_core::events::EventError> for ApiError {
+    fn from(e: teamtak_core::events::EventError) -> Self {
+        use teamtak_core::events::EventError;
         match e {
             EventError::Closed => ApiError::EventClosed,
             EventError::InvalidDates => ApiError::InvalidEventDates,
@@ -205,7 +205,7 @@ mod tests {
                 continue;
             }
             let json: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-            for kind in tak_manager_core::reconcile::CHANGE_KINDS {
+            for kind in teamtak_core::reconcile::CHANGE_KINDS {
                 let text = json.pointer(&format!("/reconcile/kinds/{kind}")).and_then(|v| v.as_str());
                 assert!(text.is_some_and(|t| !t.trim().is_empty()), "reconcile.kinds.{kind} missing in {}", file.display());
             }

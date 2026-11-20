@@ -629,9 +629,9 @@ mod tests {
     async fn protected_usernames_are_left_alone() {
         let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
         let mut want = two_teams();
-        want.protected_usernames.insert("tak-manager".into());
-        tak.add_certificate("tak-manager", "api");
-        tak.add_subscription("tls:9", "tak-manager", &["whatever"]);
+        want.protected_usernames.insert("teamtak".into());
+        tak.add_certificate("teamtak", "api");
+        tak.add_subscription("tls:9", "teamtak", &["whatever"]);
         let report = run_pass(&want, &dir, &tak).await;
         assert!(report.revoked.is_empty());
         assert_eq!(tak.certificates().len(), 1);

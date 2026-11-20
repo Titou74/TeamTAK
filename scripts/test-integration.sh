@@ -26,4 +26,4 @@ for service in app openldap takserver mailpit agent caddy; do
 done
 
 # One test at a time: several of them watch what the reconciliation reports.
-cargo test -p tak-manager-server --test e2e --test events --test monitoring -- --ignored --test-threads=1 "$@"
+cargo test -p teamtak-server --test e2e --test events --test monitoring -- --ignored --test-threads=1 "$@"

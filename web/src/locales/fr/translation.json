@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "TAK Manager"
+    "name": "TeamTAK"
   },
   "common": {
     "cancel": "Annuler",
@@ -867,7 +867,7 @@
     "restoreTitle": "Restaurer",
     "restoreHelp": "Une restauration remplace tout ce que contient le serveur par le contenu d'une archive. Elle se lance en SSH, jamais d'ici, et demande confirmation.",
     "restoreLabel": "la commande de restauration",
-    "restoreNote1": "Copiez les archives hors du serveur : une sauvegarde qui ne vit que sur le disque qu'elle protège ne survit pas à ce disque. Le README montre comment envoyer chaque nouvelle archive ailleurs.",
+    "restoreNote1": "Copiez les archives hors du serveur : une sauvegarde qui ne vit que sur le disque qu'elle protège ne survit pas à ce disque. Le fichier docs/backups.md du dépôt montre comment envoyer chaque nouvelle archive ailleurs.",
     "restoreNote2": "Gardez la phrase secrète en dehors de la plateforme : la copie enregistrée dans les réglages se trouve à l'intérieur de l'archive chiffrée.",
     "restoreNote3": "Une alerte est levée quand l'archive la plus récente a plus de {{count}} heures, ou quand une sauvegarde échoue."
   },
@@ -998,7 +998,7 @@
       "emails": "Envoyer les alertes par e-mail à chaque administrateur",
       "emailsHint": "Chaque administrateur les reçoit dans sa propre langue.",
       "webhook": "Adresse du webhook",
-      "webhookHint": "Facultatif. Chaque alerte levée, rappelée ou résolue y est aussi publiée sous forme de document JSON (son format est dans le README). Enregistrez avant de tester.",
+      "webhookHint": "Facultatif. Chaque alerte levée, rappelée ou résolue y est aussi publiée sous forme de document JSON (son format est dans le fichier docs/monitoring.md du dépôt). Enregistrez avant de tester.",
       "webhookTest": "Envoyer un test",
       "webhookTested": "Le webhook a accepté le message de test.",
       "reminder": "Rappeler une alerte qui dure toutes les (heures)"

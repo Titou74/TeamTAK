@@ -36,7 +36,7 @@ pub fn parse_tak_version(text: &str) -> Option<TakVersion> {
 /// Where an image comes from, which decides what "a newer one exists" can mean.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageSource {
-    /// Built on this machine by install.sh (`tak-manager/…`): no registry to compare with.
+    /// Built on this machine by install.sh (`teamtak/…`): no registry to compare with.
     Local,
     /// Pulled by tag: newer means the registry now serves another image under that tag.
     Tag { registry: String, repository: String, tag: String },
@@ -53,7 +53,7 @@ pub fn parse_image(reference: &str) -> Option<ImageSource> {
     if reference.is_empty() || reference.contains(char::is_whitespace) {
         return None;
     }
-    if reference.starts_with("tak-manager/") {
+    if reference.starts_with("teamtak/") {
         return Some(ImageSource::Local);
     }
     let (name, digest) = match reference.split_once('@') {
@@ -126,7 +126,7 @@ mod tests {
             parse_image("vegardit/openldap@sha256:f6e74dd8"),
             Some(ImageSource::Digest { registry: DOCKER_HUB.into(), repository: "vegardit/openldap".into(), digest: "sha256:f6e74dd8".into() })
         );
-        for local in ["tak-manager/app:local", "tak-manager/takserver:5.8-RELEASE-103", "tak-manager/agent:local"] {
+        for local in ["teamtak/app:local", "teamtak/takserver:5.8-RELEASE-103", "teamtak/agent:local"] {
             assert_eq!(parse_image(local), Some(ImageSource::Local), "{local}");
         }
         assert_eq!(parse_image(""), None);

@@ -118,7 +118,7 @@ impl Distribution for Apt {
             report.error = Some("the host's package database is not readable".into());
             return report;
         }
-        let cache_dir = std::env::temp_dir().join("tak-manager-agent-apt");
+        let cache_dir = std::env::temp_dir().join("teamtak-agent-apt");
         let _ = std::fs::create_dir_all(&cache_dir);
         let run = tokio::process::Command::new("apt-get")
             .args(Self::arguments(host_root, &cache_dir))
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn places_on_one_filesystem_are_reported_once() {
         let here = std::env::temp_dir();
-        let found = disks(&[("root", here.clone()), ("data", here.clone()), ("gone", PathBuf::from("/nonexistent/tak-manager"))]);
+        let found = disks(&[("root", here.clone()), ("data", here.clone()), ("gone", PathBuf::from("/nonexistent/teamtak"))]);
         assert_eq!(found.len(), 1);
         assert_eq!((found[0].name.as_str(), found[0].also.clone()), ("root", vec!["data".to_string()]));
         assert!(found[0].total_bytes > 0 && found[0].used_percent <= 100.0);

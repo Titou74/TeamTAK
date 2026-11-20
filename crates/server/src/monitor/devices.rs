@@ -12,8 +12,8 @@ use std::sync::RwLock;
 use axum::extract::{Path, State};
 use axum::Json;
 use serde_json::{json, Value};
-use tak_manager_core::policy::{can, Action};
-use tak_manager_core::tak::Subscription;
+use teamtak_core::policy::{can, Action};
+use teamtak_core::tak::Subscription;
 use time::OffsetDateTime;
 use uuid::Uuid;
 

@@ -19,14 +19,14 @@ use serde_json::{json, Value};
 /// Long enough for two looks of the monitoring and the e-mails that follow.
 const ALERT_WAIT: Duration = Duration::from_secs(90);
 
-/// Runs `tak-manager-agent call <method> <path>` inside the agent's container: the only
+/// Runs `teamtak-agent call <method> <path>` inside the agent's container: the only
 /// place its API can be reached from, besides the platform.
 fn agent_call(method: &str, path: &str, token: Option<&str>) -> (u16, Value) {
     let mut args: Vec<String> = vec!["compose".into(), "exec".into(), "-T".into()];
     if let Some(token) = token {
         args.extend(["-e".to_string(), format!("AGENT_TOKEN={token}")]);
     }
-    args.extend(["agent", "tak-manager-agent", "call", method, path].map(String::from));
+    args.extend(["agent", "teamtak-agent", "call", method, path].map(String::from));
     let output = std::process::Command::new("docker").current_dir(repo_root().join("deploy")).args(&args).output().expect("docker compose exec");
     let text = String::from_utf8_lossy(&output.stdout);
     let mut lines = text.lines();
@@ -197,7 +197,7 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     assert_eq!(status, 200);
     let containers = report["containers"]["containers"].as_array().unwrap();
     assert_eq!(containers.len(), 8);
-    assert!(containers.iter().all(|c| c["name"].as_str().unwrap().starts_with("tak-manager-")), "only this project's containers: {containers:?}");
+    assert!(containers.iter().all(|c| c["name"].as_str().unwrap().starts_with("teamtak-")), "only this project's containers: {containers:?}");
     let text = report.to_string();
     for secret in ["APP_SECRET", "AGENT_TOKEN", "POSTGRES_PASSWORD", "TAK_CERT_PASSWORD"] {
         assert!(!text.contains(setting(secret)), "the report must not carry {secret}");
@@ -207,15 +207,15 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     // refuses, and it refuses itself, container names, identifiers and anything unknown.
     let others = std::process::Command::new("docker").args(["ps", "-a", "--format", "{{.Names}}"]).output().unwrap();
     let others = String::from_utf8_lossy(&others.stdout);
-    let foreign: Vec<&str> = others.lines().filter(|n| !n.starts_with("tak-manager-") && n.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))).take(5).collect();
-    for target in foreign.iter().copied().chain(["agent", "tak-manager-caddy-1", "no-such-service", "caddy;id"]) {
+    let foreign: Vec<&str> = others.lines().filter(|n| !n.starts_with("teamtak-") && n.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))).take(5).collect();
+    for target in foreign.iter().copied().chain(["agent", "teamtak-caddy-1", "no-such-service", "caddy;id"]) {
         let (status, body) = agent_call("POST", &format!("/v1/services/{target}/restart"), None);
         assert_eq!((status, body["error"].as_str()), (403, Some("service_not_allowed")), "{target}");
     }
     assert_eq!(agent_call("POST", "/v1/exec", None).0, 404, "there is no way to run a command");
     assert_eq!(agent_call("GET", "/v1/report", Some("not-the-secret")).0, 401);
     // And the platform refuses the same before even asking the agent.
-    for target in ["agent", "mapping-db-1", "tak-manager-caddy-1"] {
+    for target in ["agent", "mapping-db-1", "teamtak-caddy-1"] {
         admin.post(&format!("/admin/services/{target}/restart"), json!({})).await.expect_error(400, "service_not_allowed");
     }
 
@@ -254,11 +254,11 @@ async fn a_stopped_service_raises_an_alert_by_email_and_its_resolution() {
         // One e-mail, in each administrator's language.
         let mail = mail_containing(&french.email, down_fr, ALERT_WAIT).await;
         println!("alert e-mail received {:.0} s after the service stopped: {}", stopped_at.elapsed().as_secs_f32(), mail.subject);
-        assert!(mail.subject.starts_with("[TAK Manager] Alerte"), "{}", mail.subject);
+        assert!(mail.subject.starts_with("[TeamTAK] Alerte"), "{}", mail.subject);
         assert!(mail.text.contains(&format!("Nouvelles alertes :\n  - [critique] {down_fr}")), "{}", mail.text);
         assert!(mail.text.contains("http://localhost:8480/monitoring"), "the e-mail links to the monitoring page: {}", mail.text);
         let mail = mail_containing(&english.email, down_en, Duration::from_secs(20)).await;
-        assert!(mail.subject.starts_with("[TAK Manager] Alert"), "{}", mail.subject);
+        assert!(mail.subject.starts_with("[TeamTAK] Alert"), "{}", mail.subject);
         assert!(mail.text.contains(&format!("New alerts:\n  - [critical] {down_en}")), "{}", mail.text);
 
         // While it lasts nothing more is sent: one notification, not one per look.
@@ -270,7 +270,7 @@ async fn a_stopped_service_raises_an_alert_by_email_and_its_resolution() {
     // Back up (the guard started it): the alert resolves, and says so once.
     start_platform().await;
     let resolved = mail_containing(&french.email, &format!("Résolues :\n  - [critique] {down_fr}"), ALERT_WAIT).await;
-    assert!(resolved.subject.starts_with("[TAK Manager] Résolu") || resolved.subject.starts_with("[TAK Manager] Alertes"), "{}", resolved.subject);
+    assert!(resolved.subject.starts_with("[TeamTAK] Résolu") || resolved.subject.starts_with("[TeamTAK] Alertes"), "{}", resolved.subject);
     mail_containing(&english.email, &format!("Resolved:\n  - [critical] {down_en}"), Duration::from_secs(20)).await;
 
     let after = fresh_look(&french).await;
@@ -321,7 +321,7 @@ async fn thresholds_are_settings_and_a_change_raises_and_resolves_an_alert() {
     let alert = raised["alerts"]["open"].as_array().unwrap().iter().find(|a| a["kind"] == "disk_full" && a["subject"] == name.as_str()).unwrap();
     assert!((alert["details"]["percent"].as_f64().unwrap() - disk["used_percent"].as_f64().unwrap()).abs() < 5.0, "{alert}");
     let mail = mail_containing(&admin.email, "Disk nearly full: ", Duration::from_secs(30)).await;
-    assert!(mail.subject.starts_with("[TAK Manager] Alert"), "{}", mail.subject);
+    assert!(mail.subject.starts_with("[TeamTAK] Alert"), "{}", mail.subject);
 
     admin.patch("/admin/settings", json!({ "settings": { "thresholds": { "disk_percent": 90 } } })).await.ok();
     monitoring_until(&admin, "disk alert resolved with the default threshold", ALERT_WAIT, |m| !open_alerts(m).contains(&key)).await;
@@ -583,7 +583,7 @@ async fn the_audit_log_records_who_did_what_and_never_a_secret() {
 /// Archives of the backup folder, by name.
 fn archives() -> std::collections::BTreeSet<String> {
     std::fs::read_dir(repo_root().join("deploy/backups"))
-        .map(|entries| entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with("tak-manager-backup-")).collect())
+        .map(|entries| entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with("teamtak-backup-")).collect())
         .unwrap_or_default()
 }
 
@@ -620,7 +620,7 @@ async fn a_backup_is_written_on_request_listed_recorded_and_encrypted_when_asked
     let run = &done["run"];
     assert_eq!((run["ok"].as_bool(), run["trigger"].as_str(), run["requested_by"].as_str()), (Some(true), Some("manual"), Some(admin.email.as_str())), "{run}");
     let plain = run["file"].as_str().unwrap().to_string();
-    assert!(plain.starts_with("tak-manager-backup-") && plain.ends_with("Z.tar.gz"), "{plain}");
+    assert!(plain.starts_with("teamtak-backup-") && plain.ends_with("Z.tar.gz"), "{plain}");
     assert!(run["size_bytes"].as_i64().unwrap() > 100_000 && run["encrypted"] == false);
 
     // It is on the server's disk and holds the five parts a restore needs.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Restores the whole platform from an archive written by deploy/scripts/backup.sh.
 #
-#   deploy/scripts/restore.sh deploy/backups/tak-manager-backup-20261119T031500Z.tar.gz
+#   deploy/scripts/restore.sh deploy/backups/teamtak-backup-20261119T031500Z.tar.gz
 #   BACKUP_PASSPHRASE='…' deploy/scripts/restore.sh <archive>.tar.gz.enc
 #   deploy/scripts/restore.sh --yes <archive>          no question asked
 #
@@ -145,9 +145,9 @@ wait_healthy openldap 120 || die "the directory did not start"
 wait_healthy takserver-db 420 || die "TAK Server's database did not start"
 
 log "Loading the platform's database"
-svc_exec postgres pg_restore -U tak_manager -d tak_manager --clean --if-exists --no-owner --single-transaction < "$WORK/platform.dump" \
+svc_exec postgres pg_restore -U teamtak -d teamtak --clean --if-exists --no-owner --single-transaction < "$WORK/platform.dump" \
   || die "could not load the platform's database"
-info "$(svc_exec postgres psql -U tak_manager -d tak_manager -tAc "select count(*) || ' accounts, ' || (select count(*) from teams) || ' teams, ' || (select count(*) from tak_accesses) || ' TAK accesses' from accounts")"
+info "$(svc_exec postgres psql -U teamtak -d teamtak -tAc "select count(*) || ' accounts, ' || (select count(*) from teams) || ' teams, ' || (select count(*) from tak_accesses) || ' TAK accesses' from accounts")"
 
 log "Loading TAK Server's database"
 # The database is dropped and created again from the dump. The container's healthcheck

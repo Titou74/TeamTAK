@@ -5,8 +5,8 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tak_manager_core::names::{is_valid_slug, normalize_email, slugify, AccessKind, MAX_SLUG_LEN};
-use tak_manager_core::policy::{can, seats_left, AccessRef, Action, Actor, TeamRole, TeamStatus};
+use teamtak_core::names::{is_valid_slug, normalize_email, slugify, AccessKind, MAX_SLUG_LEN};
+use teamtak_core::policy::{can, seats_left, AccessRef, Action, Actor, TeamRole, TeamStatus};
 use time::OffsetDateTime;
 use uuid::Uuid;
 

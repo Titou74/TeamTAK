@@ -140,21 +140,21 @@ mod tests {
     #[test]
     fn name_entries_are_read_from_the_enrollment_configuration() {
         let xml = r#"<?xml version="1.0"?><ns2:certificateConfig xmlns="http://bbn.com/marti/xml/config">
-            <nameEntries><nameEntry name="O" value="TAK"/><nameEntry value="TAKManager" name="OU"/></nameEntries>
+            <nameEntries><nameEntry name="O" value="TAK"/><nameEntry value="TeamTAK" name="OU"/></nameEntries>
             </ns2:certificateConfig>"#;
         assert_eq!(
             parse_name_entries(xml),
-            vec![("O".to_string(), "TAK".to_string()), ("OU".to_string(), "TAKManager".to_string())]
+            vec![("O".to_string(), "TAK".to_string()), ("OU".to_string(), "TeamTAK".to_string())]
         );
         assert!(parse_name_entries("<certificateConfig/>").is_empty());
     }
 
     #[test]
     fn csr_carries_the_expected_subject() {
-        let entries = vec![("O".to_string(), "TAK".to_string()), ("OU".to_string(), "TAKManager".to_string())];
+        let entries = vec![("O".to_string(), "TAK".to_string()), ("OU".to_string(), "TeamTAK".to_string())];
         let made = generate_key_and_csr(&entries, "alpha-shared").unwrap();
         let (_, csr) = X509CertificationRequest::from_der(&made.csr_der).unwrap();
-        assert_eq!(csr.certification_request_info.subject.to_string(), "O=TAK, OU=TAKManager, CN=alpha-shared");
+        assert_eq!(csr.certification_request_info.subject.to_string(), "O=TAK, OU=TeamTAK, CN=alpha-shared");
         assert!(!csr_body(&made.csr_der).contains('\n'));
         assert!(!csr_body(&made.csr_der).contains("BEGIN"));
     }

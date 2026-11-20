@@ -177,7 +177,7 @@ mod tests {
         let (agent, root) = test_agent(docker.clone(), "api-restart");
         let token = agent.config.token.clone();
 
-        for target in ["mapping-db-1", "opsan-db", "agent", "tak-manager-caddy-1", FOREIGN_ID, "caddy%3Bls", "%2E%2E"] {
+        for target in ["mapping-db-1", "opsan-db", "agent", "teamtak-caddy-1", FOREIGN_ID, "caddy%3Bls", "%2E%2E"] {
             let (status, body) = call(agent.clone(), "POST", &format!("/v1/services/{target}/restart"), Some(&token), "").await;
             assert_eq!((status, body["error"].as_str()), (403, Some("service_not_allowed")), "{target}");
         }

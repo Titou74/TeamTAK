@@ -74,9 +74,9 @@ mod tests {
 
     #[test]
     fn subject_expiry_and_role_are_read() {
-        let der = make("tak-manager-ca", true, datetime!(2036-11-16 17:13:05 UTC));
+        let der = make("teamtak-ca", true, datetime!(2036-11-16 17:13:05 UTC));
         let info = parse_der(&der).unwrap();
-        assert_eq!((info.subject.as_str(), info.is_ca, info.self_signed()), ("tak-manager-ca", true, true));
+        assert_eq!((info.subject.as_str(), info.is_ca, info.self_signed()), ("teamtak-ca", true, true));
         assert_eq!(info.not_after, datetime!(2036-11-16 17:13:05 UTC));
         assert_eq!(info.fingerprint.len(), 64);
         let leaf = parse_der(&make("takserver", false, datetime!(2028-11-18 0:00 UTC))).unwrap();
@@ -95,12 +95,12 @@ mod tests {
         // The shape of the CA file the platform is given: the intermediate, then the root.
         let chain = format!(
             "Bag Attributes\n    friendlyName: intermediate\n{}{}",
-            pem(&make("tak-manager-ca", true, datetime!(2036-11-16 0:00 UTC))),
-            pem(&make("tak-manager-root-ca", true, datetime!(2036-11-17 0:00 UTC)))
+            pem(&make("teamtak-ca", true, datetime!(2036-11-16 0:00 UTC))),
+            pem(&make("teamtak-root-ca", true, datetime!(2036-11-17 0:00 UTC)))
         );
         let found = parse_pem(chain.as_bytes()).unwrap();
         let names: Vec<&str> = found.iter().map(|c| c.subject.as_str()).collect();
-        assert_eq!(names, vec!["tak-manager-ca", "tak-manager-root-ca"]);
+        assert_eq!(names, vec!["teamtak-ca", "teamtak-root-ca"]);
         assert_eq!(parse_pem(b"no certificate here").unwrap(), vec![]);
     }
 

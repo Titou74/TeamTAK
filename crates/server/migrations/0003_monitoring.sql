@@ -1,4 +1,4 @@
--- TAK Manager, phase 3: audit log, alerts, monitoring history, settings, backups.
+-- TeamTAK, phase 3: audit log, alerts, monitoring history, settings, backups.
 --
 -- Every table added here that grows with time is bounded by design: the platform purges it
 -- once a day (crates/server/src/monitor/maintenance.rs), with the retention written next

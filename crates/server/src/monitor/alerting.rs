@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use tak_manager_core::alerts::{evaluate, plan, AlertKind, Finding, Observations, OpenAlert, Policy, Severity, Transition};
+use teamtak_core::alerts::{evaluate, plan, AlertKind, Finding, Observations, OpenAlert, Policy, Severity, Transition};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -62,7 +62,7 @@ fn line_of(finding: &Finding) -> AlertLine {
 ///
 /// ```json
 /// {
-///   "source": "tak-manager",
+///   "source": "teamtak",
 ///   "version": 1,
 ///   "event": "raised",
 ///   "text": "The service caddy is not running (state: exited).",
@@ -77,10 +77,10 @@ fn line_of(finding: &Finding) -> AlertLine {
 ///
 /// `event` is `raised`, `escalated` (the alert became more serious), `reminder`, `resolved`,
 /// or `test` (sent from the settings page). `kind` is one of the codes of
-/// `tak_manager_core::alerts::AlertKind`; `severity` is `low`, `warning` or `critical`.
+/// `teamtak_core::alerts::AlertKind`; `severity` is `low`, `warning` or `critical`.
 fn webhook_payload(event: &WebhookEvent, public_url: &str) -> Value {
     json!({
-        "source": "tak-manager",
+        "source": "teamtak",
         "version": 1,
         "event": event.event,
         "text": locale::alert_sentence(locale::DEFAULT_LANGUAGE, &event.line),
@@ -111,10 +111,10 @@ pub async fn post_webhook(http: &reqwest::Client, url: &str, payload: &Value) ->
 /// The document sent by "Send a test" on the settings page.
 pub fn webhook_test_payload(public_url: &str) -> Value {
     json!({
-        "source": "tak-manager",
+        "source": "teamtak",
         "version": 1,
         "event": "test",
-        "text": "Test message from TAK Manager: alerts will arrive here.",
+        "text": "Test message from TeamTAK: alerts will arrive here.",
         "url": format!("{public_url}/monitoring"),
         "alert": null,
     })
@@ -288,7 +288,7 @@ pub async fn notify_team_leaders(monitor: &Arc<Monitor>, stored: &Stored) -> Res
     .await?;
     let now = OffsetDateTime::now_utc();
     for certificate in expiring {
-        let days = tak_manager_core::certs::days_left(certificate.expires_at, now);
+        let days = teamtak_core::certs::days_left(certificate.expires_at, now);
         let Some(threshold) = notice_threshold(days, warning_days, critical_days) else { continue };
         // The row is the claim: whoever inserts it sends the notice, and nobody sends it twice.
         let claimed = sqlx::query("INSERT INTO certificate_notices (fingerprint, threshold_days) VALUES ($1, $2) ON CONFLICT DO NOTHING")
@@ -344,7 +344,7 @@ mod tests {
         assert_eq!(
             payload,
             json!({
-                "source": "tak-manager",
+                "source": "teamtak",
                 "version": 1,
                 "event": "raised",
                 "text": "The service caddy is not running (state: exited).",
@@ -388,7 +388,7 @@ mod tests {
             stream.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n").await.unwrap();
             String::from_utf8_lossy(&request).into_owned()
         });
-        let http = tak_manager_core::public_http_client(std::time::Duration::from_secs(5)).unwrap();
+        let http = teamtak_core::public_http_client(std::time::Duration::from_secs(5)).unwrap();
         let event = WebhookEvent {
             event: "raised",
             id: 3,
@@ -407,7 +407,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_webhook_that_refuses_is_reported_not_retried() {
-        let http = tak_manager_core::public_http_client(std::time::Duration::from_secs(2)).unwrap();
+        let http = teamtak_core::public_http_client(std::time::Duration::from_secs(2)).unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}/", listener.local_addr().unwrap());
         drop(listener);

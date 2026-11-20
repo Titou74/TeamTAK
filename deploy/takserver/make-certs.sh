@@ -27,14 +27,14 @@ grep -q -- '-days 730' makeCert.sh || { echo "makeCert.sh: validity not found, t
 grep -q '^\$ALTNAMEFIELD = \$SNAME$' makeCert.sh || { echo "makeCert.sh: alt name line not found, the script changed" >&2; exit 1; }
 sed -e 's/-days 730/-days ${CERT_DAYS}/' \
     -e 's/^\$ALTNAMEFIELD = \$SNAME$/&\n${EXTRA_ALT_NAMES:-}/' \
-    makeCert.sh > makeCert-tak-manager.sh
-chmod u+x makeCert-tak-manager.sh
+    makeCert.sh > makeCert-teamtak.sh
+chmod u+x makeCert-teamtak.sh
 
 ./makeRootCa.sh --ca-name "$ROOT_CA_NAME"
 # MOVE_CA=true: the intermediate becomes the CA that signs what follows.
-CERT_DAYS="$INT_CA_DAYS" MOVE_CA=true ./makeCert-tak-manager.sh ca "$INT_CA_NAME"
-CERT_DAYS="$SERVER_CERT_DAYS" ./makeCert-tak-manager.sh server "$SERVER_CERT_NAME"
-CERT_DAYS="$API_CERT_DAYS" EXTRA_ALT_NAMES="" ./makeCert-tak-manager.sh client "$API_CERT_NAME"
+CERT_DAYS="$INT_CA_DAYS" MOVE_CA=true ./makeCert-teamtak.sh ca "$INT_CA_NAME"
+CERT_DAYS="$SERVER_CERT_DAYS" ./makeCert-teamtak.sh server "$SERVER_CERT_NAME"
+CERT_DAYS="$API_CERT_DAYS" EXTRA_ALT_NAMES="" ./makeCert-teamtak.sh client "$API_CERT_NAME"
 
 cd files
 # The platform reads its key from a file only it can read; no password to store next to it.

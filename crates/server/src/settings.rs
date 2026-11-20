@@ -8,9 +8,9 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
-use tak_manager_core::alerts::Thresholds;
-use tak_manager_core::policy::Action;
-use tak_manager_core::versions::parse_tak_version;
+use teamtak_core::alerts::Thresholds;
+use teamtak_core::policy::Action;
+use teamtak_core::versions::parse_tak_version;
 use time::OffsetDateTime;
 
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};

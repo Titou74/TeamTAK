@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn qr_strings() {
-        assert_eq!(itak_qr("TAK Manager", "tak.example.org", 8089), "TAK Manager,tak.example.org,8089,ssl");
+        assert_eq!(itak_qr("TeamTAK", "tak.example.org", 8089), "TeamTAK,tak.example.org,8089,ssl");
         assert_eq!(itak_qr("A, B", "h", 8089), "A  B,h,8089,ssl");
         assert_eq!(
             atak_enroll_uri("tak.example.org", "alpha-shared", "Ab3 d/+&="),

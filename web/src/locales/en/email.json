@@ -1,14 +1,14 @@
 {
-  "signature": "TAK Manager — {{url}}",
+  "signature": "TeamTAK — {{url}}",
   "datetime_format": "[year]-[month]-[day] [hour]:[minute] UTC",
   "decimal_separator": ".",
   "login_code": {
     "subject": "Your sign-in code: {{code}}",
-    "body": "Hello,\n\nYour sign-in code for TAK Manager is:\n\n    {{code}}\n\nIt is valid for {{minutes}} minutes and can be used once. If you did not ask for it, ignore this message: nobody can sign in without the code."
+    "body": "Hello,\n\nYour sign-in code for TeamTAK is:\n\n    {{code}}\n\nIt is valid for {{minutes}} minutes and can be used once. If you did not ask for it, ignore this message: nobody can sign in without the code."
   },
   "invitation": {
     "subject": "{{inviter}} invites you to the team {{team}}",
-    "body": "Hello,\n\n{{inviter}} invites you to join the team \"{{team}}\" on TAK Manager, where you will get your access to the TAK server.\n\nTo answer, sign in with this e-mail address ({{email}}):\n\n    {{url}}\n\nThe invitation is waiting on your home page. If you do not know this team, ignore this message."
+    "body": "Hello,\n\n{{inviter}} invites you to join the team \"{{team}}\" on TeamTAK, where you will get your access to the TAK server.\n\nTo answer, sign in with this e-mail address ({{email}}):\n\n    {{url}}\n\nThe invitation is waiting on your home page. If you do not know this team, ignore this message."
   },
   "team_request": {
     "subject": "New team request: {{team}}",
@@ -63,9 +63,9 @@
     "body": "Hello,\n\nThe connection zip of the access \"{{access}}\" of your team \"{{team}}\" carries a client certificate that expires on {{date}}, in {{days}} days.\n\nNothing renews it. After that date the devices set up with this zip will no longer connect to the TAK server.\n\nBefore then, as a team leader:\n\n  1. open the access on your team's page and choose \"Regenerate\";\n  2. download the new zip and hand it out again to everyone who uses it.\n\nRegenerating disconnects the devices that use the access at once: plan it when the team can set its devices up again.\n\n    {{url}}"
   },
   "alerts": {
-    "subject_raised": "[TAK Manager] Alert: {{text}}",
-    "subject_resolved": "[TAK Manager] Resolved: {{text}}",
-    "subject_several": "[TAK Manager] Alerts — new: {{raised}}, resolved: {{resolved}}, still open: {{reminded}}",
+    "subject_raised": "[TeamTAK] Alert: {{text}}",
+    "subject_resolved": "[TeamTAK] Resolved: {{text}}",
+    "subject_several": "[TeamTAK] Alerts — new: {{raised}}, resolved: {{resolved}}, still open: {{reminded}}",
     "heading_raised": "New alerts:",
     "heading_resolved": "Resolved:",
     "heading_reminded": "Still open (reminder):",

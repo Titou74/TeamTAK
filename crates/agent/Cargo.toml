@@ -1,5 +1,5 @@
 [package]
-name = "tak-manager-agent"
+name = "teamtak-agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -27,9 +27,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 time = { version = "0.3.55", features = ["macros"] }
 
 [lib]
-name = "tak_manager_agent"
+name = "teamtak_agent"
 path = "src/lib.rs"
 
 [[bin]]
-name = "tak-manager-agent"
+name = "teamtak-agent"
 path = "src/main.rs"

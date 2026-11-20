@@ -20,7 +20,7 @@ PATTERNS=(
   "takserver-pm.jar"
 )
 
-say() { echo "[tak-manager supervisor] $*" | tee -a "$LOG"; }
+say() { echo "[teamtak supervisor] $*" | tee -a "$LOG"; }
 
 # The image has no ps or pgrep: read the command lines from /proc.
 running() {

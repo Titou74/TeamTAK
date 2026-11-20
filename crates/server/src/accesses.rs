@@ -14,12 +14,12 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tak_manager_core::names::{access_username, AccessKind};
-use tak_manager_core::package::{
+use teamtak_core::names::{access_username, AccessKind};
+use teamtak_core::package::{
     atak_enroll_uri, build_client_store, build_connection_zip, itak_qr, ClientStore, ConnectionPackage, PackageLayout,
 };
-use tak_manager_core::policy::{can, kind_allowed_in_mode, AccessRef, Action};
-use tak_manager_core::{generate_tak_password, random_string, UNAMBIGUOUS};
+use teamtak_core::policy::{can, kind_allowed_in_mode, AccessRef, Action};
+use teamtak_core::{generate_tak_password, random_string, UNAMBIGUOUS};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -397,7 +397,7 @@ async fn package_certificate(state: &SharedState, access: &Access) -> ApiResult<
         return Err(ApiError::DirectoryUnavailable);
     }
     let password = state.secrets.open_string(PASSWORD_CONTEXT, &access.password_enc)?;
-    let client_uid = format!("tak-manager-{}", access.id);
+    let client_uid = format!("teamtak-{}", access.id);
     let enrolled = state.tak.enroll(&access.username, &password, &client_uid).await?;
     let p12_password = random_string(20, UNAMBIGUOUS);
     let p12 = build_client_store(

@@ -1,4 +1,4 @@
--- TAK Manager, phase 2: cross-team events.
+-- TeamTAK, phase 2: cross-team events.
 --
 -- An event is a period during which the TAK accounts of its host team and of every team
 -- that accepted its invitation share one more group. Its state is not stored: it follows

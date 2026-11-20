@@ -6,12 +6,12 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-use tak_manager_core::directory::ldap::LdapDirectory;
-use tak_manager_core::directory::Directory;
-use tak_manager_core::package::build_truststore;
-use tak_manager_core::secret::SecretBox;
-use tak_manager_core::tak::http::{HttpTakConfig, HttpTakServer};
-use tak_manager_core::tak::TakServer;
+use teamtak_core::directory::ldap::LdapDirectory;
+use teamtak_core::directory::Directory;
+use teamtak_core::package::build_truststore;
+use teamtak_core::secret::SecretBox;
+use teamtak_core::tak::http::{HttpTakConfig, HttpTakServer};
+use teamtak_core::tak::TakServer;
 
 use crate::config::Config;
 use crate::mail::Mailer;
@@ -68,7 +68,7 @@ pub fn build_backends(config: &Config) -> Result<Backends> {
         ca_pem,
         client_cert_pem: read(&config.tak.api_cert_file)?,
         client_key_pem: read(&config.tak.api_key_file)?,
-        client_version: format!("tak-manager-{}", env!("CARGO_PKG_VERSION")),
+        client_version: format!("teamtak-{}", env!("CARGO_PKG_VERSION")),
     })
     .context("setting up the TAK Server client")?;
     let directory = LdapDirectory::new(config.ldap.clone());

@@ -3,7 +3,7 @@
 //! - accounts: `uid=<username>,ou=People,<base>` (`inetOrgPerson`);
 //! - groups: `cn=<group>,ou=Group,<base>` (`groupOfNames`, attribute `member`); the memberOf
 //!   overlay turns them into the `memberOf` attribute TAK Server reads;
-//! - the platform binds as `cn=tak-manager,ou=Services,<base>`, the only writer.
+//! - the platform binds as `cn=teamtak,ou=Services,<base>`, the only writer.
 //!
 //! Passwords are sent in clear in the `userPassword` attribute and hashed by OpenLDAP itself
 //! (Argon2, `olcPPolicyHashCleartext`). The connection is plain `ldap://` inside the Docker
@@ -26,7 +26,7 @@ const RC_OBJECT_CLASS_VIOLATION: u32 = 65;
 const RC_ALREADY_EXISTS: u32 = 68;
 
 /// Prefix of the `description` value that carries the password tag of an account.
-const TAG_PREFIX: &str = "tak-manager-pwtag=";
+const TAG_PREFIX: &str = "teamtak-pwtag=";
 
 #[derive(Debug, Clone)]
 pub struct LdapConfig {
@@ -277,7 +277,7 @@ mod tests {
         LdapDirectory::new(LdapConfig {
             url: "ldap://unused".into(),
             base_dn: "dc=tak,dc=example".into(),
-            bind_dn: "cn=tak-manager,ou=Services,dc=tak,dc=example".into(),
+            bind_dn: "cn=teamtak,ou=Services,dc=tak,dc=example".into(),
             bind_password: "x".into(),
         })
     }

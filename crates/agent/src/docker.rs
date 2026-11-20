@@ -239,7 +239,7 @@ pub mod fake {
             }
             match args[0] {
                 "ps" => {
-                    assert!(args.contains(&"label=com.docker.compose.project=tak-manager"), "listing must be limited to the project: {args:?}");
+                    assert!(args.contains(&"label=com.docker.compose.project=teamtak"), "listing must be limited to the project: {args:?}");
                     let mut ids = vec![TAK_ID, CADDY_ID];
                     if self.leaky_filter {
                         ids.push(FOREIGN_ID);
@@ -248,8 +248,8 @@ pub mod fake {
                 }
                 "inspect" => {
                     let all = [
-                        inspected(TAK_ID, "tak-manager", "takserver", "tak-manager-takserver-1", "tak-manager/takserver:5.8-RELEASE-103"),
-                        inspected(CADDY_ID, "tak-manager", "caddy", "tak-manager-caddy-1", "caddy:2.11-alpine"),
+                        inspected(TAK_ID, "teamtak", "takserver", "teamtak-takserver-1", "teamtak/takserver:5.8-RELEASE-103"),
+                        inspected(CADDY_ID, "teamtak", "caddy", "teamtak-caddy-1", "caddy:2.11-alpine"),
                         inspected(FOREIGN_ID, "mapping", "caddy", "mapping-caddy-1", "caddy:2"),
                     ];
                     let asked: Vec<Value> = all.into_iter().filter(|v| args[1..].contains(&v["Id"].as_str().unwrap())).collect();
@@ -284,9 +284,9 @@ mod tests {
     #[tokio::test]
     async fn only_containers_of_the_project_are_seen() {
         let docker = FakeDocker { leaky_filter: true, ..Default::default() };
-        let reports = container_reports(&docker, "tak-manager").await.unwrap();
+        let reports = container_reports(&docker, "teamtak").await.unwrap();
         let names: Vec<&str> = reports.iter().map(|c| c.name.as_str()).collect();
-        assert_eq!(names, vec!["tak-manager-caddy-1", "tak-manager-takserver-1"], "the other project's container is dropped even if Docker lists it");
+        assert_eq!(names, vec!["teamtak-caddy-1", "teamtak-takserver-1"], "the other project's container is dropped even if Docker lists it");
         assert_eq!(reports[0].repo_digests, vec!["caddy@sha256:1234".to_string()]);
         assert!(reports[1].repo_digests.is_empty(), "an image built here has no registry digest");
     }
@@ -296,7 +296,7 @@ mod tests {
         // Seen on the development machine: after an identical rebuild, a running container
         // still names an image identifier Docker no longer has.
         let docker = FakeDocker { image_gone_by_id: true, ..Default::default() };
-        let reports = container_reports(&docker, "tak-manager").await.unwrap();
+        let reports = container_reports(&docker, "teamtak").await.unwrap();
         let caddy = reports.iter().find(|c| c.service == "caddy").unwrap();
         assert_eq!(caddy.repo_digests, vec!["caddy@sha256:1234".to_string()], "found again by its name");
         let takserver = reports.iter().find(|c| c.service == "takserver").unwrap();
@@ -308,22 +308,22 @@ mod tests {
     #[tokio::test]
     async fn a_service_is_resolved_inside_the_project_only() {
         let docker = FakeDocker { leaky_filter: true, ..Default::default() };
-        assert_eq!(service_container(&docker, "tak-manager", "caddy").await.unwrap().as_deref(), Some(CADDY_ID));
-        assert_eq!(service_container(&docker, "tak-manager", "postgres").await.unwrap(), None);
+        assert_eq!(service_container(&docker, "teamtak", "caddy").await.unwrap().as_deref(), Some(CADDY_ID));
+        assert_eq!(service_container(&docker, "teamtak", "postgres").await.unwrap(), None);
         // The same service name exists in the other project: it is never the one returned.
-        assert_ne!(service_container(&docker, "tak-manager", "caddy").await.unwrap().as_deref(), Some(FOREIGN_ID));
+        assert_ne!(service_container(&docker, "teamtak", "caddy").await.unwrap().as_deref(), Some(FOREIGN_ID));
     }
 
     #[tokio::test]
     async fn a_docker_that_does_not_answer_is_an_error_not_an_empty_stack() {
         let docker = FakeDocker { down: true, ..Default::default() };
-        assert!(matches!(container_reports(&docker, "tak-manager").await, Err(DockerError::Unavailable(_))));
+        assert!(matches!(container_reports(&docker, "teamtak").await, Err(DockerError::Unavailable(_))));
     }
 
     #[test]
     fn container_identifiers() {
         assert!(is_container_id(TAK_ID) && is_container_id("0123456789ab"));
-        for bad in ["", "abc", "tak-manager-caddy-1", "--help", "0123456789ab;rm"] {
+        for bad in ["", "abc", "teamtak-caddy-1", "--help", "0123456789ab;rm"] {
             assert!(!is_container_id(bad), "{bad}");
         }
     }

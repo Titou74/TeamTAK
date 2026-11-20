@@ -1,4 +1,4 @@
--- TAK Manager, phase 1: accounts, teams, TAK accesses, reconciliation.
+-- TeamTAK, phase 1: accounts, teams, TAK accesses, reconciliation.
 -- This database is the source of truth; OpenLDAP and TAK Server are made to match it.
 
 CREATE TABLE accounts (

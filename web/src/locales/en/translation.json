@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "TAK Manager"
+    "name": "TeamTAK"
   },
   "common": {
     "cancel": "Cancel",
@@ -835,7 +835,7 @@
     "restoreTitle": "Restoring",
     "restoreHelp": "A restore replaces everything on the server with the content of one archive. It is run over SSH, never from here, and asks for confirmation.",
     "restoreLabel": "the restore command",
-    "restoreNote1": "Copy the archives off the server: a backup that only lives on the disk it protects does not survive that disk. The README shows how to send each new archive elsewhere.",
+    "restoreNote1": "Copy the archives off the server: a backup that only lives on the disk it protects does not survive that disk. The file docs/backups.md in the repository shows how to send each new archive elsewhere.",
     "restoreNote2": "Keep the passphrase outside the platform: the copy saved in the settings is inside the encrypted archive.",
     "restoreNote3": "An alert is raised when the newest archive is more than {{count}} hours old, or when a backup fails."
   },
@@ -964,7 +964,7 @@
       "emails": "Send alerts by e-mail to every administrator",
       "emailsHint": "Each administrator receives them in their own language.",
       "webhook": "Webhook address",
-      "webhookHint": "Optional. Each alert raised, recalled or resolved is also posted there as a JSON document (its format is in the README). Save before testing.",
+      "webhookHint": "Optional. Each alert raised, recalled or resolved is also posted there as a JSON document (its format is in docs/monitoring.md in the repository). Save before testing.",
       "webhookTest": "Send a test",
       "webhookTested": "The webhook accepted the test message.",
       "reminder": "Recall an alert that lasts every (hours)"

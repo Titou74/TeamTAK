@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs TAK Manager from nothing: builds TAK Server from the tak.gov ZIP, generates the
+# Installs TeamTAK from nothing: builds TAK Server from the tak.gov ZIP, generates the
 # secrets and certificates, and starts the whole stack with Docker Compose.
 #
 # Safe to run again: whatever already exists (settings, certificates, images) is kept, the
@@ -8,7 +8,7 @@
 #   ./install.sh --local --admin-email you@example.org
 #   ./install.sh --domain tak.example.org --admin-email you@example.org \
 #                --smtp-host smtp-relay.brevo.com --smtp-username ... --smtp-password ... \
-#                --mail-from "TAK Manager <no-reply@example.org>"
+#                --mail-from "TeamTAK <no-reply@example.org>"
 #
 # See README.md for every option.
 . "$(dirname "$0")/deploy/scripts/lib.sh"
@@ -111,7 +111,7 @@ if [ ! -f "$ENV_FILE" ]; then
     TAK_NETWORK_ALIAS="$DOMAIN_ARG"
     SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="${SMTP_PORT_ARG:-587}" SMTP_TLS="${SMTP_TLS_ARG:-starttls}"
     SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG"
-    MAIL_FROM="${MAIL_FROM_ARG:-TAK Manager <no-reply@$DOMAIN_ARG>}"
+    MAIL_FROM="${MAIL_FROM_ARG:-TeamTAK <no-reply@$DOMAIN_ARG>}"
     LOGIN_MAX_CODES_PER_IP=30
     LOGIN_MAX_FAILURES_PER_IP=30
     MONITOR_INTERVAL_SECONDS=60
@@ -125,7 +125,7 @@ if [ ! -f "$ENV_FILE" ]; then
     TAK_NETWORK_ALIAS="takserver.internal"
     SMTP_HOST="${SMTP_HOST_ARG:-mailpit}" SMTP_PORT="${SMTP_PORT_ARG:-1025}" SMTP_TLS="${SMTP_TLS_ARG:-none}"
     SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG"
-    MAIL_FROM="${MAIL_FROM_ARG:-TAK Manager <tak-manager@localhost>}"
+    MAIL_FROM="${MAIL_FROM_ARG:-TeamTAK <teamtak@localhost>}"
     # The integration tests sign in many accounts, and submit wrong codes, from one address;
     # replaying them must not lock that address out. The per-address limit stays as in
     # production, and is tested.
@@ -154,22 +154,22 @@ ACME_EMAIL=${ACME_EMAIL_ARG:-$ADMIN_EMAIL_ARG}
 
 # --- TAK Server
 TAK_VERSION=$TAK_VERSION
-TAK_IMAGE=tak-manager/takserver:$TAK_VERSION
-TAK_DB_IMAGE=tak-manager/takserver-db:$TAK_VERSION
+TAK_IMAGE=teamtak/takserver:$TAK_VERSION
+TAK_DB_IMAGE=teamtak/takserver-db:$TAK_VERSION
 # Validity of the client certificates issued by enrollment, in days
 CERT_VALIDITY_DAYS=$VALIDITY
 # Safety net only: the platform pushes group changes itself. Seconds.
 LDAP_UPDATE_INTERVAL=60
-ROOT_CA_NAME=tak-manager-root-ca
-INT_CA_NAME=tak-manager-ca
+ROOT_CA_NAME=teamtak-root-ca
+INT_CA_NAME=teamtak-ca
 SERVER_CERT_NAME=takserver
-TAK_API_CERT_NAME=tak-manager-api
+TAK_API_CERT_NAME=teamtak-api
 # true: port 8446 presents the Let's Encrypt certificate (needed by QR-code enrollment)
 TAK_ENROLL_LETSENCRYPT=${ENROLL_LE_ARG:-false}
 TAK_ENROLL_URL=$TAK_ENROLL_URL
 TAK_NETWORK_ALIAS=$TAK_NETWORK_ALIAS
 # Name of the connection in the phones' server list
-TAK_CONNECTION_NAME=TAK Manager
+TAK_CONNECTION_NAME=TeamTAK
 # PKCS#12 format of the certificates in zips: modern (AES-256) or legacy (Android 12 and older)
 P12_FORMAT=modern
 # Java heap sizes in MB; empty lets TAK Server size them from the machine's RAM
@@ -199,7 +199,7 @@ RECONCILE_INTERVAL_SECONDS=60
 MONITOR_INTERVAL_SECONDS=$MONITOR_INTERVAL_SECONDS
 
 # --- Directory
-LDAP_BASE_DN=dc=takmanager,dc=internal
+LDAP_BASE_DN=dc=teamtak,dc=internal
 
 # --- Secrets (generated)
 APP_SECRET=$(rand 48)
@@ -247,7 +247,7 @@ if [ "$UPGRADE_TAK" = 1 ]; then
   NEW_VERSION="$(basename "$NEW_ZIP" .zip)"; NEW_VERSION="${NEW_VERSION#takserver-docker-hardened-}"
   [ "$NEW_VERSION" != "$TAK_VERSION" ] || die "TAK Server $TAK_VERSION is already the installed version"
   OLD_VERSION="$TAK_VERSION" OLD_DB_IMAGE="$TAK_DB_IMAGE"
-  NEW_IMAGE="tak-manager/takserver:$NEW_VERSION" NEW_DB_IMAGE="tak-manager/takserver-db:$NEW_VERSION"
+  NEW_IMAGE="teamtak/takserver:$NEW_VERSION" NEW_DB_IMAGE="teamtak/takserver-db:$NEW_VERSION"
   info "installed: $OLD_VERSION — new: $NEW_VERSION"
 
   [ -n "$(svc_container takserver-db)" ] || die "the stack must be running for an upgrade (the backup is taken from it)"
@@ -312,7 +312,7 @@ DNS.$dns_n = $name"; dns_n=$((dns_n + 1))
     -e EXTRA_ALT_NAMES="$alt" \
     -e INT_CA_DAYS=3650 -e SERVER_CERT_DAYS=730 -e API_CERT_DAYS=730 \
     -e CAPASS="$TAK_CERT_PASSWORD" -e PASS="$TAK_CERT_PASSWORD" \
-    -e STATE=XX -e CITY=TAK -e ORGANIZATIONAL_UNIT=TAKManager \
+    -e STATE=XX -e CITY=TAK -e ORGANIZATIONAL_UNIT=TeamTAK \
     "$TAK_IMAGE" -s)"
   if ! docker start -a -i "$cid" < "$DEPLOY_DIR/takserver/make-certs.sh" > "$DATA_DIR/certs.log" 2>&1; then
     tail -n 30 "$DATA_DIR/certs.log" >&2
@@ -356,7 +356,7 @@ info "CoreConfig.xml rendered (client certificates valid $CERT_VALIDITY_DAYS day
 log "Building the platform and agent images (first build: several minutes)"
 compose build app agent > "$DATA_DIR/build-app.log" 2>&1 || { tail -n 40 "$DATA_DIR/build-app.log" >&2; die "could not build the platform images"; }
 rm -f "$DATA_DIR/build-app.log"
-info "tak-manager/app:local and tak-manager/agent:local built"
+info "teamtak/app:local and teamtak/agent:local built"
 
 if [ "$NO_START" = 1 ]; then
   log "Prepared. Start with: cd deploy && docker compose up -d"
@@ -382,7 +382,7 @@ if [ "${TAK_ENROLL_LETSENCRYPT:-false}" = true ]; then
   log "Let's Encrypt certificate for the enrollment port (8446)"
   "$DEPLOY_DIR/scripts/sync-letsencrypt.sh" --wait 180 || info "WARNING: not done yet; the platform asks the agent again every day, or use \"Hand over now\" in the administration once Caddy has its certificate"
   # Installations made before phase 3 had a cron job for this; the agent does it now.
-  rm -f /etc/cron.d/tak-manager-letsencrypt 2>/dev/null || true
+  rm -f /etc/cron.d/teamtak-letsencrypt 2>/dev/null || true
 fi
 
 log "Checking that the platform reaches the directory and TAK Server"
@@ -390,7 +390,7 @@ log "Checking that the platform reaches the directory and TAK Server"
 # certificate: try for two minutes before giving up.
 ready=0
 for _ in $(seq 1 24); do
-  if compose exec -T app tak-manager status > "$DATA_DIR/status.log" 2>&1; then ready=1; break; fi
+  if compose exec -T app teamtak status > "$DATA_DIR/status.log" 2>&1; then ready=1; break; fi
   sleep 5
 done
 sed 's/^/   /' "$DATA_DIR/status.log"; rm -f "$DATA_DIR/status.log"
@@ -398,10 +398,10 @@ sed 's/^/   /' "$DATA_DIR/status.log"; rm -f "$DATA_DIR/status.log"
 
 if [ -n "${ADMIN_EMAIL:-}" ]; then
   log "Administrator"
-  compose exec -T app tak-manager grant-admin "$ADMIN_EMAIL"
+  compose exec -T app teamtak grant-admin "$ADMIN_EMAIL"
 fi
 
-log "TAK Manager is running"
+log "TeamTAK is running"
 info "Web:               $PUBLIC_URL"
 info "TAK clients:       $PUBLIC_HOST:8089 (TLS)   enrollment: $PUBLIC_HOST:8446"
 if [ "$MODE" = local ]; then
@@ -409,4 +409,4 @@ if [ "$MODE" = local ]; then
 fi
 info "Backups:           deploy/backups/ (daily, set in the administration); restore: deploy/scripts/restore.sh"
 info "Stop:              cd deploy && docker compose down      (start again: docker compose up -d)"
-info "Rescue admin code: cd deploy && docker compose exec app tak-manager grant-admin <email>"
+info "Rescue admin code: cd deploy && docker compose exec app teamtak grant-admin <email>"

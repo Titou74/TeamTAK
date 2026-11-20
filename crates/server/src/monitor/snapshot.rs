@@ -3,7 +3,7 @@
 //! served as it is: no request of the web UI triggers a probe.
 
 use serde::Serialize;
-use tak_manager_agent::report::{BackupFile, HostReport, LetsEncryptReport, ProcessReport};
+use teamtak_agent::report::{BackupFile, HostReport, LetsEncryptReport, ProcessReport};
 use time::OffsetDateTime;
 use uuid::Uuid;
 

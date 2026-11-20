@@ -11,7 +11,7 @@ for (const [path, module] of Object.entries(files)) {
   resources[code] = { translation: module.default };
 }
 
-const STORAGE_KEY = "tak-manager.language";
+const STORAGE_KEY = "teamtak.language";
 
 function stored(): LanguageCode | null {
   try {

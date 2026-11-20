@@ -11,7 +11,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Value};
 use sqlx::PgPool;
-use tak_manager_agent::report::{BackupRequest, RotateRequest};
+use teamtak_agent::report::{BackupRequest, RotateRequest};
 use time::{Date, OffsetDateTime};
 
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};

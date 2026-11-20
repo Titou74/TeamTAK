@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  CoreConfig.xml of TAK Manager. Template: install.sh replaces the __XXX__ values and writes
+  CoreConfig.xml of TeamTAK. Template: install.sh replaces the __XXX__ values and writes
   the result to deploy/data/tak/CoreConfig.xml. Written for TAK Server 5.8-RELEASE-103 and
   validated in phase 0 (docs/phase-0-report.md, section 4).
 -->
@@ -100,7 +100,7 @@
         <certificateConfig>
             <nameEntries>
                 <nameEntry name="O" value="TAK"/>
-                <nameEntry name="OU" value="TAKManager"/>
+                <nameEntry name="OU" value="TeamTAK"/>
             </nameEntries>
         </certificateConfig>
         <TAKServerCAConfig

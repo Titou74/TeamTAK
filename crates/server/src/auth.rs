@@ -11,9 +11,9 @@ use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use tak_manager_core::login::{self, RequestDecision};
-use tak_manager_core::names::normalize_email;
-use tak_manager_core::policy::{can, Action, Actor};
+use teamtak_core::login::{self, RequestDecision};
+use teamtak_core::names::normalize_email;
+use teamtak_core::policy::{can, Action, Actor};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
@@ -260,7 +260,7 @@ pub async fn verify(
     .bind(language)
     .fetch_one(&mut *tx)
     .await?;
-    let token = tak_manager_core::random_string(48, tak_manager_core::UNAMBIGUOUS);
+    let token = teamtak_core::random_string(48, teamtak_core::UNAMBIGUOUS);
     sqlx::query(
         "INSERT INTO sessions (id, token_hash, account_id, expires_at) VALUES ($1, $2, $3, now() + make_interval(days => $4))",
     )

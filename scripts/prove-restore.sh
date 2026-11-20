@@ -9,7 +9,7 @@
 #
 # Local mode only: it refuses to run on a production installation. Everything on the local
 # stack that is not in the backup is lost, which is the point. Nothing outside the Compose
-# project "tak-manager" is touched.
+# project "teamtak" is touched.
 #
 # Before destroying anything it copies deploy/.env and deploy/data to a folder outside the
 # repository (TM_RESTORE_SAFE, a new temporary folder by default) and puts them back if the
@@ -33,14 +33,14 @@ die() { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 [ -f deploy/.env ] || die "deploy/.env is missing: run ./install.sh --local first"
 grep -q '^MODE=local$' deploy/.env || die "this proof only runs on a local-mode installation"
 
-SAFE="${TM_RESTORE_SAFE:-$(mktemp -d "${TMPDIR:-/tmp}/tak-manager-restore-proof.XXXXXX")}"
+SAFE="${TM_RESTORE_SAFE:-$(mktemp -d "${TMPDIR:-/tmp}/teamtak-restore-proof.XXXXXX")}"
 case "$SAFE" in "$PWD"/*) die "TM_RESTORE_SAFE must be outside the repository" ;; esac
 mkdir -p "$SAFE"
 export TM_RESTORE_STATE="$SAFE/state"
-PROJECT_VOLUMES() { docker volume ls -q --filter label=com.docker.compose.project=tak-manager; }
+PROJECT_VOLUMES() { docker volume ls -q --filter label=com.docker.compose.project=teamtak; }
 
 step "1/5 Preparing teams, accesses and zips, then asking the platform for a backup"
-cargo test -p tak-manager-server --test restore -- --ignored --exact before_the_backup --nocapture 2>&1 | tee "$SAFE/before.log" | grep -E '^PROOF|^test |test result|panicked' || true
+cargo test -p teamtak-server --test restore -- --ignored --exact before_the_backup --nocapture 2>&1 | tee "$SAFE/before.log" | grep -E '^PROOF|^test |test result|panicked' || true
 grep -q '^test result: ok. 1 passed' "$SAFE/before.log" || die "the preparation failed; see $SAFE/before.log"
 ARCHIVE="$(sed -n 's/^PROOF archive=//p' "$SAFE/before.log")"
 [ -f "deploy/backups/$ARCHIVE" ] || die "the archive deploy/backups/$ARCHIVE does not exist"
@@ -59,7 +59,7 @@ echo "   volumes before: $(PROJECT_VOLUMES | tr '\n' ' ')"
 deploy/scripts/clean.sh --yes > "$SAFE/clean.log" 2>&1 || { cat "$SAFE/clean.log" >&2; die "the cleaning failed"; }
 [ -z "$(PROJECT_VOLUMES)" ] || die "volumes of the project are left: $(PROJECT_VOLUMES)"
 [ ! -e deploy/.env ] && [ ! -e deploy/data ] || die "deploy/.env or deploy/data is still there"
-[ -z "$(docker ps -a -q --filter label=com.docker.compose.project=tak-manager)" ] || die "containers of the project are left"
+[ -z "$(docker ps -a -q --filter label=com.docker.compose.project=teamtak)" ] || die "containers of the project are left"
 echo "   volumes after: none; containers: none; deploy/.env and deploy/data: gone"
 
 put_back() {
@@ -82,7 +82,7 @@ grep -q 'Restored from' "$SAFE/restore.log" || { put_back; exit 1; }
 echo "   restored in $(( $(date +%s) - start )) s"
 
 step "5/5 Verifying with the zips handed out before the backup"
-cargo test -p tak-manager-server --test restore -- --ignored --exact after_the_restore --nocapture 2>&1 | tee "$SAFE/after.log" | grep -E '^PROOF|^test |test result|panicked|assertion' || true
+cargo test -p teamtak-server --test restore -- --ignored --exact after_the_restore --nocapture 2>&1 | tee "$SAFE/after.log" | grep -E '^PROOF|^test |test result|panicked|assertion' || true
 grep -q '^test result: ok. 1 passed' "$SAFE/after.log" || die "the verification failed; see $SAFE/after.log"
 
 step "The restore is proven"

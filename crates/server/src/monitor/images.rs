@@ -9,7 +9,7 @@
 //! - **pinned by digest** (`vegardit/openldap@sha256:…`): nothing newer can exist under
 //!   that reference. The registry's `latest` is compared for information only; that image
 //!   is rebuilt every week, so it almost always differs;
-//! - **built on this machine** (`tak-manager/…`): no registry. TAK Server has its own
+//! - **built on this machine** (`teamtak/…`): no registry. TAK Server has its own
 //!   version check.
 //!
 //! The registry is asked for one header per image (`HEAD` on the manifest, which registries
@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tak_manager_core::versions::{local_digests, parse_image, ImageSource};
+use teamtak_core::versions::{local_digests, parse_image, ImageSource};
 use time::OffsetDateTime;
 
 use super::snapshot::ImageUpdate;
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn images_built_here_have_no_registry() {
         // Docker gives them a digest too; the name tells them apart.
-        let update = status("tak-manager/takserver:5.8-RELEASE-103", &["tak-manager/takserver@sha256:6857".to_string()], &Checks::new());
+        let update = status("teamtak/takserver:5.8-RELEASE-103", &["teamtak/takserver@sha256:6857".to_string()], &Checks::new());
         assert_eq!((update.source, update.status, update.checked_at), ("local", "local", None));
     }
 

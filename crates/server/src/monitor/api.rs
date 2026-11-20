@@ -8,8 +8,8 @@ use axum::extract::{Path, Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tak_manager_agent::report::RESTARTABLE_SERVICES;
-use tak_manager_core::policy::Action;
+use teamtak_agent::report::RESTARTABLE_SERVICES;
+use teamtak_core::policy::Action;
 use time::OffsetDateTime;
 
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};

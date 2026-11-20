@@ -185,11 +185,11 @@ pub fn tak_processes(top_output: &str) -> Vec<ProcessReport> {
 // ------------------------------------------------------------------------------- files
 
 /// Prefix of every archive written by deploy/scripts/backup.sh.
-pub const BACKUP_PREFIX: &str = "tak-manager-backup-";
+pub const BACKUP_PREFIX: &str = "teamtak-backup-";
 
 /// True for a name the backup script gives its archives, and nothing else: the retention
 /// rule and the listing never look at another file of the folder.
-/// `tak-manager-backup-20261119T031500Z.tar.gz`, with `.enc` appended when encrypted.
+/// `teamtak-backup-20261119T031500Z.tar.gz`, with `.enc` appended when encrypted.
 pub fn backup_file(name: &str) -> Option<bool> {
     let rest = name.strip_prefix(BACKUP_PREFIX)?;
     let (stamp, encrypted) = match rest.strip_suffix(".tar.gz.enc") {
@@ -319,16 +319,16 @@ mod tests {
     #[test]
     fn containers_are_read_from_docker_inspect() {
         let v = json!({
-            "Id": "abc", "Name": "/tak-manager-takserver-1", "RestartCount": 2, "Image": "sha256:img1",
+            "Id": "abc", "Name": "/teamtak-takserver-1", "RestartCount": 2, "Image": "sha256:img1",
             "State": {"Status": "running", "ExitCode": 0, "StartedAt": "2026-11-19T17:13:02.5Z", "Health": {"Status": "healthy"}},
-            "Config": {"Image": "tak-manager/takserver:5.8-RELEASE-103",
-                       "Labels": {"com.docker.compose.project": "tak-manager", "com.docker.compose.service": "takserver"}}
+            "Config": {"Image": "teamtak/takserver:5.8-RELEASE-103",
+                       "Labels": {"com.docker.compose.project": "teamtak", "com.docker.compose.service": "takserver"}}
         });
         let c = container(&v).unwrap();
-        assert_eq!((c.service.as_str(), c.name.as_str(), c.state.as_str()), ("takserver", "tak-manager-takserver-1", "running"));
+        assert_eq!((c.service.as_str(), c.name.as_str(), c.state.as_str()), ("takserver", "teamtak-takserver-1", "running"));
         assert_eq!((c.health.as_deref(), c.restart_count, c.exit_code), (Some("healthy"), 2, Some(0)));
-        assert_eq!(c.image, "tak-manager/takserver:5.8-RELEASE-103");
-        assert_eq!(compose_project(&v), Some("tak-manager"));
+        assert_eq!(c.image, "teamtak/takserver:5.8-RELEASE-103");
+        assert_eq!(compose_project(&v), Some("teamtak"));
 
         let stopped = json!({"Name": "/x", "State": {"Status": "exited", "ExitCode": 137, "StartedAt": "0001-01-01T00:00:00Z"},
             "Config": {"Image": "caddy:2.11-alpine", "Labels": {"com.docker.compose.service": "caddy"}}});
@@ -349,7 +349,7 @@ mod tests {
     fn tak_server_processes_are_found_in_docker_top() {
         // Captured from the running stack (TAK Server 5.8-RELEASE-103).
         let top = "PID                 COMMAND\n\
-990414              /bin/bash /opt/tak-manager/entrypoint.sh\n\
+990414              /bin/bash /opt/teamtak/entrypoint.sh\n\
 990492              {configureInDock} /bin/sh /opt/tak/configureInDocker.sh init\n\
 990493              {tee} /usr/bin/coreutils --coreutils-prog-shebang=tee /usr/bin/tee -a /opt/tak/logs/takserver.log\n\
 990508              java -jar -Xmx469m -Dspring.profiles.active=config takserver.war\n\
@@ -364,15 +364,15 @@ mod tests {
 
     #[test]
     fn only_archives_of_the_backup_script_are_backups() {
-        assert_eq!(backup_file("tak-manager-backup-20261119T031500Z.tar.gz"), Some(false));
-        assert_eq!(backup_file("tak-manager-backup-20261119T031500Z.tar.gz.enc"), Some(true));
+        assert_eq!(backup_file("teamtak-backup-20261119T031500Z.tar.gz"), Some(false));
+        assert_eq!(backup_file("teamtak-backup-20261119T031500Z.tar.gz.enc"), Some(true));
         for other in [
-            "tak-manager-backup-20261119T031500Z.tar.gz.partial",
-            "tak-manager-backup-latest.tar.gz",
-            "tak-manager-backup-2026-11-19.tar.gz",
+            "teamtak-backup-20261119T031500Z.tar.gz.partial",
+            "teamtak-backup-latest.tar.gz",
+            "teamtak-backup-2026-11-19.tar.gz",
             "notes.txt",
-            "../tak-manager-backup-20261119T031500Z.tar.gz",
-            "tak-manager-backup-20261119T031500Z.tar.gz/../x",
+            "../teamtak-backup-20261119T031500Z.tar.gz",
+            "teamtak-backup-20261119T031500Z.tar.gz/../x",
         ] {
             assert_eq!(backup_file(other), None, "{other}");
         }
@@ -389,9 +389,9 @@ mod tests {
 
     #[test]
     fn settings_are_read_from_the_env_file() {
-        let env = "# comment\nMODE=local\nPUBLIC_HOST=localhost\nMAIL_FROM=TAK Manager <a=b@c>\nMODE=production\n";
+        let env = "# comment\nMODE=local\nPUBLIC_HOST=localhost\nMAIL_FROM=TeamTAK <a=b@c>\nMODE=production\n";
         assert_eq!(env_value(env, "MODE").as_deref(), Some("production"), "the last one wins, as in Compose");
-        assert_eq!(env_value(env, "MAIL_FROM").as_deref(), Some("TAK Manager <a=b@c>"));
+        assert_eq!(env_value(env, "MAIL_FROM").as_deref(), Some("TeamTAK <a=b@c>"));
         assert_eq!(env_value(env, "ABSENT"), None);
     }
 }

@@ -265,7 +265,7 @@ async fn zips_carry_only_the_connection() {
     let host = setting("PUBLIC_HOST");
 
     // QR strings in the formats found in phase 0.
-    assert_eq!(detail["qr"]["itak"], format!("TAK Manager,{host},8089,ssl"));
+    assert_eq!(detail["qr"]["itak"], format!("TeamTAK,{host},8089,ssl"));
     assert_eq!(detail["qr"]["atak"], format!("tak://com.atakmap.app/enroll?host={host}&username={username}&token={password}"));
 
     // Keys allowed in config.pref: the connection, nothing about the user or the device.
@@ -310,7 +310,7 @@ async fn zips_carry_only_the_connection() {
     // The certificate was issued by TAK Server's enrollment, for one year by default, and
     // its expiry is recorded by the platform.
     let identity = with_certificate.identity();
-    let (cn, not_before, not_after) = tak_manager_core::tak::enroll::inspect_certificate(&identity.chain[0]).unwrap();
+    let (cn, not_before, not_after) = teamtak_core::tak::enroll::inspect_certificate(&identity.chain[0]).unwrap();
     assert_eq!(cn, username);
     let days = (not_after - time::OffsetDateTime::now_utc()).whole_days();
     let expected: i64 = setting("CERT_VALIDITY_DAYS").parse().unwrap();
@@ -577,7 +577,7 @@ async fn reconciliation_repairs_drift_and_reports_it() {
          dn: {stray_dn}\nchangetype: add\nobjectClass: top\nobjectClass: groupOfNames\ncn: {stray_group}\nmember: {intruder_dn}\n\n\
          # 3. the password of the team's account is changed.\n\
          dn: {user_dn}\nchangetype: modify\nreplace: userPassword\nuserPassword: changed-by-hand-1234\n-\n\
-         replace: description\ndescription: tak-manager-pwtag=tampered\n",
+         replace: description\ndescription: teamtak-pwtag=tampered\n",
         team_group = group_dn(&team.slug),
         other_dn = user_dn(&other),
         intruder_dn = user_dn(&intruder),

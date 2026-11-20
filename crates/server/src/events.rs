@@ -17,12 +17,12 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tak_manager_core::events::{
+use teamtak_core::events::{
     changed_event_dates, clock_now, end_now, new_event_dates, next_participation, EventPhase, Participation,
     ParticipationChange,
 };
-use tak_manager_core::names::event_group_name;
-use tak_manager_core::policy::{can, Action, Actor};
+use teamtak_core::names::event_group_name;
+use teamtak_core::policy::{can, Action, Actor};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -63,7 +63,7 @@ macro_rules! event_columns {
 
 impl EventRow {
     fn phase(&self, now: OffsetDateTime) -> EventPhase {
-        tak_manager_core::events::phase(self.starts_at, self.ends_at, self.cancelled_at, now)
+        teamtak_core::events::phase(self.starts_at, self.ends_at, self.cancelled_at, now)
     }
 }
 
@@ -861,7 +861,7 @@ fn notify(state: &SharedState, notice: Notice) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tak_manager_core::policy::TeamRole;
+    use teamtak_core::policy::TeamRole;
     use time::macros::datetime;
 
     const NOW: OffsetDateTime = datetime!(2026-11-20 10:00 UTC);

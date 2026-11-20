@@ -64,11 +64,11 @@ pub fn install_crypto() {
 
 /// A name no earlier run has used, so tests can be replayed on the same stack.
 pub fn unique(prefix: &str) -> String {
-    format!("{prefix}{}", tak_manager_core::random_string(6, b"abcdefghijkmnpqrstuvwxyz23456789"))
+    format!("{prefix}{}", teamtak_core::random_string(6, b"abcdefghijkmnpqrstuvwxyz23456789"))
 }
 
 pub fn email(prefix: &str) -> String {
-    format!("{}@e2e.tak-manager.test", unique(prefix))
+    format!("{}@e2e.teamtak.test", unique(prefix))
 }
 
 // ------------------------------------------------------------------------------- compose
@@ -127,7 +127,7 @@ pub async fn start_platform() {
 // ------------------------------------------------------------------------------- directory
 
 fn manager_dn() -> String {
-    format!("cn=tak-manager,ou=Services,{}", setting("LDAP_BASE_DN"))
+    format!("cn=teamtak,ou=Services,{}", setting("LDAP_BASE_DN"))
 }
 
 /// `ldapsearch` as the platform's account, from inside the openldap container.
@@ -348,7 +348,7 @@ impl Session {
         let mut request = self
             .http
             .request(method.parse().unwrap(), url)
-            .header("X-Requested-With", "tak-manager")
+            .header("X-Requested-With", "teamtak")
             .header("Accept", "application/json");
         if let Some(body) = body {
             request = request.json(&body);
@@ -394,7 +394,7 @@ impl Session {
     /// the first administrator of an installation gets in).
     pub async fn admin() -> Self {
         let address = email("admin");
-        let (ok, output) = compose_exec("app", &["tak-manager", "grant-admin", &address], None);
+        let (ok, output) = compose_exec("app", &["teamtak", "grant-admin", &address], None);
         assert!(ok, "grant-admin failed: {output}");
         let code: String = output
             .lines()
@@ -642,7 +642,7 @@ pub struct Identity {
 
 impl Identity {
     pub fn fingerprint(&self) -> String {
-        tak_manager_core::tak::fingerprint(&self.chain[0])
+        teamtak_core::tak::fingerprint(&self.chain[0])
     }
 }
 
@@ -670,7 +670,7 @@ pub async fn device_enroll(
     password: &str,
     device: &str,
 ) -> Result<Identity, u16> {
-    use tak_manager_core::tak::enroll;
+    use teamtak_core::tak::enroll;
     let tls = tls_builder().with_root_certificates(root_store(roots)).with_no_client_auth();
     let http = reqwest::Client::builder()
         .tls_backend_preconfigured(tls)
@@ -732,7 +732,7 @@ fn position_event(uid: &str) -> String {
         "<event version=\"2.0\" uid=\"{uid}\" type=\"a-f-G-U-C\" how=\"m-g\" time=\"{t}\" start=\"{t}\" stale=\"{s}\">\
          <point lat=\"45.9\" lon=\"6.1\" hae=\"450\" ce=\"10\" le=\"10\"/>\
          <detail><contact callsign=\"{uid}\" endpoint=\"*:-1:stcp\"/>\
-         <takv device=\"e2e\" platform=\"tak-manager-e2e\" os=\"0\" version=\"0\"/></detail></event>",
+         <takv device=\"e2e\" platform=\"teamtak-e2e\" os=\"0\" version=\"0\"/></detail></event>",
         t = cot_time(now),
         s = cot_time(now + time::Duration::seconds(30)),
     )

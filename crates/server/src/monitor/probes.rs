@@ -8,7 +8,7 @@ use std::time::Duration;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
-use tak_manager_core::certs::{parse_der, CertificateInfo};
+use teamtak_core::certs::{parse_der, CertificateInfo};
 
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 

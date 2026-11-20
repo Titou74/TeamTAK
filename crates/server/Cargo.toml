@@ -1,5 +1,5 @@
 [package]
-name = "tak-manager-server"
+name = "teamtak-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -24,8 +24,8 @@ serde_json = "1.0.154"
 sha2 = "0.11.1"
 sqlx = { version = "0.9.1", default-features = false, features = ["postgres", "runtime-tokio", "uuid", "time", "migrate", "macros"] }
 # The report the host agent produces is read back with the agent's own types.
-tak-manager-agent = { version = "0.1.0", path = "../agent" }
-tak-manager-core = { version = "0.1.0", path = "../core" }
+teamtak-agent = { version = "0.1.0", path = "../agent" }
+teamtak-core = { version = "0.1.0", path = "../core" }
 thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["serde", "formatting"] }
 tokio = { version = "1.54.1", features = ["full"] }
@@ -44,5 +44,5 @@ time = { version = "0.3.55", features = ["macros"] }
 zip = { version = "9.7.3", default-features = false, features = ["deflate"] }
 
 [[bin]]
-name = "tak-manager"
+name = "teamtak"
 path = "src/main.rs"

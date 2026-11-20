@@ -10,7 +10,7 @@ REPO_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
 DATA_DIR="$DEPLOY_DIR/data"
 ENV_FILE="$DEPLOY_DIR/.env"
 # Name of the Compose project (the `name:` of docker-compose.yml).
-COMPOSE_PROJECT="${TM_COMPOSE_PROJECT:-tak-manager}"
+COMPOSE_PROJECT="${TM_COMPOSE_PROJECT:-teamtak}"
 
 # uid of the "tak" user of the TAK Server image, and of the user of the app image.
 TAK_UID=1001

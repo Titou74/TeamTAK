@@ -62,7 +62,7 @@ macro_rules! audit_actions {
 audit_actions! {
     /// An administrator signed in. Other sign-ins are not recorded.
     AdminSignedIn => "admin_signed_in",
-    /// `tak-manager grant-admin` was run on the server.
+    /// `teamtak grant-admin` was run on the server.
     RescueCodeIssued => "rescue_code_issued",
     AdminGranted => "admin_granted",
     AdminRevoked => "admin_revoked",
@@ -268,7 +268,7 @@ pub enum Actor<'a> {
     Account(&'a Account),
     /// The platform itself: the daily schedule.
     System,
-    /// Someone on the server's command line (`docker compose exec app tak-manager …`).
+    /// Someone on the server's command line (`docker compose exec app teamtak …`).
     CommandLine,
 }
 
@@ -344,7 +344,7 @@ fn like_pattern(part: &str) -> String {
 
 /// `GET /api/admin/audit`: the log, newest first, filtered by period, team, actor and kind.
 pub async fn list(State(state): State<SharedState>, AdminAccount(admin): AdminAccount, Query(query): Query<AuditQuery>) -> ApiResult<Json<Value>> {
-    admin.require_platform(tak_manager_core::policy::Action::ViewMonitoring)?;
+    admin.require_platform(teamtak_core::policy::Action::ViewMonitoring)?;
     let from = parse_time(&query.from)?;
     let to = parse_time(&query.to)?;
     let page_size = query.page_size.unwrap_or(50).clamp(1, 200);

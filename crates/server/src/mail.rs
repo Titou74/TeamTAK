@@ -137,7 +137,7 @@ mod tests {
 
     #[tokio::test]
     async fn without_a_mail_server_sending_fails_cleanly() {
-        let config = SmtpConfig { host: String::new(), port: 587, username: String::new(), password: String::new(), tls: SmtpTls::StartTls, from: "TAK Manager <tak@localhost>".into() };
+        let config = SmtpConfig { host: String::new(), port: 587, username: String::new(), password: String::new(), tls: SmtpTls::StartTls, from: "TeamTAK <tak@localhost>".into() };
         let mailer = Mailer::new(&config, "https://tak.example.org", None).unwrap();
         let error = mailer.send("someone@example.org", "en", Template::LoginCode, &[("code", "123456"), ("minutes", "10")]).await.unwrap_err();
         assert!(format!("{error:#}").contains("no SMTP server configured"));

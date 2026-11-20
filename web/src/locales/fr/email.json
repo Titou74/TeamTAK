@@ -1,14 +1,14 @@
 {
-  "signature": "TAK Manager — {{url}}",
+  "signature": "TeamTAK — {{url}}",
   "datetime_format": "[day]/[month]/[year] à [hour]:[minute] UTC",
   "decimal_separator": ",",
   "login_code": {
     "subject": "Votre code de connexion : {{code}}",
-    "body": "Bonjour,\n\nVotre code de connexion à TAK Manager est :\n\n    {{code}}\n\nIl est valable {{minutes}} minutes et ne sert qu'une fois. Si vous ne l'avez pas demandé, ignorez ce message : personne ne peut se connecter sans ce code."
+    "body": "Bonjour,\n\nVotre code de connexion à TeamTAK est :\n\n    {{code}}\n\nIl est valable {{minutes}} minutes et ne sert qu'une fois. Si vous ne l'avez pas demandé, ignorez ce message : personne ne peut se connecter sans ce code."
   },
   "invitation": {
     "subject": "{{inviter}} vous invite dans l'équipe {{team}}",
-    "body": "Bonjour,\n\n{{inviter}} vous invite à rejoindre l'équipe « {{team}} » sur TAK Manager, où vous obtiendrez votre accès au serveur TAK.\n\nPour répondre, connectez-vous avec cette adresse e-mail ({{email}}) :\n\n    {{url}}\n\nL'invitation vous attend sur votre page d'accueil. Si vous ne connaissez pas cette équipe, ignorez ce message."
+    "body": "Bonjour,\n\n{{inviter}} vous invite à rejoindre l'équipe « {{team}} » sur TeamTAK, où vous obtiendrez votre accès au serveur TAK.\n\nPour répondre, connectez-vous avec cette adresse e-mail ({{email}}) :\n\n    {{url}}\n\nL'invitation vous attend sur votre page d'accueil. Si vous ne connaissez pas cette équipe, ignorez ce message."
   },
   "team_request": {
     "subject": "Nouvelle demande d'équipe : {{team}}",
@@ -63,9 +63,9 @@
     "body": "Bonjour,\n\nLe zip de connexion de l'accès « {{access}} » de votre équipe « {{team}} » contient un certificat client qui expire le {{date}}, dans {{days}} jours.\n\nRien ne le renouvelle. Passé cette date, les appareils configurés avec ce zip ne se connecteront plus au serveur TAK.\n\nD'ici là, en tant que chef d'équipe :\n\n  1. ouvrez l'accès sur la page de votre équipe et choisissez « Régénérer » ;\n  2. téléchargez le nouveau zip et redistribuez-le à toutes les personnes qui l'utilisent.\n\nRégénérer déconnecte aussitôt les appareils qui utilisent l'accès : prévoyez-le à un moment où l'équipe peut reconfigurer ses appareils.\n\n    {{url}}"
   },
   "alerts": {
-    "subject_raised": "[TAK Manager] Alerte : {{text}}",
-    "subject_resolved": "[TAK Manager] Résolu : {{text}}",
-    "subject_several": "[TAK Manager] Alertes — nouvelles : {{raised}}, résolues : {{resolved}}, toujours en cours : {{reminded}}",
+    "subject_raised": "[TeamTAK] Alerte : {{text}}",
+    "subject_resolved": "[TeamTAK] Résolu : {{text}}",
+    "subject_several": "[TeamTAK] Alertes — nouvelles : {{raised}}, résolues : {{resolved}}, toujours en cours : {{reminded}}",
     "heading_raised": "Nouvelles alertes :",
     "heading_resolved": "Résolues :",
     "heading_reminded": "Toujours en cours (rappel) :",

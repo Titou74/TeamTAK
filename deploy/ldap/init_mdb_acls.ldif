@@ -2,7 +2,7 @@ version: 1
 
 # Replaces /opt/ldifs/init_mdb_acls.ldif of the vegardit/openldap image.
 # Two service accounts, and users cannot read each other:
-#   cn=tak-manager  the platform, the only writer (users, groups, passwords)
+#   cn=teamtak  the platform, the only writer (users, groups, passwords)
 #   cn=takserver    TAK Server, read-only (it reads the users' memberOf)
 # A user can only read their own entry: TAK Server binds as the user during
 # enrollment (port 8446), then reads that user's memberOf.
@@ -14,19 +14,19 @@ olcAccess: {0}to dn.base=""
   by * read
 olcAccess: {1}to attrs=userPassword
   by dn.exact="${LDAP_INIT_ROOT_USER_DN}" write
-  by dn.exact="cn=tak-manager,ou=Services,${LDAP_INIT_ORG_DN}" write
+  by dn.exact="cn=teamtak,ou=Services,${LDAP_INIT_ORG_DN}" write
   by anonymous auth
   by * none
 olcAccess: {2}to dn.subtree="ou=People,${LDAP_INIT_ORG_DN}"
   by dn.exact="${LDAP_INIT_ROOT_USER_DN}" write
-  by dn.exact="cn=tak-manager,ou=Services,${LDAP_INIT_ORG_DN}" write
+  by dn.exact="cn=teamtak,ou=Services,${LDAP_INIT_ORG_DN}" write
   by dn.exact="cn=takserver,ou=Services,${LDAP_INIT_ORG_DN}" read
   by self read
   by anonymous auth
   by * none
 olcAccess: {3}to dn.subtree="ou=Group,${LDAP_INIT_ORG_DN}"
   by dn.exact="${LDAP_INIT_ROOT_USER_DN}" write
-  by dn.exact="cn=tak-manager,ou=Services,${LDAP_INIT_ORG_DN}" write
+  by dn.exact="cn=teamtak,ou=Services,${LDAP_INIT_ORG_DN}" write
   by dn.exact="cn=takserver,ou=Services,${LDAP_INIT_ORG_DN}" read
   by * none
 olcAccess: {4}to *
