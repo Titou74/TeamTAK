@@ -5,7 +5,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { adoptAccountLanguage } from "@/i18n";
-import { useErrorText, useMe } from "@/lib/hooks";
+import { useErrorText, useMe, usePublicConfig } from "@/lib/hooks";
 import { applyTheme, isTheme } from "@/lib/theme";
 import { AdminPage } from "@/pages/admin";
 import { HomePage } from "@/pages/home";
@@ -17,6 +17,7 @@ import { TeamPage } from "@/pages/team";
 export function App() {
   const { t } = useTranslation();
   const me = useMe();
+  const serverName = usePublicConfig().data?.server_name;
   const errorText = useErrorText();
   const language = me.data?.account.language;
   // Undefined while the account loads: the theme remembered on this device stays until then.
@@ -32,9 +33,10 @@ export function App() {
     if (theme !== undefined) applyTheme(isTheme(theme) ? theme : "auto");
   }, [theme]);
 
+  // The server's name in the tab, to tell apart several servers open at once.
   useEffect(() => {
-    document.title = t("app.name");
-  }, [t]);
+    document.title = serverName ? `${t("app.name")} · ${serverName}` : t("app.name");
+  }, [t, serverName]);
 
   if (me.isPending) {
     return <p className="p-8 text-center text-sm text-muted-foreground">{t("common.loading")}</p>;

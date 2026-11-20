@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MailIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { MailIcon, ServerIcon } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { adoptAccountLanguage, currentLanguage } from "@/i18n";
 import { api, ApiError } from "@/lib/api";
-import { useErrorText } from "@/lib/hooks";
+import { useErrorText, usePublicConfig } from "@/lib/hooks";
 import { useLoginProofs } from "@/lib/login-proof";
 
 /** The address as the server compares it. */
@@ -28,7 +28,8 @@ export function LoginPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const errorText = useErrorText();
-  const config = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
+  const config = usePublicConfig();
+  const serverName = config.data?.server_name;
   const proofs = useLoginProofs();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -117,7 +118,14 @@ export function LoginPage() {
         <Brand />
         <LanguageSwitcher />
       </header>
-      <main className="grid flex-1 place-items-center px-4 pb-24">
+      <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-24">
+        {/* Which server this is, when an organisation runs several. */}
+        {serverName && (
+          <p className="flex max-w-sm items-center justify-center gap-2 text-center text-lg font-semibold tracking-tight">
+            <ServerIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 break-words">{serverName}</span>
+          </p>
+        )}
         <Card className="w-full max-w-sm">
           <CardHeader>
             <CardTitle className="text-xl">{step === "email" ? t("login.title") : t("login.codeTitle")}</CardTitle>

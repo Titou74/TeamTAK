@@ -1065,6 +1065,13 @@
   "settings": {
     "saved": "Settings saved.",
     "default": "Default: {{value}}",
+    "server": {
+      "title": "Server name",
+      "description": "Tells this server from the others you run: it is shown on the sign-in page, in the browser tab, under TeamTAK at the top left, and in the subject of every e-mail.",
+      "name": "Name of this server",
+      "nameHint": "For example the event or the domain name (tak.example.org). Up to 60 characters; leave empty for none.",
+      "namePlaceholder": "Exercise North"
+    },
     "alerts": {
       "title": "Alerts",
       "description": "Where alerts are sent. They are always shown on the monitoring page.",

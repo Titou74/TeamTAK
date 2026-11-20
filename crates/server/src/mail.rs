@@ -106,8 +106,22 @@ impl Mailer {
         }
     }
 
-    /// Sends an e-mail that was rendered already.
-    pub async fn send_rendered(&self, to: &str, template: Template, rendered: Rendered) -> Result<()> {
+    /// The name an administrator gave this server, for the subjects; empty for none, or when
+    /// it cannot be read (the e-mail still goes).
+    async fn server_name(&self) -> String {
+        let Some(db) = &self.db else { return String::new() };
+        match crate::settings::load(db).await {
+            Ok(stored) => stored.values.server_name,
+            Err(e) => {
+                tracing::warn!(error = %e, "server name not read for an e-mail subject");
+                String::new()
+            }
+        }
+    }
+
+    /// Sends an e-mail that was rendered already, with the server's name in its subject.
+    pub async fn send_rendered(&self, to: &str, template: Template, mut rendered: Rendered) -> Result<()> {
+        rendered.subject = locale::with_server_name(&rendered.subject, &self.server_name().await);
         let outcome = self.deliver(to, rendered).await;
         self.count(template, &outcome).await;
         outcome

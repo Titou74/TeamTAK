@@ -179,6 +179,24 @@ pub fn render(template: Template, language: &str, vars: &[(&str, &str)], url: &s
     Rendered { subject, body: format!("{body}\n\n-- \n{signature}\n") }
 }
 
+/// How the platform's own e-mails to administrators (alerts, the test e-mail) begin, in
+/// every language.
+const PLATFORM_TAG: &str = "[TeamTAK]";
+
+/// `subject` with the name an administrator gave this server, so that the e-mails of
+/// several servers are told apart: inside the tag of the platform's own e-mails
+/// (`[TeamTAK · Exercise North] Alert: …`), in front of the others (`[Exercise North] Your
+/// sign-in code: …`). Unchanged when the server has no name.
+pub fn with_server_name(subject: &str, server_name: &str) -> String {
+    if server_name.is_empty() {
+        return subject.to_string();
+    }
+    match subject.strip_prefix(PLATFORM_TAG) {
+        Some(rest) => format!("[TeamTAK · {server_name}]{rest}"),
+        None => format!("[{server_name}] {subject}"),
+    }
+}
+
 // ------------------------------------------------------------------------------- alerts
 
 /// One alert as a notification mentions it.
@@ -379,6 +397,16 @@ mod tests {
             assert!(mail.body.contains(&date) && mail.body.contains("https://tak.example.org"), "{language}: {}", mail.body);
         }
         assert_eq!(render(Template::MailTest, "fr", &[], "u").subject, "[TeamTAK] E-mail de test");
+    }
+
+    #[test]
+    fn the_server_name_goes_in_every_subject() {
+        let test = render(Template::MailTest, "fr", &[], "u").subject;
+        assert_eq!(with_server_name(&test, "Exercice Nord"), "[TeamTAK · Exercice Nord] E-mail de test");
+        let code = render(Template::LoginCode, "en", &[("code", "123456"), ("minutes", "10")], "u").subject;
+        assert_eq!(with_server_name(&code, "Exercise North"), "[Exercise North] Your sign-in code: 123456");
+        // No name, no change.
+        assert_eq!(with_server_name(&code, ""), code);
     }
 
     #[test]

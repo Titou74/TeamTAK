@@ -51,6 +51,8 @@ export interface PublicConfig {
   code_ttl_minutes: number;
   /** Seconds before another code can be sent to the same address. */
   resend_cooldown_seconds: number;
+  /** Name an administrator gave this server, to tell it from others; empty for none. */
+  server_name: string;
 }
 
 /** Anti-bot challenge solved before asking for a login code (lib/login-proof.ts). */

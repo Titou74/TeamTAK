@@ -71,7 +71,7 @@ async fn mails_to(to: &str) -> Vec<Mail> {
         let full: Value = http.get(format!("{}/api/v1/message/{id}", mailpit_url())).send().await.unwrap().json().await.unwrap();
         // E-mail travels with CRLF line ends.
         let text = full["Text"].as_str().unwrap_or_default().replace("\r\n", "\n");
-        mails.push(Mail { subject: full["Subject"].as_str().unwrap_or_default().to_string(), text });
+        mails.push(Mail { subject: untagged(full["Subject"].as_str().unwrap_or_default()), text });
     }
     mails
 }
@@ -313,6 +313,33 @@ async fn a_stopped_service_raises_an_alert_by_email_and_its_resolution() {
     assert!(closed["resolved_at"].is_string());
     let summary = french.get("/admin/alerts/summary").await.ok();
     assert_eq!(summary["open"].as_u64().unwrap() as usize, open_alerts(&after).len());
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn the_server_name_is_shown_before_sign_in() {
+    let admin = Session::admin().await;
+    let before = admin.get("/admin/settings").await.ok()["settings"]["server_name"].as_str().unwrap().to_string();
+
+    let saved = admin.patch("/admin/settings", json!({ "settings": { "server_name": "  Test   bench " } })).await.ok();
+    assert_eq!(saved["settings"]["server_name"], "Test bench", "spaces are tidied");
+    // The sign-in page reads it before anyone is signed in.
+    let browser = Session::anonymous();
+    assert_eq!(browser.get("/config").await.ok()["server_name"], "Test bench");
+    // It is in the subject of the e-mails, to tell them from those of another server.
+    let address = email("named");
+    browser.request_code(&address, None).await.ok();
+    let mail = latest_mail(&address).await;
+    assert!(mail.subject.starts_with("Your sign-in code"), "{}", mail.subject);
+    assert!(mail_subjects(&address).await[0].starts_with("[Test bench] Your sign-in code"), "{:?}", mail_subjects(&address).await);
+    admin.post("/admin/settings/mail-test", json!({})).await.ok();
+    let test = mail_subjects(&admin.email).await;
+    assert!(test.iter().any(|s| s.starts_with("[TeamTAK · Test bench] ")), "{test:?}");
+    admin.patch("/admin/settings", json!({ "settings": { "server_name": "x".repeat(61) } })).await.expect_error(400, "invalid_input");
+    let leader = Session::new_account("noname").await;
+    leader.patch("/admin/settings", json!({ "settings": { "server_name": "Mine" } })).await.expect_error(403, "forbidden");
+
+    admin.patch("/admin/settings", json!({ "settings": { "server_name": before } })).await.ok();
 }
 
 #[tokio::test]

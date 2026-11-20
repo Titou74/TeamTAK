@@ -1,6 +1,6 @@
-//! Settings an administrator changes from the web UI: alert thresholds, where alerts go,
-//! the backup schedule, retention periods, and the latest TAK Server version they saw on
-//! tak.gov. Stored as one row; a field missing from the stored JSON takes its default, so a
+//! Settings an administrator changes from the web UI: the name of the server, alert
+//! thresholds, where alerts go, the backup schedule, retention periods, and the latest TAK
+//! Server version they saw on tak.gov. Stored as one row; a field missing from the stored JSON takes its default, so a
 //! new setting needs no migration.
 
 use axum::extract::State;
@@ -24,6 +24,9 @@ pub const PASSPHRASE_CONTEXT: &str = "settings.backup_passphrase";
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// Shown on the sign-in page, under the brand and in the subject of the e-mails, to tell
+    /// this server from the others an organisation runs. Empty for none.
+    pub server_name: String,
     pub thresholds: Thresholds,
     /// Alerts are e-mailed to every administrator.
     pub alert_emails: bool,
@@ -47,6 +50,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            server_name: String::new(),
             thresholds: Thresholds::default(),
             alert_emails: true,
             webhook_url: String::new(),
@@ -61,12 +65,20 @@ impl Default for Settings {
     }
 }
 
+/// Longest server name accepted, in characters.
+const SERVER_NAME_MAX: usize = 60;
+
 /// Longest passphrase accepted, and shortest: the archive holds every secret of the platform.
 const PASSPHRASE_LENGTH: std::ops::RangeInclusive<usize> = 12..=200;
 
 impl Settings {
     /// Checks what cannot be clamped and brings the rest within reasonable bounds.
     pub fn validated(mut self) -> Result<Self, ApiError> {
+        // Runs of spaces are one: the name is shown on one line.
+        self.server_name = self.server_name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if self.server_name.chars().count() > SERVER_NAME_MAX || self.server_name.chars().any(char::is_control) {
+            return Err(ApiError::InvalidInput);
+        }
         self.thresholds = self.thresholds.sanitized();
         self.webhook_url = self.webhook_url.trim().to_string();
         if !self.webhook_url.is_empty() && !is_webhook_url(&self.webhook_url) {
@@ -251,6 +263,9 @@ mod tests {
             json!({ "webhook_url": "ftp://example.org/hook" }),
             json!({ "webhook_url": "https://user:secret@example.org/hook" }),
             json!({ "tak_latest_known_version": "the new one" }),
+            json!({ "server_name": "x".repeat(61) }),
+            json!({ "server_name": "two\u{0}parts" }),
+            json!({ "server_name": 12 }),
             json!([1, 2]),
         ] {
             assert_eq!(merged(&base, &patch), Err(ApiError::InvalidInput), "{patch}");
@@ -271,6 +286,17 @@ mod tests {
         let after = merged(&base, &json!({ "tak_latest_known_version": " 5.9-release-12 " })).unwrap();
         assert_eq!(after.tak_latest_known_version, "5.9-RELEASE-12");
         assert_eq!(merged(&after, &json!({ "tak_latest_known_version": "" })).unwrap().tak_latest_known_version, "");
+    }
+
+    #[test]
+    fn the_server_name_is_tidied() {
+        let base = Settings::default();
+        assert_eq!(base.server_name, "");
+        let after = merged(&base, &json!({ "server_name": "  Exercise   North\t(tak.example.org) " })).unwrap();
+        assert_eq!(after.server_name, "Exercise North (tak.example.org)");
+        assert_eq!(merged(&base, &json!({ "server_name": "é".repeat(60) })).unwrap().server_name.chars().count(), 60);
+        assert_eq!(merged(&after, &json!({ "server_name": "   " })).unwrap().server_name, "");
+        assert_eq!(changed_fields(&base, &after), vec!["server_name".to_string()]);
     }
 
     #[test]

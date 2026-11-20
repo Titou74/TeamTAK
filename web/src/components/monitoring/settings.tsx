@@ -70,6 +70,8 @@ function SettingsForm({ view }: { view: SettingsView }) {
       setDraft(saved.settings);
       setPassphrase("");
       toast.success(done);
+      // The server's name is shown in the header and on the sign-in page.
+      void queryClient.invalidateQueries({ queryKey: ["config"] });
       // The platform looks again with the new settings, so the other tabs show their effect.
       queryClient.setQueryData(["admin", "monitoring"], await api.monitoring(true));
     } catch (e) {
@@ -123,6 +125,18 @@ function SettingsForm({ view }: { view: SettingsView }) {
   const webhookSaved = view.settings.webhook_url !== "" && view.settings.webhook_url === draft.webhook_url;
   return (
     <form onSubmit={save} className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.server.title")}</CardTitle>
+          <CardDescription>{t("settings.server.description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          <Label htmlFor="set-server-name">{t("settings.server.name")}</Label>
+          <Input id="set-server-name" maxLength={60} value={draft.server_name} placeholder={t("settings.server.namePlaceholder")} onChange={(e) => set("server_name", e.target.value)} className="max-w-md" />
+          <p className="text-xs text-muted-foreground">{t("settings.server.nameHint")}</p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.alerts.title")}</CardTitle>
@@ -245,7 +259,7 @@ function SettingsForm({ view }: { view: SettingsView }) {
   );
 }
 
-/** Thresholds, where alerts go, the backup schedule, retention. */
+/** The server's name, thresholds, where alerts go, the backup schedule, retention. */
 export function SettingsTab() {
   const query = useQuery({ queryKey: ["admin", "settings"], queryFn: api.settings });
   if (!query.data) return <QueryState pending={query.isPending} error={query.error} />;
