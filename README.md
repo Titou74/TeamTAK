@@ -40,6 +40,8 @@ reading its whole installation guide, and keeping it healthy and current afterwa
   behind their sign-in.
 - **Audit log** of every action that changes something.
 
+![The monitoring page: each service with its state and whether a newer image exists, then TAK Server's ports, processes and version](docs/images/monitoring.png)
+
 ## Built for a community of teams
 
 This is what sets TeamTAK apart from a plain TAK Server: the server is shared by many teams, and
@@ -52,13 +54,21 @@ each team runs itself. The administrator approves new teams; everything else hap
 3. **Bring the team in.** The leader invites the members by e-mail, removes them, and chooses how
    the team connects: one shared identity, one account per member, or named accesses for people
    outside the platform.
+
+   ![A team's page for its leader: one TAK access per member, and a named access for a guest crew](docs/images/team.png)
+
 4. **Connect without setting anything up.** TeamTAK generates each access ready to use: a QR code
    to scan, a zip (data package) to import into ATAK or iTAK, with or without a client
    certificate, or a username and password. The leader creates, regenerates or withdraws them, and
    sees which devices are connected. In ATAK and iTAK the team is one channel, private to it.
+
+   <img src="docs/images/access-dialog.png" width="560" alt="Connecting a device: QR codes for ATAK and iTAK, with the choice of the server port; the zip and the username and password are on the other tabs">
+
 5. **Work together at events.** A leader creates an event and invites other teams; each team
    accepts or declines. From the start of the event to its end, a shared channel appears on every
    device, then goes away, without anyone reconnecting.
+
+   ![Cross-team events: one under way that another team has joined, one coming later](docs/images/events.png)
 
 The UI and the e-mails are in English and French; other languages are two files away.
 
