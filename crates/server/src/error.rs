@@ -51,6 +51,10 @@ api_errors! {
     InvalidCode => ("invalid_code", BAD_REQUEST),
     /// The e-mail could not be handed to the mail server.
     MailUnavailable => ("mail_unavailable", SERVICE_UNAVAILABLE),
+    /// Sign-ups are by invitation only, and no invitation waits for this address.
+    SignupsClosed => ("signups_closed", FORBIDDEN),
+    /// An administrator invited an address that already has an account.
+    AccountExists => ("account_exists", CONFLICT),
     TeamNameTaken => ("team_name_taken", CONFLICT),
     /// The account already has the maximum number of requests waiting for approval.
     TooManyPendingRequests => ("too_many_pending_requests", CONFLICT),

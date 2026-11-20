@@ -34,6 +34,7 @@
   "login": {
     "title": "Sign in",
     "intro": "Enter your e-mail address and we will send you a one-time code. There is no password to remember.",
+    "invitationOnly": "On this server, new accounts are by invitation only: a team leader or an administrator must first invite your address.",
     "email": "E-mail address",
     "emailPlaceholder": "you@example.org",
     "send": "Send me a code",
@@ -41,6 +42,7 @@
     "haveCodeIntro": "Enter the 6-digit code you were given for {{email}}.",
     "codeTitle": "Enter your code",
     "codeIntro": "We sent a 6-digit code to {{email}}. It is valid for {{minutes}} minutes.",
+    "codeIntroInvitationOnly": "If {{email}} has an account or an invitation, we sent it a 6-digit code, valid for {{minutes}} minutes. If not, an e-mail tells you how to get an invitation.",
     "code": "Code",
     "verify": "Sign in",
     "resend": "Send a new code",
@@ -58,7 +60,8 @@
       "title": "You are not in a team yet",
       "description": "Without a team, an account has no access to the TAK server. There are two ways to get one:",
       "invited": "A team leader invites you with this e-mail address: the invitation then appears on this page.",
-      "request": "You request a new team: an administrator reviews the request, and you become its leader."
+      "request": "You request a new team: an administrator reviews the request, and you become its leader.",
+      "create": "You create a new team: it is active at once, and you become its leader."
     },
     "invitations": {
       "title": "Invitations",
@@ -77,6 +80,13 @@
       "message": "Message to the administrator",
       "submit": "Send the request",
       "sent": "Request sent. You will receive an e-mail when it is reviewed."
+    },
+    "create": {
+      "open": "Create a team",
+      "title": "Create a team",
+      "description": "Your team is active at once and you are its leader: you invite the members yourself.",
+      "submit": "Create the team",
+      "created": "{{team}} is created."
     }
   },
   "status": {
@@ -407,6 +417,13 @@
       "approved": "{{team}} is approved.",
       "rejected": "The request for {{team}} is rejected."
     },
+    "policy": {
+      "signupsOpen": "Sign-ups: open to everyone",
+      "signupsInvitation": "Sign-ups: by invitation only",
+      "approvalOn": "New teams: approved by an administrator",
+      "approvalOff": "New teams: active at once, without approval",
+      "change": "Change in the settings"
+    },
     "teams": {
       "title": "Teams",
       "none": "No team yet.",
@@ -440,6 +457,14 @@
       "title_one": "{{count}} account",
       "title_other": "{{count}} accounts",
       "description": "Anyone can sign in, but an account without a team can do nothing and has no access to the TAK server.",
+      "descriptionInvitationOnly": "Only invited addresses can get an account. An account without a team can do nothing and has no access to the TAK server.",
+      "invite": {
+        "label": "Invite someone to the platform",
+        "hint": "Creates an account for this address and e-mails it an invitation: for a future team leader no team has invited yet, when sign-ups are by invitation only.",
+        "submit": "Invite",
+        "sent": "Invitation sent to {{email}}.",
+        "notSent": "The account of {{email}} is created, but the e-mail could not be sent: tell them to sign in with this address."
+      },
       "account": "Account",
       "teams": "Teams",
       "lastLogin": "Last sign-in",
@@ -987,7 +1012,9 @@
       "tak_admin_opened": "Administrator opened TAK Server's administration",
       "admin_granted": "Administrator role granted",
       "admin_revoked": "Administrator role withdrawn",
+      "account_invited": "Account created and invited by an administrator",
       "team_requested": "Team requested",
+      "team_created": "Team created (no approval needed)",
       "team_approved": "Team request approved",
       "team_rejected": "Team request rejected",
       "team_cap_changed": "Member cap changed",
@@ -1018,7 +1045,7 @@
       "event_ended_early": "Event ended early",
       "event_cancelled": "Event cancelled",
       "reconciliation_requested": "TAK server check requested",
-      "settings_changed": "Monitoring settings changed",
+      "settings_changed": "Settings changed",
       "service_restarted": "Service restarted",
       "backup_run": "Backup run",
       "letsencrypt_synced": "Let's Encrypt certificate handed to TAK Server",
@@ -1076,6 +1103,14 @@
       "name": "Name of this server",
       "nameHint": "For example the event or the domain name (tak.example.org). Up to 60 characters; leave empty for none.",
       "namePlaceholder": "Exercise North"
+    },
+    "access": {
+      "title": "Sign-ups and teams",
+      "description": "Two steps you can keep in your hands. Checked, an administrator controls the step; unchecked, it is open to everyone.",
+      "invitationOnly": "Sign-ups by invitation only",
+      "invitationOnlyHint": "Checked: an address gets an account only if a team leader invited it to their team, or if an administrator invited it from Administration, Accounts; existing accounts still sign in. Unchecked: anyone can sign up.",
+      "teamApproval": "New teams wait for an administrator's approval",
+      "teamApprovalHint": "Checked: a team asked for waits until an administrator approves it, and the administrators are e-mailed. Unchecked: it is active at once, with the default member cap, and whoever asked for it leads it; requests already waiting stay for you to decide."
     },
     "alerts": {
       "title": "Alerts",
@@ -1141,6 +1176,8 @@
     "challenge_failed": "The page's security check did not go through. Please try again.",
     "invalid_code": "This code is wrong or has expired. Check it, or ask for a new one.",
     "mail_unavailable": "The e-mail could not be sent. Please try again in a moment.",
+    "signups_closed": "This server accepts new accounts by invitation only, and no invitation is waiting for this address. Ask a team leader or an administrator to invite you.",
+    "account_exists": "This address already has an account: it can sign in.",
     "team_name_taken": "A team with this name already exists.",
     "too_many_pending_requests": "You already have several requests waiting. Wait for an answer before sending another one.",
     "team_not_active": "This team is not active.",

@@ -46,12 +46,15 @@ reading its whole installation guide, and keeping it healthy and current afterwa
 
 This is what sets TeamTAK apart from a plain TAK Server: the server is shared by many teams, and
 each team runs itself. The administrator approves new teams; everything else happens without them.
+Or, if they prefer, they open the server to everyone, with teams created at once, or keep sign-ups
+to invited addresses: two switches in the settings.
 
 1. **Sign in with an e-mail address.** No password to remember: a six-digit code arrives by e-mail.
-   Anyone can sign in, but an account gets no TAK access until it belongs to a team. An invisible
-   anti-bot check and a countdown between two codes keep scripts from flooding the mail server.
+   Anyone can sign in (unless sign-ups are by invitation only), but an account gets no TAK access
+   until it belongs to a team. An invisible anti-bot check and a countdown between two codes keep
+   scripts from flooding the mail server.
 2. **Ask for a team.** A future leader asks for one and an administrator approves it, with a cap on
-   its members. It is the only step that needs an administrator.
+   its members. It is the only step that needs an administrator, and it can be turned off.
 3. **Bring the team in.** The leader invites the members by e-mail, removes them, and chooses how
    the team connects: one shared identity, one account per member, or named accesses for people
    outside the platform.
@@ -186,7 +189,9 @@ In **Monitoring, Settings**, set a backup passphrase, then arrange for the archi
 server ([Copying the archives elsewhere](docs/backups.md#copying-the-archives-elsewhere)).
 
 **8. Welcome the first teams.** Share the address of the UI with the community: each future team
-leader signs in and asks for their team, and you approve it from the administration area.
+leader signs in and asks for their team, and you approve it from the administration area. In
+**Monitoring, Settings**, you can instead let teams be created without approval, or accept new
+accounts by invitation only (you then invite the future leaders from **Administration, Accounts**).
 
 ### Local mode (development, tests, first look)
 

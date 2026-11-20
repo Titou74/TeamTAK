@@ -130,6 +130,37 @@ pub async fn start_platform() {
     }
 }
 
+// ------------------------------------------------------------------------------- settings
+
+/// Platform settings changed for the length of a test. When it is dropped, at the end of the
+/// test whatever its outcome, the values from before are written back: a test that failed
+/// with sign-ups closed would otherwise leave every following test unable to sign up.
+pub struct SettingsChanged {
+    before: Value,
+}
+
+impl SettingsChanged {
+    /// Changes `changes` (fields of the settings) through the API, as an administrator does.
+    pub async fn apply(admin: &Session, changes: Value) -> Self {
+        let current = admin.get("/admin/settings").await.ok()["settings"].clone();
+        let before = changes.as_object().expect("an object of settings").keys().map(|k| (k.clone(), current[k].clone())).collect();
+        admin.patch("/admin/settings", json!({ "settings": changes })).await.ok();
+        Self { before: Value::Object(before) }
+    }
+}
+
+impl Drop for SettingsChanged {
+    fn drop(&mut self) {
+        // In the database itself: a drop cannot wait for the API. The platform reads its
+        // settings there at every use.
+        let sql = format!("UPDATE settings SET data = data || $json${}$json$::jsonb WHERE id = 1;", self.before);
+        let (ok, output) = compose_exec("postgres", &["psql", "-U", "teamtak", "-d", "teamtak", "-v", "ON_ERROR_STOP=1"], Some(&sql));
+        if !ok {
+            eprintln!("settings not put back ({}): {output}", self.before);
+        }
+    }
+}
+
 // ------------------------------------------------------------------------------- directory
 
 fn manager_dn() -> String {

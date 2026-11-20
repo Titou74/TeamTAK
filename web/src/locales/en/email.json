@@ -6,9 +6,17 @@
     "subject": "Your sign-in code: {{code}}",
     "body": "Hello,\n\nYour sign-in code for TeamTAK is:\n\n    {{code}}\n\nIt is valid for {{minutes}} minutes and can be used once. If you did not ask for it, ignore this message: nobody can sign in without the code."
   },
+  "signups_closed": {
+    "subject": "Sign-up by invitation only",
+    "body": "Hello,\n\nSomeone, probably you, asked to sign in to TeamTAK with this e-mail address. This server accepts new accounts by invitation only, and no invitation is waiting for this address.\n\nAsk a team leader to invite you to their team, or an administrator to invite you to the platform, with this address. Then sign in again:\n\n    {{url}}\n\nIf you did not ask, ignore this message."
+  },
   "invitation": {
     "subject": "{{inviter}} invites you to the team {{team}}",
     "body": "Hello,\n\n{{inviter}} invites you to join the team \"{{team}}\" on TeamTAK, where you will get your access to the TAK server.\n\nTo answer, sign in with this e-mail address ({{email}}):\n\n    {{url}}\n\nThe invitation is waiting on your home page. If you do not know this team, ignore this message."
+  },
+  "platform_invitation": {
+    "subject": "{{inviter}} invites you to TeamTAK",
+    "body": "Hello,\n\n{{inviter}}, an administrator, invites you to TeamTAK, where teams get their access to the TAK server. An account is ready for this e-mail address ({{email}}).\n\nSign in with it; there is no password, a code arrives by e-mail:\n\n    {{url}}\n\nOnce signed in, you can ask for your own team, or join the one whose leader invites you. If you were not expecting this invitation, ignore this message."
   },
   "team_request": {
     "subject": "New team request: {{team}}",

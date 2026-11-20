@@ -6,9 +6,17 @@
     "subject": "Votre code de connexion : {{code}}",
     "body": "Bonjour,\n\nVotre code de connexion à TeamTAK est :\n\n    {{code}}\n\nIl est valable {{minutes}} minutes et ne sert qu'une fois. Si vous ne l'avez pas demandé, ignorez ce message : personne ne peut se connecter sans ce code."
   },
+  "signups_closed": {
+    "subject": "Inscription sur invitation uniquement",
+    "body": "Bonjour,\n\nQuelqu'un, sans doute vous, a demandé à se connecter à TeamTAK avec cette adresse e-mail. Ce serveur n'accepte de nouveaux comptes que sur invitation, et aucune invitation n'attend cette adresse.\n\nDemandez à un chef d'équipe de vous inviter dans son équipe, ou à un administrateur de vous inviter sur la plateforme, avec cette adresse. Connectez-vous ensuite à nouveau :\n\n    {{url}}\n\nSi vous n'avez rien demandé, ignorez ce message."
+  },
   "invitation": {
     "subject": "{{inviter}} vous invite dans l'équipe {{team}}",
     "body": "Bonjour,\n\n{{inviter}} vous invite à rejoindre l'équipe « {{team}} » sur TeamTAK, où vous obtiendrez votre accès au serveur TAK.\n\nPour répondre, connectez-vous avec cette adresse e-mail ({{email}}) :\n\n    {{url}}\n\nL'invitation vous attend sur votre page d'accueil. Si vous ne connaissez pas cette équipe, ignorez ce message."
+  },
+  "platform_invitation": {
+    "subject": "{{inviter}} vous invite sur TeamTAK",
+    "body": "Bonjour,\n\n{{inviter}}, administrateur de la plateforme, vous invite sur TeamTAK, où les équipes obtiennent leur accès au serveur TAK. Un compte est prêt pour cette adresse e-mail ({{email}}).\n\nConnectez-vous avec elle ; il n'y a pas de mot de passe, un code arrive par e-mail :\n\n    {{url}}\n\nAprès la connexion, vous pouvez demander votre propre équipe, ou rejoindre celle dont le chef vous invite. Si vous n'attendiez pas cette invitation, ignorez ce message."
   },
   "team_request": {
     "subject": "Nouvelle demande d'équipe : {{team}}",

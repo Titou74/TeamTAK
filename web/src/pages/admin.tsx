@@ -6,13 +6,15 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  MailPlusIcon,
   PauseIcon,
   PlayIcon,
   RefreshCwIcon,
+  SettingsIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -30,9 +32,10 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { currentLanguage } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime, formatNumber, formatRelative } from "@/lib/format";
-import { useErrorText, useNotifyError } from "@/lib/hooks";
+import { useErrorText, useNotifyError, usePublicConfig } from "@/lib/hooks";
 import type { AdminTeam, AdminTeams, Me, TeamEvent } from "@/lib/types";
 
 function RequestCard({ team, defaults, reload }: { team: AdminTeam; defaults: AdminTeams; reload: () => Promise<unknown> }) {
@@ -205,6 +208,23 @@ function TeamRow({ team, defaults, reload }: { team: AdminTeam; defaults: AdminT
   );
 }
 
+/** Who may sign up and whether new teams wait for approval, with the way to the settings. */
+function PolicySummary() {
+  const { t } = useTranslation();
+  const config = usePublicConfig().data;
+  if (!config) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-card p-3 text-sm">
+      <span>{config.invitation_only ? t("admin.policy.signupsInvitation") : t("admin.policy.signupsOpen")}</span>
+      <span>{config.team_approval ? t("admin.policy.approvalOn") : t("admin.policy.approvalOff")}</span>
+      <Link to="/monitoring?tab=settings" className="ml-auto inline-flex items-center gap-1 font-medium text-primary hover:underline">
+        <SettingsIcon className="size-4" />
+        {t("admin.policy.change")}
+      </Link>
+    </div>
+  );
+}
+
 function TeamsTab() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -224,6 +244,7 @@ function TeamsTab() {
   const others = query.data.teams.filter((team) => team.status !== "pending");
   return (
     <div className="space-y-8">
+      <PolicySummary />
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">{t("admin.requests.title", { count: pending.length })}</h2>
         {pending.length === 0 ? (
@@ -339,12 +360,64 @@ function EventsTab() {
   );
 }
 
+/** Creates an account for an address and e-mails it an invitation. */
+function InviteAccountForm({ reload }: { reload: () => Promise<unknown> }) {
+  const { t } = useTranslation();
+  const notifyError = useNotifyError();
+  const [email, setEmail] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function invite(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    try {
+      // The invitee has no language yet: the e-mail and the account take the administrator's.
+      const result = await api.inviteAccount(email, currentLanguage());
+      await reload();
+      if (result.email_sent) {
+        toast.success(t("admin.accounts.invite.sent", { email: result.email }));
+      } else {
+        toast.warning(t("admin.accounts.invite.notSent", { email: result.email }), { duration: 15_000 });
+      }
+      setEmail("");
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void invite(e)} className="space-y-1.5">
+      <Label htmlFor="invite-account">{t("admin.accounts.invite.label")}</Label>
+      <div className="flex flex-wrap gap-2">
+        <Input
+          id="invite-account"
+          type="email"
+          autoComplete="off"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t("login.emailPlaceholder")}
+          className="max-w-sm flex-1"
+        />
+        <Button type="submit" variant="outline" disabled={pending || !email}>
+          <MailPlusIcon />
+          {pending ? t("common.working") : t("admin.accounts.invite.submit")}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("admin.accounts.invite.hint")}</p>
+    </form>
+  );
+}
+
 function AccountsTab({ me }: { me: Me }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const errorText = useErrorText();
   const notifyError = useNotifyError();
   const query = useQuery({ queryKey: ["admin", "accounts"], queryFn: api.adminAccounts });
+  const invitationOnly = usePublicConfig().data?.invitation_only ?? false;
 
   async function setAdmin(id: string, isAdmin: boolean) {
     try {
@@ -367,9 +440,10 @@ function AccountsTab({ me }: { me: Me }) {
     <Card>
       <CardHeader>
         <CardTitle>{t("admin.accounts.title", { count: query.data.accounts.length })}</CardTitle>
-        <CardDescription>{t("admin.accounts.description")}</CardDescription>
+        <CardDescription>{invitationOnly ? t("admin.accounts.descriptionInvitationOnly") : t("admin.accounts.description")}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
+        <InviteAccountForm reload={() => queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] })} />
         <Table>
           <TableHeader>
             <TableRow>
