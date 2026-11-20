@@ -600,7 +600,13 @@
       "columns": {
         "service": "Service",
         "state": "State",
+        "usage": "Usage",
         "image": "Image"
+      },
+      "usage": {
+        "cpu": "Processor",
+        "memory": "Memory",
+        "disk": "Disk"
       },
       "state": {
         "running": "running",
@@ -769,16 +775,38 @@
     },
     "charts": {
       "title": "History",
-      "description": "One measure every five minutes, kept {{days}} days.",
+      "description": "One measure a minute, for the machine and for each service, kept {{days}} days.",
+      "points_one": "Each point is one measure.",
+      "points_other": "Each point is the average of {{count}} minutes.",
+      "period": "Period",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
       "day": "24 hours",
       "week": "7 days",
+      "machine": "Server",
       "cpu": "Processor",
       "memory": "Memory",
+      "swap": "Swap in use",
       "disk": "Fullest disk",
       "devices": "Connected devices",
+      "byService": "By service",
+      "measure": "Measure",
+      "serviceMetric": {
+        "cpu": "Processor",
+        "memory": "Memory",
+        "disk": "Disk"
+      },
+      "serviceMetricHelp": {
+        "cpu": "Share of the whole server's processor, all cores together: the services add up to about the server's figure.",
+        "memory": "Memory each service uses, without the file cache the system can take back.",
+        "disk": "Space each service's data takes: its volumes and its folders under deploy/data."
+      },
+      "sameScale": "Same scale for every service, up to {{value}}.",
+      "noServices": "No measure by service over this period.",
+      "chartLabel": "Chart: {{title}}. Arrow keys show each measure.",
       "peak": "highest: {{value}} ({{when}})",
       "noData": "no measure",
-      "empty": "The history starts a few minutes after the platform's first start."
+      "empty": "The history starts a minute after the platform's first start."
     }
   },
   "devices": {

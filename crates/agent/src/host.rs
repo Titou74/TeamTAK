@@ -3,8 +3,8 @@
 //!
 //! `/proc` of the agent's own container already describes the whole machine for what is
 //! read here (memory, load, CPU time, uptime are not per-container). The rest comes from
-//! three host directories mounted read-only under [`HostPaths::root`]: `/etc`, `/var/lib`
-//! and `/run`.
+//! four host directories mounted read-only under [`HostPaths::root`]: `/etc`, `/var/lib`,
+//! `/run`, and `/sys/fs/cgroup` for what each container uses (see `usage`).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -16,9 +16,16 @@ use crate::report::{percent, ClockReport, CpuReport, DiskReport, HostReport, OsI
 
 #[derive(Debug, Clone)]
 pub struct HostPaths {
-    /// Where the host's `/etc`, `/var/lib` and `/run` are mounted.
+    /// Where the host's `/etc`, `/var/lib`, `/run` and `/sys/fs/cgroup` are mounted.
     pub root: PathBuf,
     pub proc: PathBuf,
+}
+
+impl HostPaths {
+    /// The host's control groups.
+    pub fn cgroup(&self) -> PathBuf {
+        self.root.join("sys/fs/cgroup")
+    }
 }
 
 fn read(path: &Path) -> Option<String> {

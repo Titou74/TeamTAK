@@ -58,6 +58,12 @@ pub struct ServiceView {
     /// An administrator may restart it from the web UI.
     pub restartable: bool,
     pub update: ImageUpdate,
+    /// Share of the whole machine's processor since the previous look, 0 to 100.
+    pub cpu_percent: Option<f32>,
+    /// Memory in use, the file cache the kernel can take back left out.
+    pub memory_bytes: Option<u64>,
+    /// Space its volumes and its folders under deploy/data take.
+    pub disk_bytes: Option<u64>,
 }
 
 /// Whether a newer image exists, and what "newer" means for this image.

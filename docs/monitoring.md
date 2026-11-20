@@ -13,10 +13,49 @@ probed while a page loads.
 | Certificates: root and intermediate authority, TAK Server's, the platform's, the one of TAK Server's administration pages (when they are open), the Let's Encrypt ones, client certificates | The platform's files, what each port presents, and its database |
 | The platform: last clean synchronisation, drift, whether the starts and ends of events were applied, e-mails that failed | The platform's database |
 | TeamTAK's version, and the latest release published on GitHub | The platform itself, and GitHub for the last point |
-| A history of processor, memory, disk and connected devices | One sample every five minutes, kept 14 days |
+| What each service uses now: processor, memory, disk | The host agent |
+| A history of the server's processor, memory, swap, fullest disk and connected devices, and of each service's processor, memory and disk | One sample a minute, kept 14 days |
 
 The machine and the Docker socket are seen through the host agent only; see
 [architecture](architecture.md#the-host-agent).
+
+**Swap.** The server's card shows the share of the swap space in use, as the kernel gives it
+(`SwapTotal` and `SwapFree` of `/proc/meminfo`), or "no swap" when the server has none, which is
+common on a VPS: a server without swap is never shown as 0 % used. Swap in use is not a problem by
+itself: the kernel moves out pages nobody has touched for a long time, and the share can stay high
+for days after a peak. Whether memory is short now is what the memory figure says: it counts as
+available what the kernel can give to programs without swapping (`MemAvailable`), and the "memory
+under pressure" alert (92 % by default) is raised on it. There is no alert on swap.
+
+Swap matters for TAK Server. Its five Java processes size their heaps from the machine's memory
+unless told otherwise, and a heap partly in swap makes each garbage collection slow, which TAK
+clients feel as delays. When memory stays high and the swap in use keeps growing, give TAK Server
+smaller heaps (`TAK_API_MAX_HEAP`, `TAK_MESSAGING_MAX_HEAP`…, see
+[configuration](configuration.md)) or the server more memory.
+
+The history keeps the share of swap in use with each sample, one a minute, and draws it next to the
+server's memory, so a slow climb shows. A server without swap has no swap chart. Swap is not
+measured service by service.
+
+**What each service uses.** The agent reads it for every container of the stack, at each look:
+
+- **processor**: its share of the whole server since the previous look, all cores together, so
+  the services add up to about the server's own figure. It is read in the kernel's control groups
+  (`/sys/fs/cgroup`, mounted read-only into the agent);
+- **memory**: what it uses, without the file cache the system can take back: the figure
+  `docker stats` shows;
+- **disk**: the space its data takes, its volumes and its folders under `deploy/data` (TAK Server's
+  database, its logs and certificates, the platform's database, the directory…). Files of the
+  image itself are not counted. The agent has no data of its own and shows none.
+
+A figure the agent cannot read is shown as unknown: Docker keeping its data elsewhere than in
+`/var/lib/docker`, or its control groups in an unusual place (rootless Docker).
+
+**The history** keeps one sample a minute. A chart over one hour shows each of them; over longer
+periods each point is the average of a few minutes (5 minutes over 24 hours, 34 over 7 days), so
+that a chart never has more than 300 points. Under the server's charts, one chart per service shows
+the chosen measure (processor, memory or disk), all on the same scale, the heaviest service first.
+A gap in a line is a time the platform was not looking (stopped, or being updated).
 
 **What the web UI does not do**, on purpose: it never installs system updates, never restarts the
 server and never pulls an image. It reports, and shows the command to run over SSH:

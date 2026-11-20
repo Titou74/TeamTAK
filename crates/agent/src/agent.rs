@@ -2,11 +2,13 @@
 //! name a command, a path or a container: a restart names one of this stack's services,
 //! and everything else takes no target at all.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
+use serde_json::Value;
 use time::OffsetDateTime;
 
 use crate::docker::{self, Docker, DockerError};
@@ -14,6 +16,11 @@ use crate::host::{self, HostPaths};
 use crate::logs;
 use crate::parse::{self, CpuTimes};
 use crate::report::*;
+use crate::usage::{self, CpuReading};
+
+/// The agent's own service. What it mounts is the machine's and the other services': none
+/// of it is its data.
+const AGENT_SERVICE: &str = "agent";
 
 /// How long a reading of the package state is reused. It takes a second or two of CPU and
 /// changes at most a few times a day.
@@ -62,6 +69,8 @@ pub struct Agent {
     pub config: AgentConfig,
     docker: Arc<dyn Docker>,
     cpu: Mutex<Option<CpuTimes>>,
+    /// Processor time of each running container at the previous report.
+    container_cpu: Mutex<HashMap<String, CpuReading>>,
     updates: Mutex<Option<(Instant, UpdatesReport)>>,
     updates_refreshing: AtomicBool,
     /// Restart, backup and certificate hand-over never run two at a time.
@@ -95,6 +104,7 @@ impl Agent {
             config,
             docker,
             cpu: Mutex::new(None),
+            container_cpu: Mutex::new(HashMap::new()),
             updates: Mutex::new(None),
             updates_refreshing: AtomicBool::new(false),
             action: tokio::sync::Mutex::new(()),
@@ -213,8 +223,12 @@ impl Agent {
         if mode == "local" {
             expected.extend(LOCAL_SERVICES.iter().map(|s| s.to_string()));
         }
-        let containers = match docker::container_reports(self.docker.as_ref(), &self.config.project).await {
-            Ok(containers) => ContainersReport { expected, containers, error: None },
+        let containers = match docker::project_containers(self.docker.as_ref(), &self.config.project).await {
+            Ok(described) => {
+                let mut containers = docker::describe(self.docker.as_ref(), &described).await;
+                self.measure(&described, &mut containers, host.cpu.cores).await;
+                ContainersReport { expected, containers, error: None }
+            }
             Err(e) => ContainersReport { expected, containers: Vec::new(), error: Some(e.to_string()) },
         };
         let tak = self.tak(&env, &containers.containers).await;
@@ -227,6 +241,66 @@ impl Agent {
             tak,
             backups: self.backups(),
             letsencrypt: self.letsencrypt(&env),
+        }
+    }
+
+    /// Fills in what each container uses: processor time and memory from its control
+    /// group, disk from the size of its data. `described` is what `docker inspect` said of
+    /// the same containers.
+    async fn measure(&self, described: &[Value], containers: &mut [ContainerReport], cores: Option<u32>) {
+        let cgroup = self.config.host.cgroup();
+        let seen: Vec<(ContainerReport, &Value)> = described.iter().filter_map(|item| Some((parse::container(item)?, item))).collect();
+
+        // A running container's processor time is kept under its identifier and start: a
+        // restart sets the counter back to zero.
+        let running: Vec<(String, String, String)> = seen
+            .iter()
+            .filter(|(c, _)| c.state == "running")
+            .filter_map(|(c, item)| {
+                let id = parse::container_id(item)?;
+                Some((c.name.clone(), format!("{id}@{}", c.started_at.as_deref().unwrap_or_default()), id.to_string()))
+            })
+            .collect();
+        let keys: Vec<(String, String)> = running.iter().map(|(_, key, id)| (key.clone(), id.clone())).collect();
+        let mut before = self.container_cpu.lock().unwrap().clone();
+        let mut now = usage::read_cpu(&cgroup, &keys);
+        // A container seen for the first time is read again a moment later, like the machine.
+        if now.keys().any(|key| !before.contains_key(key)) {
+            for (key, reading) in &now {
+                before.entry(key.clone()).or_insert(*reading);
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            now = usage::read_cpu(&cgroup, &keys);
+        }
+        // Only the containers running now are remembered.
+        *self.container_cpu.lock().unwrap() = now.clone();
+
+        // The size of each service's data, walked away from the async threads.
+        let own_mounts = seen.iter().find(|(c, _)| c.service == AGENT_SERVICE).map(|(_, item)| parse::mounts(item)).unwrap_or_default();
+        let data_dir = self.config.deploy_dir().join("data");
+        let to_size: Vec<(String, Vec<PathBuf>)> = seen
+            .iter()
+            .filter(|(c, _)| c.service != AGENT_SERVICE)
+            .filter_map(|(c, item)| Some((c.name.clone(), usage::data_paths(&parse::mounts(item), &own_mounts, &data_dir)?)))
+            .filter(|(_, paths)| !paths.is_empty())
+            .collect();
+        let sizes: HashMap<String, u64> = tokio::task::spawn_blocking(move || {
+            to_size
+                .into_iter()
+                .filter_map(|(name, paths)| Some((name, paths.iter().map(|p| usage::disk_size(p, usage::DISK_WALK_LIMIT)).sum::<Option<u64>>()?)))
+                .collect()
+        })
+        .await
+        .unwrap_or_default();
+
+        for container in containers.iter_mut() {
+            let found = running.iter().find(|(name, _, _)| *name == container.name);
+            container.cpu_percent = found.and_then(|(_, key, _)| match (before.get(key), now.get(key), cores) {
+                (Some(before), Some(after), Some(cores)) => usage::cpu_share(*before, *after, cores),
+                _ => None,
+            });
+            container.memory_bytes = found.and_then(|(_, _, id)| usage::memory_bytes(&cgroup, id));
+            container.disk_bytes = sizes.get(&container.name).copied();
         }
     }
 
@@ -450,6 +524,53 @@ pub mod tests {
         assert!(report.containers.error.is_some() && report.containers.containers.is_empty());
         assert!(report.tak.processes.is_empty() && report.tak.processes_error.is_some());
         assert!(matches!(agent.restart("caddy").await, Err(ActionError::Failed(_))));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn each_container_gets_its_processor_memory_and_disk() {
+        const AGENT_ID: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        let (agent, root) = test_agent(Arc::new(FakeDocker::default()), "usage");
+        // TAK Server's control group, where Docker's own driver puts it.
+        let group = root.join("host/sys/fs/cgroup/docker").join(TAK_ID);
+        std::fs::create_dir_all(&group).unwrap();
+        std::fs::write(group.join("cpu.stat"), "usage_usec 1000000\n").unwrap();
+        std::fs::write(group.join("memory.current"), "4000000\n").unwrap();
+        std::fs::write(group.join("memory.stat"), "anon 3000000\ninactive_file 1000000\n").unwrap();
+        std::fs::write(root.join("repo/deploy/data/tak/logs/takserver-messaging.log"), vec![b'x'; 50_000]).unwrap();
+        // The repository is /srv/teamtak on the host; the agent sees it where the test put it.
+        let repo = root.join("repo").display().to_string();
+        let described = vec![
+            serde_json::json!({"Id": TAK_ID, "Name": "/teamtak-takserver-1",
+                "State": {"Status": "running", "StartedAt": "2026-11-20T08:00:00Z"},
+                "Config": {"Labels": {"com.docker.compose.service": "takserver"}},
+                "Mounts": [
+                    {"Type": "bind", "Source": "/srv/teamtak/deploy/data/tak/logs", "Destination": "/opt/tak/logs"},
+                    {"Type": "bind", "Source": "/srv/teamtak/deploy/takserver/entrypoint.sh", "Destination": "/opt/teamtak/entrypoint.sh"}]}),
+            serde_json::json!({"Id": CADDY_ID, "Name": "/teamtak-caddy-1", "State": {"Status": "exited"},
+                "Config": {"Labels": {"com.docker.compose.service": "caddy"}}, "Mounts": []}),
+            serde_json::json!({"Id": AGENT_ID, "Name": "/teamtak-agent-1", "State": {"Status": "running"},
+                "Config": {"Labels": {"com.docker.compose.service": "agent"}},
+                "Mounts": [
+                    {"Type": "bind", "Source": "/srv/teamtak", "Destination": repo},
+                    {"Type": "bind", "Source": "/srv/teamtak/deploy/data/tak", "Destination": format!("{repo}/deploy/data/tak")}]}),
+        ];
+        let mut containers: Vec<ContainerReport> = described.iter().filter_map(parse::container).collect();
+        let find = |containers: &[ContainerReport], service: &str| containers.iter().find(|c| c.service == service).cloned().unwrap();
+
+        agent.measure(&described, &mut containers, Some(4)).await;
+        let tak = find(&containers, "takserver");
+        assert_eq!(tak.memory_bytes, Some(3_000_000), "the cache the kernel can take back is left out");
+        assert_eq!(tak.cpu_percent, Some(0.0), "first sight: read twice a moment apart, nothing used in between");
+        assert!(tak.disk_bytes.is_some_and(|b| b >= 50_000), "its logs, not the script it mounts: {:?}", tak.disk_bytes);
+        let caddy = find(&containers, "caddy");
+        assert_eq!((caddy.cpu_percent, caddy.memory_bytes, caddy.disk_bytes), (None, None, None), "stopped, and no data of its own");
+        assert_eq!(find(&containers, "agent").disk_bytes, None, "what the agent mounts is not its data");
+
+        // At the next report it has worked: its share is counted from the previous reading.
+        std::fs::write(group.join("cpu.stat"), "usage_usec 1300000\n").unwrap();
+        agent.measure(&described, &mut containers, Some(4)).await;
+        assert!(find(&containers, "takserver").cpu_percent.is_some_and(|p| p > 0.0 && p <= 100.0));
         std::fs::remove_dir_all(root).unwrap();
     }
 

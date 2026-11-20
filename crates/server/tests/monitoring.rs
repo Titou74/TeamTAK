@@ -175,6 +175,20 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     assert_eq!(image_status("openldap"), "digest");
     assert!(listed.iter().find(|s| s["service"] == "agent").is_some_and(|s| s["restartable"] == false), "the agent does not offer to restart itself");
 
+    // What each service uses, read in the host's control groups and on disk.
+    let usage = |name: &str| listed.iter().find(|s| s["service"] == name).cloned().unwrap();
+    for service in &listed {
+        let cpu = service["cpu_percent"].as_f64().unwrap_or_else(|| panic!("processor of {service}"));
+        assert!((0.0..=100.0).contains(&cpu), "{service}");
+        assert!(service["memory_bytes"].as_u64().is_some_and(|b| b > 0), "memory of {service}");
+    }
+    assert!(usage("takserver")["memory_bytes"].as_u64().unwrap() > 500 << 20, "TAK Server's Java processes take far more than 500 MB");
+    for name in ["postgres", "takserver-db", "openldap", "takserver"] {
+        assert!(usage(name)["disk_bytes"].as_u64().is_some_and(|b| b > 0), "the data of {name}: {}", usage(name));
+    }
+    assert!(usage("takserver-db")["disk_bytes"].as_u64().unwrap() > 10 << 20, "TAK Server's database: {}", usage("takserver-db"));
+    assert!(usage("agent")["disk_bytes"].is_null(), "the agent's mounts are not its data");
+
     // TAK Server: its three ports, its version, its five processes.
     let tak = &snapshot["tak"];
     let ports: Vec<(u64, bool)> = tak["ports"].as_array().unwrap().iter().map(|p| (p["port"].as_u64().unwrap(), p["open"].as_bool().unwrap())).collect();
@@ -347,6 +361,15 @@ async fn thresholds_are_settings_and_a_change_raises_and_resolves_an_alert() {
     let samples = history["samples"].as_array().unwrap();
     assert!(!samples.is_empty() && samples.len() <= 300, "{} samples", samples.len());
     assert!(samples.last().unwrap()["memory_percent"].is_number() && samples.last().unwrap()["devices"].is_number(), "{}", samples.last().unwrap());
+    assert_eq!(history["bucket_seconds"], 300, "24 hours: each point is five minutes");
+    // Each service has its own history, at the same moments as the machine's.
+    let by_service = history["services"].as_array().unwrap();
+    let takserver = by_service.iter().find(|s| s["service"] == "takserver").unwrap_or_else(|| panic!("no history of TAK Server: {by_service:?}"));
+    let latest = takserver["samples"].as_array().unwrap().last().unwrap();
+    assert!(latest["memory_bytes"].as_u64().unwrap() > 0 && latest["cpu_percent"].is_number(), "{latest}");
+    assert_eq!(latest["sampled_at"], samples.last().unwrap()["sampled_at"]);
+    let hour = admin.get("/admin/monitoring/history?hours=1").await.ok();
+    assert_eq!(hour["bucket_seconds"], 60, "the last hour: every sample, one a minute");
 }
 
 #[tokio::test]

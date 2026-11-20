@@ -69,6 +69,12 @@ export interface Service {
   image_created: string | null;
   restartable: boolean;
   update: ImageUpdate;
+  /** Share of the whole machine's processor since the previous look, 0 to 100. */
+  cpu_percent: number | null;
+  /** Memory in use, the file cache the system can take back left out. */
+  memory_bytes: number | null;
+  /** Space its volumes and its folders under deploy/data take. */
+  disk_bytes: number | null;
 }
 
 export interface Certificate {
@@ -225,10 +231,21 @@ export interface Sample {
   devices: number | null;
 }
 
+export interface ServiceSample {
+  sampled_at: string;
+  cpu_percent: number | null;
+  memory_bytes: number | null;
+  disk_bytes: number | null;
+}
+
 export interface History {
   hours: number;
   retention_days: number;
+  /** Each point is the average of the samples (one a minute) of this many seconds. */
+  bucket_seconds: number;
   samples: Sample[];
+  /** Each service the host agent measured over the period, by name. */
+  services: { service: string; samples: ServiceSample[] }[];
 }
 
 export interface Device {

@@ -619,7 +619,13 @@
       "columns": {
         "service": "Service",
         "state": "État",
+        "usage": "Consommation",
         "image": "Image"
+      },
+      "usage": {
+        "cpu": "Processeur",
+        "memory": "Mémoire",
+        "disk": "Disque"
       },
       "state": {
         "running": "en marche",
@@ -796,16 +802,40 @@
     },
     "charts": {
       "title": "Historique",
-      "description": "Une mesure toutes les cinq minutes, conservée {{days}} jours.",
+      "description": "Une mesure par minute, pour la machine et pour chaque service, conservée {{days}} jours.",
+      "points_one": "Chaque point est une mesure.",
+      "points_many": "Chaque point est la moyenne de {{count}} minutes.",
+      "points_other": "Chaque point est la moyenne de {{count}} minutes.",
+      "period": "Période",
+      "hours_one": "{{count}} heure",
+      "hours_many": "{{count}} heures",
+      "hours_other": "{{count}} heures",
       "day": "24 heures",
       "week": "7 jours",
+      "machine": "Serveur",
       "cpu": "Processeur",
       "memory": "Mémoire",
+      "swap": "Swap utilisé",
       "disk": "Disque le plus plein",
       "devices": "Appareils connectés",
+      "byService": "Par service",
+      "measure": "Mesure",
+      "serviceMetric": {
+        "cpu": "Processeur",
+        "memory": "Mémoire",
+        "disk": "Disque"
+      },
+      "serviceMetricHelp": {
+        "cpu": "Part du processeur de tout le serveur, tous cœurs réunis : les services ensemble font à peu près le chiffre du serveur.",
+        "memory": "Mémoire utilisée par chaque service, sans le cache de fichiers que le système peut reprendre.",
+        "disk": "Place qu'occupent les données de chaque service : ses volumes et ses dossiers sous deploy/data."
+      },
+      "sameScale": "Même échelle pour tous les services, jusqu'à {{value}}.",
+      "noServices": "Aucune mesure par service sur cette période.",
+      "chartLabel": "Graphique : {{title}}. Les flèches montrent chaque mesure.",
       "peak": "maximum : {{value}} ({{when}})",
       "noData": "aucune mesure",
-      "empty": "L'historique commence quelques minutes après le premier démarrage de la plateforme."
+      "empty": "L'historique commence une minute après le premier démarrage de la plateforme."
     }
   },
   "devices": {

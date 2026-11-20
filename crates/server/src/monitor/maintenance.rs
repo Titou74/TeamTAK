@@ -132,6 +132,7 @@ pub async fn purge(db: &PgPool, audit_retention_days: u32) -> Result<Value> {
         ("audit_log", "DELETE FROM audit_log WHERE occurred_at < now() - make_interval(days => $1)", audit_retention_days as i32),
         ("alerts", "DELETE FROM alerts WHERE resolved_at IS NOT NULL AND resolved_at < now() - make_interval(days => $1)", RESOLVED_ALERTS_DAYS),
         ("metric_samples", "DELETE FROM metric_samples WHERE sampled_at < now() - make_interval(days => $1)", METRIC_SAMPLES_DAYS),
+        ("service_samples", "DELETE FROM service_samples WHERE sampled_at < now() - make_interval(days => $1)", METRIC_SAMPLES_DAYS),
         ("backup_runs", "DELETE FROM backup_runs WHERE started_at < now() - make_interval(days => $1)", BACKUP_RUNS_DAYS),
         ("mail_failures", "DELETE FROM mail_failures WHERE occurred_at < now() - make_interval(days => $1)", MAIL_FAILURES_DAYS),
         ("certificate_notices", "DELETE FROM certificate_notices WHERE sent_at < now() - make_interval(days => $1)", CERTIFICATE_NOTICES_DAYS),
@@ -247,8 +248,12 @@ mod tests {
 
     #[test]
     fn the_history_is_bounded_by_design() {
-        // One sample every five minutes for the retention: the table cannot hold more.
-        let most = METRIC_SAMPLES_DAYS as i64 * 24 * 60 / super::super::SAMPLE_EVERY.whole_minutes();
-        assert_eq!(most, 4032);
+        // At most one sample a minute for the retention, and one row per service with each:
+        // the tables cannot hold more.
+        let gap = super::super::SAMPLE_EVERY - super::super::SAMPLE_SLACK;
+        let most = METRIC_SAMPLES_DAYS as i64 * 24 * 3600 / gap.whole_seconds();
+        assert!(most <= 27_000, "{most}");
+        let services = teamtak_agent::report::CORE_SERVICES.len() + teamtak_agent::report::LOCAL_SERVICES.len();
+        assert!(most * services as i64 <= 250_000);
     }
 }

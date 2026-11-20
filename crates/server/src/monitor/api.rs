@@ -112,37 +112,76 @@ struct Sample {
     devices: Option<i32>,
 }
 
-/// Most points a chart is given.
-const MAX_POINTS: usize = 300;
-
-/// Keeps at most `MAX_POINTS` evenly spread points, the latest always among them.
-fn thin<T>(mut points: Vec<T>) -> Vec<T> {
-    if points.len() <= MAX_POINTS {
-        return points;
-    }
-    let step = points.len().div_ceil(MAX_POINTS);
-    let last = points.len() - 1;
-    let mut index = 0;
-    points.retain(|_| {
-        let keep = (last - index).is_multiple_of(step);
-        index += 1;
-        keep
-    });
-    points
+#[derive(Serialize, sqlx::FromRow)]
+struct ServiceSample {
+    #[serde(skip)]
+    service: String,
+    #[serde(with = "time::serde::rfc3339")]
+    sampled_at: OffsetDateTime,
+    cpu_percent: Option<f32>,
+    memory_bytes: Option<i64>,
+    disk_bytes: Option<i64>,
 }
 
-/// `GET /api/admin/monitoring/history?hours=24`: the samples for the charts, oldest first.
+#[derive(Serialize)]
+struct ServiceHistory {
+    service: String,
+    samples: Vec<ServiceSample>,
+}
+
+/// Most points a chart is given.
+const MAX_POINTS: i64 = 300;
+
+/// Seconds each point of a chart over `hours` stands for: whole minutes, the samples being a
+/// minute apart, and no more than `MAX_POINTS` points. Each point is the average of the
+/// samples it stands for, at the time of the latest of them.
+fn bucket_seconds(hours: i64) -> i64 {
+    ((hours.max(1) * 60 + MAX_POINTS - 1) / MAX_POINTS) * 60
+}
+
+/// `GET /api/admin/monitoring/history?hours=24`: the machine's samples and each service's,
+/// oldest first.
 pub async fn history(State(state): State<SharedState>, AdminAccount(admin): AdminAccount, Query(query): Query<HistoryQuery>) -> ApiResult<Json<Value>> {
     admin.require_platform(Action::ViewMonitoring)?;
     let hours = query.hours.unwrap_or(24).clamp(1, maintenance::METRIC_SAMPLES_DAYS as i64 * 24);
+    let bucket = bucket_seconds(hours);
     let samples: Vec<Sample> = sqlx::query_as(
-        "SELECT sampled_at, cpu_percent, load1, memory_percent, swap_percent, disk_percent, devices
-           FROM metric_samples WHERE sampled_at > now() - make_interval(hours => $1) ORDER BY sampled_at",
+        "SELECT max(sampled_at) AS sampled_at, avg(cpu_percent)::real AS cpu_percent, avg(load1)::real AS load1,
+                avg(memory_percent)::real AS memory_percent, avg(swap_percent)::real AS swap_percent,
+                avg(disk_percent)::real AS disk_percent, round(avg(devices))::int4 AS devices
+           FROM metric_samples WHERE sampled_at > now() - make_interval(hours => $1)
+          GROUP BY date_bin(make_interval(secs => $2), sampled_at, TIMESTAMPTZ '2000-01-01 00:00:00+00')
+          ORDER BY sampled_at",
     )
     .bind(hours as i32)
+    .bind(bucket as f64)
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(json!({ "hours": hours, "retention_days": maintenance::METRIC_SAMPLES_DAYS, "samples": thin(samples) })))
+    let rows: Vec<ServiceSample> = sqlx::query_as(
+        "SELECT service, max(sampled_at) AS sampled_at, avg(cpu_percent)::real AS cpu_percent,
+                round(avg(memory_bytes))::int8 AS memory_bytes, round(avg(disk_bytes))::int8 AS disk_bytes
+           FROM service_samples WHERE sampled_at > now() - make_interval(hours => $1)
+          GROUP BY service, date_bin(make_interval(secs => $2), sampled_at, TIMESTAMPTZ '2000-01-01 00:00:00+00')
+          ORDER BY service, sampled_at",
+    )
+    .bind(hours as i32)
+    .bind(bucket as f64)
+    .fetch_all(&state.db)
+    .await?;
+    let mut services: Vec<ServiceHistory> = Vec::new();
+    for row in rows {
+        match services.last_mut() {
+            Some(last) if last.service == row.service => last.samples.push(row),
+            _ => services.push(ServiceHistory { service: row.service.clone(), samples: vec![row] }),
+        }
+    }
+    Ok(Json(json!({
+        "hours": hours,
+        "retention_days": maintenance::METRIC_SAMPLES_DAYS,
+        "bucket_seconds": bucket,
+        "samples": samples,
+        "services": services,
+    })))
 }
 
 fn agent_error(e: &AgentCallError) -> ApiError {
@@ -314,15 +353,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn charts_get_a_bounded_number_of_points_and_always_the_latest() {
-        let two_weeks: Vec<u32> = (0..4032).collect();
-        let thinned = thin(two_weeks);
-        assert!(thinned.len() <= MAX_POINTS, "{}", thinned.len());
-        assert!(thinned.len() > MAX_POINTS / 2);
-        assert_eq!(*thinned.last().unwrap(), 4031);
-        assert!(thinned.windows(2).all(|w| w[1] - w[0] == 14), "evenly spread");
-        assert_eq!(thin((0..288).collect::<Vec<u32>>()).len(), 288, "a day is served whole");
-        assert_eq!(thin(Vec::<u32>::new()), Vec::<u32>::new());
+    fn chart_points_stand_for_whole_minutes_and_stay_few() {
+        assert_eq!(bucket_seconds(1), 60, "the last hour: every sample");
+        assert_eq!(bucket_seconds(6), 120);
+        assert_eq!(bucket_seconds(24), 300);
+        assert_eq!(bucket_seconds(168), 34 * 60);
+        for hours in [1, 2, 6, 12, 24, 48, 168, 336] {
+            let points = hours * 3600 / bucket_seconds(hours);
+            assert!((MAX_POINTS / 6..=MAX_POINTS).contains(&points), "{hours} h: {points} points");
+        }
     }
 
     #[test]

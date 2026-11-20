@@ -1,6 +1,8 @@
 //! Reading what the host and Docker print. Pure functions, tested against output captured
 //! from real systems (`tests/fixtures/`).
 
+use std::path::PathBuf;
+
 use serde_json::Value;
 
 use crate::report::{ContainerReport, MemoryReport, OsInfo, ProcessReport};
@@ -141,7 +143,59 @@ pub fn container(v: &Value) -> Option<ContainerReport> {
         image_id: text_at(v, &["Image"]).unwrap_or_default().to_string(),
         image_created: None,
         repo_digests: Vec::new(),
+        cpu_percent: None,
+        memory_bytes: None,
+        disk_bytes: None,
     })
+}
+
+/// The full identifier of a container, from `docker inspect`.
+pub fn container_id(v: &Value) -> Option<&str> {
+    text_at(v, &["Id"])
+}
+
+/// A mount of a container. `source` is a path of the host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mount {
+    /// `volume`, `bind`, `tmpfs`…
+    pub kind: String,
+    pub source: PathBuf,
+    pub destination: PathBuf,
+}
+
+/// The mounts of a container, from `docker inspect`.
+pub fn mounts(v: &Value) -> Vec<Mount> {
+    let Some(items) = v.get("Mounts").and_then(Value::as_array) else { return Vec::new() };
+    items
+        .iter()
+        .filter_map(|m| {
+            Some(Mount {
+                kind: text_at(m, &["Type"])?.to_string(),
+                source: PathBuf::from(text_at(m, &["Source"])?),
+                destination: PathBuf::from(text_at(m, &["Destination"])?),
+            })
+        })
+        .collect()
+}
+
+// ------------------------------------------------------------------------------- control groups
+
+/// Processor time used, in microseconds, from `cpu.stat` (cgroup v2).
+pub fn cgroup_cpu_usec(cpu_stat: &str) -> Option<u64> {
+    cpu_stat.lines().find_map(|l| l.strip_prefix("usage_usec "))?.trim().parse().ok()
+}
+
+/// Memory in use with the inactive file cache left out, as `docker stats` counts it. `usage`
+/// is `memory.current` (cgroup v2) or `memory.usage_in_bytes` (v1); `inactive_key` names
+/// that cache in `memory.stat`: `inactive_file` (v2) or `total_inactive_file` (v1).
+pub fn cgroup_memory(usage: &str, memory_stat: &str, inactive_key: &str) -> Option<u64> {
+    let usage: u64 = usage.trim().parse().ok()?;
+    let inactive = memory_stat
+        .lines()
+        .find_map(|l| l.strip_prefix(inactive_key)?.strip_prefix(' '))
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(0);
+    Some(usage.saturating_sub(inactive))
 }
 
 /// The Compose project a container belongs to, from `docker inspect`.
@@ -343,6 +397,39 @@ mod tests {
         assert_eq!(image(&pulled), Some(("sha256:1".into(), Some("2026-10-01T00:00:00Z".into()), vec!["caddy@sha256:aa".into()])));
         let built = json!({"Id": "sha256:2", "RepoDigests": []});
         assert_eq!(image(&built).unwrap().2, Vec::<String>::new());
+    }
+
+    #[test]
+    fn mounts_are_read_from_docker_inspect() {
+        // As Docker 29 describes the platform's database and TAK Server.
+        let v = json!({"Id": "6cb4c041ffd0", "Mounts": [
+            {"Type": "volume", "Name": "teamtak_postgres-data", "Source": "/var/lib/docker/volumes/teamtak_postgres-data/_data",
+             "Destination": "/var/lib/postgresql/data", "Driver": "local", "Mode": "z", "RW": true, "Propagation": ""},
+            {"Type": "bind", "Source": "/srv/teamtak/deploy/data/tak/logs", "Destination": "/opt/tak/logs", "Mode": "", "RW": true, "Propagation": "rprivate"},
+            {"Type": "tmpfs", "Destination": "/tmp"}
+        ]});
+        assert_eq!(container_id(&v), Some("6cb4c041ffd0"));
+        let found = mounts(&v);
+        assert_eq!(found.len(), 2, "a mount without source is not data: {found:?}");
+        assert_eq!(found[0], Mount { kind: "volume".into(), source: "/var/lib/docker/volumes/teamtak_postgres-data/_data".into(), destination: "/var/lib/postgresql/data".into() });
+        assert_eq!(found[1].kind, "bind");
+        assert!(mounts(&json!({"Id": "x"})).is_empty());
+    }
+
+    #[test]
+    fn processor_and_memory_of_a_container_are_read_from_its_control_group() {
+        // cgroup v2, captured from the platform's database container.
+        const CPU_STAT: &str = include_str!("../tests/fixtures/cgroup2-cpu.stat");
+        const MEMORY_STAT: &str = include_str!("../tests/fixtures/cgroup2-memory.stat");
+        assert_eq!(cgroup_cpu_usec(CPU_STAT), Some(117_569_997));
+        assert_eq!(cgroup_memory("47206400\n", MEMORY_STAT, "inactive_file"), Some(47_206_400 - 2_043_904), "the cache the kernel can take back is left out");
+        // cgroup v1 names it differently, next to a per-cgroup figure that must not be taken.
+        let v1 = "cache 9000\ninactive_file 4000\ntotal_cache 9000\ntotal_inactive_file 6000\n";
+        assert_eq!(cgroup_memory("10000", v1, "total_inactive_file"), Some(4000));
+        assert_eq!(cgroup_memory("10000", "", "inactive_file"), Some(10000), "no cache figure: all of it");
+        assert_eq!(cgroup_memory("100", "inactive_file 500\n", "inactive_file"), Some(0));
+        assert_eq!(cgroup_memory("max", MEMORY_STAT, "inactive_file"), None);
+        assert_eq!(cgroup_cpu_usec("user_usec 5\n"), None);
     }
 
     #[test]

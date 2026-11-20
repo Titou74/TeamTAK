@@ -49,8 +49,11 @@ use self::agent::{AgentCallError, AgentClient};
 use self::probes::{host_port, tcp_open, tls_probe, TlsProbe};
 use self::snapshot::*;
 
-/// A history sample is kept this often.
-const SAMPLE_EVERY: time::Duration = time::Duration::minutes(5);
+/// A history sample is kept this often, for the machine and for each service.
+const SAMPLE_EVERY: time::Duration = time::Duration::minutes(1);
+/// Two looks a minute apart are not always 60 seconds apart: one that comes this much early
+/// is still sampled, so that the default look of every minute gives one sample a minute.
+const SAMPLE_SLACK: time::Duration = time::Duration::seconds(15);
 /// Restarts are counted over this window to tell a loop from a single restart.
 const RESTART_WINDOW: time::Duration = time::Duration::minutes(15);
 
@@ -358,6 +361,9 @@ impl Monitor {
                         image_created: c.image_created.clone(),
                         restartable: RESTARTABLE_SERVICES.contains(&name.as_str()),
                         update: images::status(&c.image, &c.repo_digests, &image_checks),
+                        cpu_percent: c.cpu_percent,
+                        memory_bytes: c.memory_bytes,
+                        disk_bytes: c.disk_bytes,
                     },
                     None => ServiceView { service: name.clone(), restartable: false, ..Default::default() },
                 };
@@ -675,7 +681,8 @@ impl Monitor {
         Ok(())
     }
 
-    /// Keeps one history point every few minutes.
+    /// Keeps one history point a minute: the machine's, and one for each service the agent
+    /// measured.
     async fn sample(&self, snapshot: &Snapshot) {
         let now = snapshot.collected_at;
         let last = *self.last_sample.lock().unwrap();
@@ -688,7 +695,7 @@ impl Monitor {
                 .ok()
                 .and_then(|(at,)| at),
         };
-        if last.is_some_and(|last| now - last < SAMPLE_EVERY) {
+        if !sample_due(last, now) {
             *self.last_sample.lock().unwrap() = last;
             return;
         }
@@ -709,11 +716,39 @@ impl Monitor {
         .bind(snapshot.tak.api_ok.then_some(snapshot.devices.identified as i32))
         .execute(&self.db)
         .await;
-        match written {
-            Ok(_) => *self.last_sample.lock().unwrap() = Some(now),
-            Err(e) => tracing::warn!(error = %e, "history sample not written"),
+        if let Err(e) = written {
+            tracing::warn!(error = %e, "history sample not written");
+            return;
+        }
+        *self.last_sample.lock().unwrap() = Some(now);
+
+        let measured: Vec<&ServiceView> =
+            snapshot.services.services.iter().filter(|s| s.cpu_percent.is_some() || s.memory_bytes.is_some() || s.disk_bytes.is_some()).collect();
+        if measured.is_empty() {
+            return;
+        }
+        let bytes = |b: Option<u64>| b.and_then(|b| i64::try_from(b).ok());
+        let written = sqlx::query(
+            "INSERT INTO service_samples (sampled_at, service, cpu_percent, memory_bytes, disk_bytes)
+             SELECT $1, * FROM UNNEST($2::text[], $3::real[], $4::bigint[], $5::bigint[])
+             ON CONFLICT (sampled_at, service) DO NOTHING",
+        )
+        .bind(now)
+        .bind(measured.iter().map(|s| s.service.clone()).collect::<Vec<String>>())
+        .bind(measured.iter().map(|s| s.cpu_percent).collect::<Vec<Option<f32>>>())
+        .bind(measured.iter().map(|s| bytes(s.memory_bytes)).collect::<Vec<Option<i64>>>())
+        .bind(measured.iter().map(|s| bytes(s.disk_bytes)).collect::<Vec<Option<i64>>>())
+        .execute(&self.db)
+        .await;
+        if let Err(e) = written {
+            tracing::warn!(error = %e, "history sample of the services not written");
         }
     }
+}
+
+/// Whether a look at `now` is kept as a history sample, the last one being at `last`.
+fn sample_due(last: Option<OffsetDateTime>, now: OffsetDateTime) -> bool {
+    last.is_none_or(|last| now - last >= SAMPLE_EVERY - SAMPLE_SLACK)
 }
 
 /// Looks at everything every `interval`, for ever. Started once, with the server.
@@ -750,6 +785,17 @@ mod tests {
         assert_eq!(history.record("takserver", 7, at(19)), 0);
         // Another service has its own count.
         assert_eq!(history.record("caddy", 0, at(19)), 0);
+    }
+
+    #[test]
+    fn one_sample_a_minute_even_when_looks_drift() {
+        let start = datetime!(2026-11-20 12:00 UTC);
+        let at = |seconds: i64| start + time::Duration::seconds(seconds);
+        assert!(sample_due(None, at(0)), "the first look after a start");
+        assert!(sample_due(Some(at(0)), at(60)));
+        assert!(sample_due(Some(at(0)), at(58)), "a look that comes a little early is still the next minute's");
+        assert!(!sample_due(Some(at(0)), at(20)), "an administrator's refresh in between");
+        assert!(sample_due(Some(at(0)), at(300)), "after a pause");
     }
 
     #[test]

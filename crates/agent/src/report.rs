@@ -154,6 +154,20 @@ pub struct ContainerReport {
     /// `repository@sha256:…` of the image when it was pulled from a registry; empty for an
     /// image built on this machine.
     pub repo_digests: Vec<String>,
+    /// Share of the whole machine's processor time it used since the previous report, 0 to
+    /// 100, all cores together like the machine's own figure. `None` when it is not running
+    /// or its control group could not be read.
+    #[serde(default)]
+    pub cpu_percent: Option<f32>,
+    /// Memory it uses, the file cache the kernel can take back left out: what `docker stats`
+    /// shows.
+    #[serde(default)]
+    pub memory_bytes: Option<u64>,
+    /// Space its data takes on disk: its volumes and what it mounts from deploy/data. `None`
+    /// for a service without data of its own, and for the agent, whose mounts are the
+    /// machine's and the other services'.
+    #[serde(default)]
+    pub disk_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

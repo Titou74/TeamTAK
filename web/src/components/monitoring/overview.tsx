@@ -239,6 +239,27 @@ function serviceState(service: Service): "ok" | "warning" | "bad" | "unknown" {
   return "ok";
 }
 
+/** What a service uses now: processor, memory, and the space its data takes. */
+function ServiceUsage({ service }: { service: Service }) {
+  const { t } = useTranslation();
+  const figures = [
+    { label: t("monitoring.services.usage.cpu"), value: service.cpu_percent === null ? null : formatPercent(service.cpu_percent, service.cpu_percent < 10 ? 1 : 0) },
+    { label: t("monitoring.services.usage.memory"), value: service.memory_bytes === null ? null : formatBytes(service.memory_bytes) },
+    { label: t("monitoring.services.usage.disk"), value: service.disk_bytes === null ? null : formatBytes(service.disk_bytes) },
+  ].filter((f) => f.value !== null);
+  if (figures.length === 0) return <span className="text-muted-foreground">—</span>;
+  return (
+    <dl className="grid grid-cols-[auto_auto] gap-x-2 text-xs">
+      {figures.map((f) => (
+        <div key={f.label} className="contents">
+          <dt className="text-muted-foreground">{f.label}</dt>
+          <dd className="text-right tabular-nums">{f.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function ServicesCard({ snapshot, reload }: { snapshot: Snapshot; reload: () => Promise<unknown> }) {
   const { t, i18n } = useTranslation();
   const notifyError = useNotifyError();
@@ -285,6 +306,7 @@ function ServicesCard({ snapshot, reload }: { snapshot: Snapshot; reload: () => 
             <TableRow>
               <TableHead>{t("monitoring.services.columns.service")}</TableHead>
               <TableHead>{t("monitoring.services.columns.state")}</TableHead>
+              <TableHead>{t("monitoring.services.columns.usage")}</TableHead>
               <TableHead>{t("monitoring.services.columns.image")}</TableHead>
               <TableHead />
             </TableRow>
@@ -312,6 +334,9 @@ function ServicesCard({ snapshot, reload }: { snapshot: Snapshot; reload: () => 
                       </>
                     )}
                   </div>
+                </TableCell>
+                <TableCell>
+                  <ServiceUsage service={service} />
                 </TableCell>
                 <TableCell className="whitespace-normal">
                   <span className="font-mono text-xs break-all" translate="no">

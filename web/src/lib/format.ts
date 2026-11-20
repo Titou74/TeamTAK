@@ -11,6 +11,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat(currentLanguage(), { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
 
+/** "Nov 20, 4:55 PM": a moment of the last days, short enough for the axis of a chart. */
+export function formatShortDateTime(iso: string): string {
+  return new Intl.DateTimeFormat(currentLanguage(), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+}
+
 /** "Nov 20, 2026, 2:00 – 6:00 PM": a period, written the way the current language does. */
 export function formatDateTimeRange(startIso: string, endIso: string): string {
   const format = new Intl.DateTimeFormat(currentLanguage(), { dateStyle: "medium", timeStyle: "short" });

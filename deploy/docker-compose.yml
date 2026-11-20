@@ -120,11 +120,13 @@ services:
       # The only Docker socket of the stack.
       - /var/run/docker.sock:/var/run/docker.sock
       # The machine, read-only, and no more of it than the report needs: the distribution
-      # and its package sources (/etc), the package database and Docker's disk (/var/lib),
-      # the "reboot required" flag (/run).
+      # and its package sources (/etc), the package database, Docker's disk and the
+      # services' volumes (/var/lib), the "reboot required" flag (/run), and what each
+      # container uses of the processor and the memory (/sys/fs/cgroup).
       - /etc:/host/etc:ro
       - /var/lib:/host/var/lib:ro
       - /run:/host/run:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
       # The repository, read-only: the scripts the agent runs, deploy/.env and deploy/data
       # for the backups, the name of a TAK Server ZIP at its root.
       - ..:/repo:ro

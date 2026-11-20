@@ -16,3 +16,4 @@ pub mod host;
 pub mod logs;
 pub mod parse;
 pub mod report;
+pub mod usage;

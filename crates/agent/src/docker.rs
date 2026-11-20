@@ -124,7 +124,13 @@ pub async fn project_containers(docker: &dyn Docker, project: &str) -> Result<Ve
 
 /// The containers of the project with what is known of their images.
 pub async fn container_reports(docker: &dyn Docker, project: &str) -> Result<Vec<ContainerReport>, DockerError> {
-    let mut reports: Vec<ContainerReport> = project_containers(docker, project).await?.iter().filter_map(parse::container).collect();
+    Ok(describe(docker, &project_containers(docker, project).await?).await)
+}
+
+/// The reports of containers described by `docker inspect`, with what is known of their
+/// images, sorted by service.
+pub async fn describe(docker: &dyn Docker, containers: &[Value]) -> Vec<ContainerReport> {
+    let mut reports: Vec<ContainerReport> = containers.iter().filter_map(parse::container).collect();
     let mut image_ids: Vec<&str> = reports.iter().map(|c| c.image_id.as_str()).filter(|id| !id.is_empty()).collect();
     image_ids.sort_unstable();
     image_ids.dedup();
@@ -154,7 +160,7 @@ pub async fn container_reports(docker: &dyn Docker, project: &str) -> Result<Vec
         }
     }
     reports.sort_by(|a, b| a.service.cmp(&b.service));
-    Ok(reports)
+    reports
 }
 
 /// An image name as a Compose file writes it, safe to hand to `docker image inspect`: it
