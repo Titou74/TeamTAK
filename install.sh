@@ -2,13 +2,18 @@
 # Installs TeamTAK from nothing: builds TAK Server from the tak.gov ZIP, generates the
 # secrets and certificates, and starts the whole stack with Docker Compose.
 #
+# The first run, in a terminal, asks for every setting not given as an option, shows a
+# summary and waits for a yes before writing anything. Later runs reuse deploy/.env and ask
+# nothing.
+#
 # Safe to run again: whatever already exists (settings, certificates, images) is kept, the
 # configuration is rendered again and the stack is brought up to date.
 #
-#   ./install.sh --local --admin-email you@example.org
+#   sudo ./install.sh                                         (asks the questions)
+#   ./install.sh --local --admin-email you@example.org --non-interactive
 #   ./install.sh --domain tak.example.org --admin-email you@example.org \
 #                --smtp-host smtp-relay.brevo.com --smtp-username ... --smtp-password ... \
-#                --mail-from "TeamTAK <no-reply@example.org>"
+#                --mail-from "TeamTAK <no-reply@example.org>" --non-interactive
 #
 # See README.md for every option.
 . "$(dirname "$0")/deploy/scripts/lib.sh"
@@ -17,9 +22,12 @@ usage() {
   cat <<'EOF'
 Usage: ./install.sh [options]
 
-Mode (first run only; later runs reuse deploy/.env):
+On the first run, in a terminal, the script asks for each setting below that is not given
+as an option, then shows a summary before writing anything. Later runs reuse deploy/.env
+and ask nothing.
+
+Mode (first run only):
   --local                    Local mode: plain HTTP on localhost, mail catcher, private CA.
-                             Default when --domain is not given.
   --domain <name>            Production mode: HTTPS with Let's Encrypt for this domain, which
                              must already point to this machine. Also TAK Server's public name.
   --host <name-or-ip>        Local mode only: address TAK clients use to reach this machine
@@ -36,22 +44,35 @@ Settings (first run only):
   --smtp-tls <starttls|tls|none> --mail-from <address>
                              Outgoing e-mail (production). Local mode uses the mail catcher.
 
+TAK Server:
+  --zip <path>               TAK Server ZIP from tak.gov, any version (it is read from the
+                             ZIP). Default: the takserver-docker-hardened-<version>.zip at the
+                             repository root; the newest when there are several (asked in a
+                             terminal). Later runs only need it to rebuild missing images.
+  --upgrade-tak              Move an installed platform to a newer TAK Server: the ZIP given
+                             with --zip, or a newer one at the repository root (asked when
+                             there are several). Backup, new images, restart. See README,
+                             "Upgrading TAK Server".
+
 Other:
-  --zip <path>               TAK Server ZIP (default: takserver-docker-hardened-*.zip at the
-                             repository root).
-  --upgrade-tak              Move an installed platform to the TAK Server version of the ZIP
-                             given with --zip (or of the only other ZIP at the repository
-                             root): backup, new images, restart. See README, "Upgrading TAK
-                             Server". NOT TESTED: only one TAK Server ZIP exists so far.
+  --non-interactive          Ask nothing: options not given take their default. Implied when
+                             the script does not run in a terminal.
   --no-start                 Prepare everything but do not start the stack.
   -h, --help
 EOF
 }
 
 MODE_ARG="" DOMAIN_ARG="" HOST_ARG="" ADMIN_EMAIL_ARG="" ACME_EMAIL_ARG="" VALIDITY_ARG=""
-ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0
+ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0
 SMTP_HOST_ARG="" SMTP_PORT_ARG="" SMTP_USERNAME_ARG="" SMTP_PASSWORD_ARG="" SMTP_TLS_ARG="" MAIL_FROM_ARG=""
+# Options given on the command line, between spaces: they are not asked.
+GIVEN=" "
 while [ $# -gt 0 ]; do
+  case "$1" in
+    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--smtp-*|--mail-from|--zip)
+      [ $# -ge 2 ] || { usage >&2; die "$1 needs a value"; } ;;
+  esac
+  GIVEN="$GIVEN${1#--} "
   case "$1" in
     --local) MODE_ARG=local ;;
     --domain) MODE_ARG=production; DOMAIN_ARG="$2"; shift ;;
@@ -68,12 +89,167 @@ while [ $# -gt 0 ]; do
     --mail-from) MAIL_FROM_ARG="$2"; shift ;;
     --zip) ZIP_ARG="$2"; shift ;;
     --upgrade-tak) UPGRADE_TAK=1 ;;
+    --non-interactive) NON_INTERACTIVE=1 ;;
     --no-start) NO_START=1 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown option: $1" ;;
   esac
   shift
 done
+given() { case "$GIVEN" in *" $1 "*) return 0 ;; esac; return 1; }
+
+# Questions are written to stderr and answered on stdin, so only when both are a terminal:
+# never from a script, a pipe or a log redirection (restore.sh runs this script that way).
+INTERACTIVE=0
+if [ "$NON_INTERACTIVE" = 0 ] && [ -t 0 ] && [ -t 2 ]; then INTERACTIVE=1; fi
+
+# ----------------------------------------------------------------------------- questions
+
+say() { printf '   %s\n' "$*" >&2; }
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
+
+# ask <variable> <question> <default> [check]: sets the variable to the answer, or to the
+# default when the answer is empty. Asks again while the check (a command given the answer)
+# fails; it prints why.
+ask() {
+  local __var="$1" __question="$2" __default="$3" __check="${4:-}" __answer __why
+  while :; do
+    if [ -n "$__default" ]; then printf '   %s [%s]: ' "$__question" "$__default" >&2
+    else printf '   %s: ' "$__question" >&2; fi
+    IFS= read -r __answer || { printf '\n' >&2; die "no answer: stopped, nothing was written"; }
+    __answer="$(trim "$__answer")"
+    [ -n "$__answer" ] || __answer="$__default"
+    if [ -n "$__check" ] && ! __why="$($__check "$__answer")"; then
+      printf '   \033[33m%s\033[0m\n' "$__why" >&2
+      continue
+    fi
+    printf -v "$__var" '%s' "$__answer"
+    return 0
+  done
+}
+
+# ask_secret <variable> <question>: like ask, without echoing the answer.
+ask_secret() {
+  local __var="$1" __answer
+  printf '   %s: ' "$2" >&2
+  IFS= read -r -s __answer || { printf '\n' >&2; die "no answer: stopped, nothing was written"; }
+  printf ' (hidden)\n' >&2
+  printf -v "$__var" '%s' "$__answer"
+}
+
+# ask_yes_no <variable> <question> <y|n>: sets the variable to true or false.
+ask_yes_no() {
+  local __yn
+  ask __yn "$2 (y/n)" "$3" check_yes_no
+  case "$__yn" in [yYoO]*) printf -v "$1" true ;; *) printf -v "$1" false ;; esac
+}
+
+check_yes_no() {
+  case "$1" in [yY]|[yY][eE][sS]|[oO]|[oO][uU][iI]|[nN]|[nN][oO]|[nN][oO][nN]) return 0 ;; esac
+  echo "answer y or n"; return 1
+}
+check_choice() { # <max> <answer>
+  case "$2" in ''|*[!0-9]*) ;; *) [ "$2" -ge 1 ] && [ "$2" -le "$1" ] && return 0 ;; esac
+  echo "answer a number from 1 to $1"; return 1
+}
+check_mode() {
+  case "$1" in 1|2|production|local) return 0 ;; esac
+  echo "answer 1 (production) or 2 (local)"; return 1
+}
+check_email() {
+  case "$1" in
+    *[[:space:]]*|*@*@*|*'<'*|*'>'*) ;;
+    ?*@?*.?*) return 0 ;;
+  esac
+  echo "an e-mail address is needed, like you@example.org"; return 1
+}
+check_domain() {
+  printf '%s' "$1" | grep -Eq '^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9]$' && return 0
+  echo "a domain name is needed, like tak.example.org"; return 1
+}
+check_host() {
+  printf '%s' "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$' && return 0
+  echo "a host name or an IPv4 address is needed, like localhost or 192.168.1.20"; return 1
+}
+check_days() {
+  case "$1" in ''|*[!0-9]*|0*) echo "a number of days is needed, like 365"; return 1 ;; esac
+}
+check_port() {
+  case "$1" in ''|*[!0-9]*) ;; *) [ "$1" -ge 1 ] && [ "$1" -le 65535 ] && return 0 ;; esac
+  echo "a port number is needed, like 587"; return 1
+}
+check_tls() {
+  case "$1" in starttls|tls|none) return 0 ;; esac
+  echo "answer starttls, tls or none"; return 1
+}
+check_mail_from() {
+  case "$1" in *@*) return 0 ;; esac
+  echo "an address is needed, like TeamTAK <no-reply@example.org>"; return 1
+}
+check_zip_path() {
+  [ -f "$(expand_path "$1")" ] && return 0
+  echo "no such file: $1"; return 1
+}
+
+# A path as typed or dropped into a terminal: quotes, "\ " and a leading ~ are undone.
+expand_path() {
+  local p="$1"
+  case "$p" in \'*\'|\"*\") p="${p#?}"; p="${p%?}" ;; esac
+  p="$(printf '%s' "$p" | sed 's/\\\(.\)/\1/g')"
+  case "$p" in "~"|"~/"*) p="$HOME${p#\~}" ;; esac
+  printf '%s' "$p"
+}
+
+# This machine's address on its local network, empty when unknown. A hint only.
+lan_address() {
+  { hostname -I 2>/dev/null | awk '{print $1}' || true
+    ipconfig getifaddr en0 2>/dev/null || true
+    ipconfig getifaddr en1 2>/dev/null || true
+  } | grep -E '^[0-9]+(\.[0-9]+){3}$' | head -n 1 || true
+}
+
+# Lists "<version> <path>" lines as a numbered menu, newest last, and sets ZIP to the one
+# chosen (the newest by default).
+choose_zip_from() {
+  local list="$1" n=0 newest v zip mark
+  newest="$(printf '%s\n' "$list" | grep -c .)"
+  say "$2"
+  while read -r v zip; do
+    n=$((n + 1)) mark=""
+    [ "$n" != "$newest" ] || mark="   (newest)"
+    say "  $n) TAK Server $v   $(basename "$zip")$mark"
+  done <<EOF
+$list
+EOF
+  ask ZIP_CHOICE "Which one" "$newest" "check_choice $newest"
+  ZIP="$(printf '%s\n' "$list" | sed -n "${ZIP_CHOICE}p" | cut -d' ' -f2-)"
+}
+
+# The TAK Server ZIP of a first install, in ZIP, and its version, in TAK_VERSION: --zip;
+# else the one at the repository root, the newest when there are several (asked in a
+# terminal); else, in a terminal, a path asked for.
+choose_first_zip() {
+  local list count
+  if [ -n "$ZIP_ARG" ]; then
+    ZIP="$ZIP_ARG"
+  else
+    list="$(tak_zips)"
+    count="$(printf '%s\n' "$list" | grep -c . || true)"
+    if [ "$count" = 0 ]; then
+      [ "$INTERACTIVE" = 1 ] || die "TAK Server ZIP not found: put takserver-docker-hardened-<version>.zip (from tak.gov) at the repository root, or pass --zip <path>"
+      say "No TAK Server ZIP at the repository root. Download takserver-docker-hardened-<version>.zip"
+      say "from tak.gov (a free account is needed), then give its path, or drop the file here."
+      ask ZIP "Path of the ZIP" "" check_zip_path
+      ZIP="$(expand_path "$ZIP")"
+    elif [ "$count" = 1 ] || [ "$INTERACTIVE" = 0 ]; then
+      ZIP="$(printf '%s\n' "$list" | tail -n 1 | cut -d' ' -f2-)"
+    else
+      choose_zip_from "$list" "Several TAK Server ZIPs are at the repository root:"
+    fi
+  fi
+  [ -f "$ZIP" ] || die "TAK Server ZIP not found: $ZIP"
+  TAK_VERSION="$(tak_zip_version "$ZIP")" || die "cannot tell the TAK Server version of $ZIP: tak/version.txt is missing and the name is not takserver-docker-hardened-<version>.zip"
+}
 
 # ----------------------------------------------------------------------------- preflight
 
@@ -89,43 +265,119 @@ info "Docker $(docker version --format '{{.Server.Version}}'), $(docker compose 
 # ----------------------------------------------------------------------------- settings
 
 mkdir -p "$DATA_DIR"
+ZIP=""
 if [ ! -f "$ENV_FILE" ]; then
-  log "Creating $ENV_FILE"
-  MODE="${MODE_ARG:-local}"
-  ZIP="${ZIP_ARG:-$(ls "$REPO_DIR"/takserver-docker-hardened-*.zip 2>/dev/null | head -n 1)}"
-  [ -n "$ZIP" ] && [ -f "$ZIP" ] || die "TAK Server ZIP not found: put takserver-docker-hardened-<version>.zip at the repository root, or pass --zip"
-  TAK_VERSION="$(basename "$ZIP" .zip)"; TAK_VERSION="${TAK_VERSION#takserver-docker-hardened-}"
-  VALIDITY="${VALIDITY_ARG:-365}"
-  case "$VALIDITY" in ''|*[!0-9]*) die "--cert-validity-days must be a number of days" ;; esac
+  if [ "$INTERACTIVE" = 1 ]; then
+    log "Settings"
+    say "First installation: a few questions. Press Enter to keep the value in brackets."
+    say "Nothing is written before the summary at the end. (--non-interactive asks nothing.)"
+    echo >&2
+  fi
+
+  choose_first_zip
+  info "TAK Server $TAK_VERSION, from $(basename "$ZIP")"
+  [ "$INTERACTIVE" = 0 ] || echo >&2
+
+  MODE="$MODE_ARG"
+  [ -n "$MODE" ] || [ -z "$HOST_ARG" ] || MODE=local
+  if [ -z "$MODE" ] && [ "$INTERACTIVE" = 1 ]; then
+    say "How will this installation be used?"
+    say "  1) production: on a server, with a domain name pointing to it, HTTPS from Let's Encrypt"
+    say "     and login codes sent through your SMTP account"
+    say "  2) local: on this computer or its local network, plain HTTP, e-mails kept by a mail"
+    say "     catcher (first look, development, tests)"
+    ask MODE "Mode (1 or 2)" "" check_mode
+    case "$MODE" in 1) MODE=production ;; 2) MODE=local ;; esac
+    echo >&2
+  fi
+  MODE="${MODE:-local}"
+
+  DOMAIN="$DOMAIN_ARG" CLIENT_HOST="$HOST_ARG"
+  ADMIN_EMAIL="$ADMIN_EMAIL_ARG" ACME_EMAIL="$ACME_EMAIL_ARG" VALIDITY="$VALIDITY_ARG"
+  ENROLL_LE="${ENROLL_LE_ARG:-false}"
+  SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="$SMTP_PORT_ARG" SMTP_TLS="$SMTP_TLS_ARG"
+  SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG" MAIL_FROM="$MAIL_FROM_ARG"
+
+  if [ "$INTERACTIVE" = 1 ]; then
+    if [ "$MODE" = production ]; then
+      if [ -z "$DOMAIN" ]; then
+        say "Domain name of this server. Its DNS record must already point here: Let's Encrypt"
+        say "checks it as soon as the stack starts. TAK clients connect to it too."
+        ask DOMAIN "Domain name" "" check_domain
+      fi
+    elif ! given host; then
+      lan="$(lan_address)"
+      say "Address TAK clients use to reach this machine. localhost: this computer only. To let"
+      say "phones on the local network connect, give this machine's LAN address${lan:+ (here: $lan)}."
+      ask CLIENT_HOST "Address" localhost check_host
+    fi
+    given admin-email || ask ADMIN_EMAIL "E-mail address of the first administrator" "" check_email
+    if [ "$MODE" = production ] && ! given acme-email; then
+      ask ACME_EMAIL "Contact address given to Let's Encrypt" "$ADMIN_EMAIL" check_email
+    fi
+    given cert-validity-days || ask VALIDITY "Validity of TAK client certificates, in days" 365 check_days
+    if [ "$MODE" = production ]; then
+      if ! given tak-enroll-letsencrypt; then
+        echo >&2
+        say "Enrollment port 8446: QR-code enrollment needs the Let's Encrypt certificate there;"
+        say "data packages (zips) work either way. Can be changed later in deploy/.env."
+        ask_yes_no ENROLL_LE "Present the Let's Encrypt certificate on port 8446" n
+      fi
+      echo >&2
+      say "Outgoing e-mail, for the login codes and the alerts: an SMTP account (Brevo, for"
+      say "example: smtp-relay.brevo.com). Leave the server empty to set it later in deploy/.env."
+      given smtp-host || ask SMTP_HOST "SMTP server" "" ""
+      if [ -n "$SMTP_HOST" ]; then
+        given smtp-port || ask SMTP_PORT "SMTP port" 587 check_port
+        if ! given smtp-tls; then
+          tls_default=starttls
+          [ "${SMTP_PORT:-587}" != 465 ] || tls_default=tls
+          ask SMTP_TLS "Encryption: starttls, tls or none" "$tls_default" check_tls
+        fi
+        given smtp-username || ask SMTP_USERNAME "SMTP username (empty if none)" "" ""
+        if [ -n "$SMTP_USERNAME" ] && ! given smtp-password; then
+          ask_secret SMTP_PASSWORD "SMTP password or key"
+        fi
+        given mail-from || ask MAIL_FROM "Sender of the e-mails (an address your SMTP account may send from)" "TeamTAK <no-reply@$DOMAIN>" check_mail_from
+      fi
+    fi
+  fi
+
+  # Options given on the command line are checked here; answers were checked when typed.
+  VALIDITY="${VALIDITY:-365}"
+  check_days "$VALIDITY" > /dev/null || die "--cert-validity-days must be a number of days"
+  [ -z "$ADMIN_EMAIL" ] || check_email "$ADMIN_EMAIL" > /dev/null || die "--admin-email: not an e-mail address: $ADMIN_EMAIL"
+  ACME_EMAIL="${ACME_EMAIL:-$ADMIN_EMAIL}"
+  [ "$ENROLL_LE" != true ] || [ "$MODE" = production ] || die "--tak-enroll-letsencrypt needs --domain"
 
   if [ "$MODE" = production ]; then
-    [ -n "$DOMAIN_ARG" ] || die "--domain needs a domain name"
-    PUBLIC_HOST="$DOMAIN_ARG"
-    PUBLIC_URL="https://$DOMAIN_ARG"
+    [ -n "$DOMAIN" ] || die "--domain needs a domain name"
+    check_domain "$DOMAIN" > /dev/null || die "--domain: not a domain name: $DOMAIN"
+    PUBLIC_HOST="$DOMAIN"
+    PUBLIC_URL="https://$DOMAIN"
     BIND_ADDRESS=0.0.0.0
     COOKIE_SECURE=true
     COMPOSE_FILES="docker-compose.yml:docker-compose.production.yml"
     # Inside the Docker network the public name resolves to the takserver container, so the
     # platform can verify whichever certificate 8446 presents (private CA or Let's Encrypt).
-    TAK_ENROLL_URL="https://$DOMAIN_ARG:8446"
-    TAK_NETWORK_ALIAS="$DOMAIN_ARG"
-    SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="${SMTP_PORT_ARG:-587}" SMTP_TLS="${SMTP_TLS_ARG:-starttls}"
-    SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG"
-    MAIL_FROM="${MAIL_FROM_ARG:-TeamTAK <no-reply@$DOMAIN_ARG>}"
+    TAK_ENROLL_URL="https://$DOMAIN:8446"
+    TAK_NETWORK_ALIAS="$DOMAIN"
+    SMTP_PORT="${SMTP_PORT:-587}" SMTP_TLS="${SMTP_TLS:-starttls}"
+    MAIL_FROM="${MAIL_FROM:-TeamTAK <no-reply@$DOMAIN>}"
     LOGIN_MAX_CODES_PER_IP=30
     LOGIN_MAX_FAILURES_PER_IP=30
     MONITOR_INTERVAL_SECONDS=60
   else
-    PUBLIC_HOST="${HOST_ARG:-localhost}"
+    PUBLIC_HOST="${CLIENT_HOST:-localhost}"
+    check_host "$PUBLIC_HOST" > /dev/null || die "--host: not a host name or an IPv4 address: $PUBLIC_HOST"
     PUBLIC_URL="http://$PUBLIC_HOST:8480"
     if [ "$PUBLIC_HOST" = localhost ] || [ "$PUBLIC_HOST" = 127.0.0.1 ]; then BIND_ADDRESS=127.0.0.1; else BIND_ADDRESS=0.0.0.0; fi
     COOKIE_SECURE=false
     COMPOSE_FILES="docker-compose.yml:docker-compose.local.yml"
     TAK_ENROLL_URL="https://takserver:8446"
     TAK_NETWORK_ALIAS="takserver.internal"
-    SMTP_HOST="${SMTP_HOST_ARG:-mailpit}" SMTP_PORT="${SMTP_PORT_ARG:-1025}" SMTP_TLS="${SMTP_TLS_ARG:-none}"
-    SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG"
-    MAIL_FROM="${MAIL_FROM_ARG:-TeamTAK <teamtak@localhost>}"
+    SMTP_HOST="${SMTP_HOST:-mailpit}" SMTP_PORT="${SMTP_PORT:-1025}" SMTP_TLS="${SMTP_TLS:-none}"
+    MAIL_FROM="${MAIL_FROM:-TeamTAK <teamtak@localhost>}"
     # The integration tests sign in many accounts, and submit wrong codes, from one address;
     # replaying them must not lock that address out. The per-address limit stays as in
     # production, and is tested.
@@ -134,8 +386,34 @@ if [ ! -f "$ENV_FILE" ]; then
     # The integration tests wait for alerts to be raised and resolved.
     MONITOR_INTERVAL_SECONDS=10
   fi
-  [ "${ENROLL_LE_ARG:-false}" = true ] && [ "$MODE" != production ] && die "--tak-enroll-letsencrypt needs --domain"
+  check_port "$SMTP_PORT" > /dev/null || die "--smtp-port: not a port number: $SMTP_PORT"
+  check_tls "$SMTP_TLS" > /dev/null || die "--smtp-tls must be starttls, tls or none"
 
+  if [ "$INTERACTIVE" = 1 ]; then
+    log "Summary"
+    info "Mode:                  $MODE"
+    info "Web:                   $PUBLIC_URL"
+    info "TAK clients:           $PUBLIC_HOST:8089, enrollment $PUBLIC_HOST:8446"
+    info "Administrator:         ${ADMIN_EMAIL:-none (later: docker compose exec app teamtak grant-admin <email>)}"
+    if [ "$MODE" = production ]; then
+      info "Let's Encrypt contact: ${ACME_EMAIL:-none}"
+      if [ "$ENROLL_LE" = true ]; then info "Port 8446:             Let's Encrypt certificate"
+      else info "Port 8446:             private CA's certificate"; fi
+      if [ -z "$SMTP_HOST" ]; then info "E-mail:                not set: login codes cannot be e-mailed yet"
+      else
+        info "E-mail:                $SMTP_HOST:$SMTP_PORT ($SMTP_TLS), ${SMTP_USERNAME:+user $SMTP_USERNAME, }${SMTP_PASSWORD:+password given, }from $MAIL_FROM"
+      fi
+    else
+      info "E-mail:                mail catcher, http://localhost:${MAILPIT_PORT:-8025}"
+    fi
+    info "TAK Server:            $TAK_VERSION ($(basename "$ZIP"))"
+    info "Client certificates:   valid $VALIDITY days"
+    echo >&2
+    ask_yes_no GO "Write deploy/.env and install with these settings" y
+    [ "$GO" = true ] || { info "Stopped: nothing was written. Run ./install.sh again to answer again."; exit 1; }
+  fi
+
+  log "Creating $ENV_FILE"
   cat > "$ENV_FILE" <<ENVEOF
 # Generated by install.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ). Holds secrets: never version or share this file.
 # After editing it, run ./install.sh again to apply the change.
@@ -149,8 +427,8 @@ PUBLIC_URL=$PUBLIC_URL
 # Interface the published ports listen on
 BIND_ADDRESS=$BIND_ADDRESS
 COOKIE_SECURE=$COOKIE_SECURE
-ADMIN_EMAIL=$ADMIN_EMAIL_ARG
-ACME_EMAIL=${ACME_EMAIL_ARG:-$ADMIN_EMAIL_ARG}
+ADMIN_EMAIL=$ADMIN_EMAIL
+ACME_EMAIL=$ACME_EMAIL
 
 # --- TAK Server
 TAK_VERSION=$TAK_VERSION
@@ -165,7 +443,7 @@ INT_CA_NAME=teamtak-ca
 SERVER_CERT_NAME=takserver
 TAK_API_CERT_NAME=teamtak-api
 # true: port 8446 presents the Let's Encrypt certificate (needed by QR-code enrollment)
-TAK_ENROLL_LETSENCRYPT=${ENROLL_LE_ARG:-false}
+TAK_ENROLL_LETSENCRYPT=$ENROLL_LE
 TAK_ENROLL_URL=$TAK_ENROLL_URL
 TAK_NETWORK_ALIAS=$TAK_NETWORK_ALIAS
 # Name of the connection in the phones' server list
@@ -216,7 +494,12 @@ ENVEOF
   chmod 600 "$ENV_FILE"
 else
   info "keeping existing settings: $ENV_FILE"
-  [ -z "$MODE_ARG$DOMAIN_ARG$HOST_ARG$VALIDITY_ARG" ] || info "note: mode, domain, host and validity options are only read on the first run; edit $ENV_FILE to change them"
+  for option in local domain host admin-email acme-email cert-validity-days tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
+    if given "$option"; then
+      info "note: --$option and the other settings options are only read on the first run; edit $ENV_FILE to change them"
+      break
+    fi
+  done
 fi
 # Settings added since this file was generated (an installation made before phase 3).
 if [ -z "$(env_get AGENT_TOKEN)" ]; then
@@ -237,26 +520,43 @@ chmod 700 "$DEPLOY_DIR/backups"
 # before the restart can be undone by putting the three TAK_ lines of deploy/.env back.
 if [ "$UPGRADE_TAK" = 1 ]; then
   log "Upgrading TAK Server"
-  NEW_ZIP="$ZIP_ARG"
-  if [ -z "$NEW_ZIP" ]; then
-    candidates="$(ls "$REPO_DIR"/takserver-docker-hardened-*.zip 2>/dev/null | grep -v -F "takserver-docker-hardened-$TAK_VERSION.zip" || true)"
-    [ "$(printf '%s\n' "$candidates" | grep -c .)" = 1 ] || die "give the new ZIP with --zip <path> (found: ${candidates:-none other than the installed version})"
-    NEW_ZIP="$candidates"
+  if [ -n "$ZIP_ARG" ]; then
+    [ -f "$ZIP_ARG" ] || die "TAK Server ZIP not found: $ZIP_ARG"
+    ZIP="$ZIP_ARG"
+  else
+    # The ZIPs at the repository root of a newer version than the installed one.
+    candidates="$(tak_zips | while read -r v zip; do
+      if version_newer "$v" "$TAK_VERSION"; then printf '%s %s\n' "$v" "$zip"; fi
+    done)"
+    count="$(printf '%s\n' "$candidates" | grep -c . || true)"
+    if [ "$count" = 0 ]; then
+      die "no ZIP of a version newer than $TAK_VERSION at the repository root: put takserver-docker-hardened-<new version>.zip there, or pass --zip <path>"
+    elif [ "$count" = 1 ]; then
+      ZIP="$(printf '%s\n' "$candidates" | cut -d' ' -f2-)"
+    elif [ "$INTERACTIVE" = 1 ]; then
+      choose_zip_from "$candidates" "Several newer TAK Server ZIPs are at the repository root:"
+    else
+      die "several ZIPs newer than $TAK_VERSION at the repository root ($(printf '%s\n' "$candidates" | cut -d' ' -f1 | tr '\n' ' ')): give the one to install with --zip <path>"
+    fi
   fi
-  [ -f "$NEW_ZIP" ] || die "TAK Server ZIP not found: $NEW_ZIP"
-  NEW_VERSION="$(basename "$NEW_ZIP" .zip)"; NEW_VERSION="${NEW_VERSION#takserver-docker-hardened-}"
+  NEW_VERSION="$(tak_zip_version "$ZIP")" || die "cannot tell the TAK Server version of $ZIP"
   [ "$NEW_VERSION" != "$TAK_VERSION" ] || die "TAK Server $TAK_VERSION is already the installed version"
+  version_newer "$NEW_VERSION" "$TAK_VERSION" || die "$(basename "$ZIP") holds TAK Server $NEW_VERSION, older than the installed $TAK_VERSION. Going back is done with the backup taken by the upgrade: see README, \"Upgrading TAK Server\"."
   OLD_VERSION="$TAK_VERSION" OLD_DB_IMAGE="$TAK_DB_IMAGE"
   NEW_IMAGE="teamtak/takserver:$NEW_VERSION" NEW_DB_IMAGE="teamtak/takserver-db:$NEW_VERSION"
-  info "installed: $OLD_VERSION — new: $NEW_VERSION"
-
+  info "installed: $OLD_VERSION — new: $NEW_VERSION ($(basename "$ZIP"))"
   [ -n "$(svc_container takserver-db)" ] || die "the stack must be running for an upgrade (the backup is taken from it)"
+  if [ "$INTERACTIVE" = 1 ]; then
+    ask_yes_no GO "Take a backup, build TAK Server $NEW_VERSION and restart the stack on it" y
+    [ "$GO" = true ] || { info "Stopped: nothing was changed."; exit 1; }
+  fi
+
   info "backup first"
   "$DEPLOY_DIR/scripts/backup.sh" > "$DATA_DIR/upgrade-backup.log" 2>&1 || { tail -n 20 "$DATA_DIR/upgrade-backup.log" >&2; die "the backup failed: nothing was changed"; }
   info "$(sed -n 's/^BACKUP_RESULT file=\([^ ]*\).*/archive: deploy\/backups\/\1/p' "$DATA_DIR/upgrade-backup.log")"
   rm -f "$DATA_DIR/upgrade-backup.log"
 
-  "$DEPLOY_DIR/scripts/build-tak-images.sh" "$NEW_ZIP" "$NEW_IMAGE" "$NEW_DB_IMAGE"
+  "$DEPLOY_DIR/scripts/build-tak-images.sh" "$ZIP" "$NEW_IMAGE" "$NEW_DB_IMAGE"
 
   # TAK Server's database lives in a Docker volume written by the old image's PostgreSQL.
   # A new major version of PostgreSQL cannot open it: stop before anything is switched.
@@ -271,9 +571,24 @@ if [ "$UPGRADE_TAK" = 1 ]; then
   env_set TAK_DB_IMAGE "$NEW_DB_IMAGE"
   load_env
   info "deploy/.env now names TAK Server $NEW_VERSION (to go back: TAK_VERSION, TAK_IMAGE and TAK_DB_IMAGE to $OLD_VERSION, then ./install.sh; the database is in the backup above)"
-  ZIP_ARG="$NEW_ZIP"
 fi
-ZIP="${ZIP_ARG:-$REPO_DIR/takserver-docker-hardened-$TAK_VERSION.zip}"
+
+# The ZIP of the installed version, which build-tak-images.sh reads only when an image is
+# missing. A first install and an upgrade have already chosen it.
+if [ -z "$ZIP" ]; then
+  if [ -n "$ZIP_ARG" ]; then
+    [ -f "$ZIP_ARG" ] || die "TAK Server ZIP not found: $ZIP_ARG"
+    zip_version="$(tak_zip_version "$ZIP_ARG" || true)"
+    [ "$zip_version" = "$TAK_VERSION" ] || die "$ZIP_ARG holds TAK Server ${zip_version:-of an unknown version}, and $TAK_VERSION is installed: to move to it, add --upgrade-tak"
+    ZIP="$ZIP_ARG"
+  else
+    ZIP="$(tak_zip_for_version "$TAK_VERSION")"
+    newest="$(tak_zips | tail -n 1 | cut -d' ' -f1)"
+    if [ -n "$newest" ] && version_newer "$newest" "$TAK_VERSION"; then
+      info "TAK Server $newest is at the repository root (installed: $TAK_VERSION); to move to it: sudo ./install.sh --upgrade-tak"
+    fi
+  fi
+fi
 info "mode: $MODE — public host: $PUBLIC_HOST — web: $PUBLIC_URL — client certificates: $CERT_VALIDITY_DAYS days"
 if [ "$MODE" = production ] && [ -z "$SMTP_HOST" ]; then
   info "WARNING: SMTP_HOST is empty in $ENV_FILE: login codes cannot be e-mailed until it is set."

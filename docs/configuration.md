@@ -18,7 +18,7 @@ The settings worth knowing:
 | `TAK_CONNECTION_NAME` | Name of the server shown in ATAK and iTAK (`TeamTAK` by default) |
 | `SMTP_*`, `MAIL_FROM` | Outgoing e-mail |
 
-Mode, addresses and certificate validity given to `install.sh` are read on the first run only;
+The settings `install.sh` asks for, or reads from its options, are used on the first run only;
 afterwards they live in this file.
 
 Thresholds of the alerts, the backup schedule and passphrase, and the webhook are not in this file:

@@ -13,7 +13,7 @@ Everything runs with Docker Compose, in the project `teamtak`.
 | `app` | The platform: Rust API (axum, sqlx) serving the React UI as static files, and the reconciliation loop |
 | `postgres` | The platform's database, the source of truth |
 | `openldap` | Directory of TAK accounts and groups, written by the platform, read by TAK Server |
-| `takserver`, `takserver-db` | TAK Server 5.8 and its database, built from the official tak.gov ZIP |
+| `takserver`, `takserver-db` | TAK Server and its database, built from the official tak.gov ZIP of the installed version (5.8 so far) |
 | `agent` | The host agent: reads the state of the machine and of this stack, takes the backups, restarts a service on request. The only service that holds the Docker socket |
 | `mailpit` | Local mode only: catches outgoing e-mail so login codes can be read |
 

@@ -11,7 +11,8 @@ they agree to share.
 The administrator welcomes new teams and looks after the server. TeamTAK takes care of the rest:
 TAK accounts, groups and certificates, monitoring, alerts, backups and an audit log.
 
-One script installs everything on one server with Docker Compose, TAK Server 5.8 included.
+One script installs everything on one server with Docker Compose, TAK Server included: it asks a
+few questions, shows a summary, and does the rest.
 
 ## How a community uses it
 
@@ -63,10 +64,12 @@ One script installs everything on one server with Docker Compose, TAK Server 5.8
 - A Linux server, amd64, with **8 GB of RAM** and about **12 GB of disk** for the images.
   **Ubuntu Server LTS (24.04)** is the recommended system.
 - **Docker with Compose v2**, plus `git`, `unzip`, `bash` and `openssl`.
-- **`takserver-docker-hardened-5.8-RELEASE-103.zip`** from [tak.gov](https://tak.gov) (a free
-  account is needed to download it). It is under the tak.gov licence, so it is not in this
-  repository and must never be committed (`.gitignore` excludes it). No Iron Bank account and no
-  `docker login` are needed.
+- **The TAK Server Docker ZIP**, `takserver-docker-hardened-<version>.zip`, from
+  [tak.gov](https://tak.gov) (a free account is needed to download it). No version is fixed: the
+  install reads it from the ZIP, so take the latest one (TeamTAK has been tested with
+  `5.8-RELEASE-103`). It is under the tak.gov licence, so it is not in this repository and must
+  never be committed (`.gitignore` excludes it). No Iron Bank account and no `docker login` are
+  needed.
 - For production: a **domain name** pointing to the server, and an **SMTP account** to send the
   login codes (Brevo, for example).
 
@@ -98,28 +101,47 @@ git clone https://github.com/Titou74/teamtak.git
 cd teamtak
 ```
 
-**4. Add the TAK Server ZIP.** Download `takserver-docker-hardened-5.8-RELEASE-103.zip` from
+**4. Add the TAK Server ZIP.** Download the latest `takserver-docker-hardened-<version>.zip` from
 tak.gov and put it at the root of the repository. From your own computer, for example:
 
 ```bash
-scp takserver-docker-hardened-5.8-RELEASE-103.zip user@tak.example.org:teamtak/
+scp takserver-docker-hardened-*.zip user@tak.example.org:teamtak/
 ```
 
-**5. Run the install**, as root, with your domain, the address of the first administrator and
-your SMTP settings:
+If several ZIPs are there, the install asks which one to use (the newest by default). Without a
+ZIP at the root, it asks for the path of one.
+
+**5. Run the install**, as root:
 
 ```bash
-sudo ./install.sh --domain tak.example.org --admin-email you@example.org --smtp-host smtp-relay.brevo.com --smtp-port 587 --smtp-username 'SMTP_LOGIN' --smtp-password 'SMTP_KEY' --mail-from 'TeamTAK <no-reply@example.org>'
+sudo ./install.sh
 ```
 
-The script builds the two TAK Server images from the ZIP, generates the secrets (`deploy/.env`),
-a certificate authority and TAK Server's certificates (`deploy/data/`), builds the platform and
-agent images, starts everything, declares the platform's certificate as TAK Server administrator,
-and creates the first administrator. Allow ten minutes the first time, one minute afterwards.
+It asks its questions one by one, with the default in brackets (Enter keeps it):
 
-Add `--tak-enroll-letsencrypt` to also present the Let's Encrypt certificate on the enrollment
-port, which QR-code enrollment needs (see
-[QR codes and port 8446](docs/architecture.md#qr-codes-and-port-8446)).
+| Question | Answer |
+|---|---|
+| Mode | `1`, production |
+| Domain name | `tak.example.org` |
+| E-mail address of the first administrator | your address |
+| Contact address given to Let's Encrypt | the administrator's by default |
+| Validity of TAK client certificates | 365 days by default |
+| Let's Encrypt certificate on port 8446 | `y` if phones will enroll by QR code ([QR codes and port 8446](docs/architecture.md#qr-codes-and-port-8446)) |
+| SMTP server, port, encryption, username, password, sender | your SMTP account, `smtp-relay.brevo.com`, 587 and starttls for Brevo |
+
+It then shows a summary and writes nothing before you answer yes. The script builds the two TAK
+Server images from the ZIP, generates the secrets (`deploy/.env`), a certificate authority and
+TAK Server's certificates (`deploy/data/`), builds the platform and agent images, starts
+everything, declares the platform's certificate as TAK Server administrator, and creates the first
+administrator. Allow ten minutes the first time, one minute afterwards.
+
+Every answer can be given in advance as an option ([Install options](#install-options)); the
+script then only asks for the others. To install with no question at all, from a script for
+example, add `--non-interactive`:
+
+```bash
+sudo ./install.sh --non-interactive --domain tak.example.org --admin-email you@example.org --smtp-host smtp-relay.brevo.com --smtp-port 587 --smtp-username 'SMTP_LOGIN' --smtp-password 'SMTP_KEY' --mail-from 'TeamTAK <no-reply@example.org>'
+```
 
 **6. Sign in.** The script ends by printing the address of the UI and a one-time login code for
 the administrator. Open `https://tak.example.org`, type the administrator's address, choose
@@ -145,18 +167,22 @@ leader signs in and asks for their team, and you approve it from the administrat
 With Docker running and the ZIP at the repository root:
 
 ```bash
-./install.sh --local --admin-email you@example.org
+./install.sh --local
 ```
+
+It asks for the address TAK clients use, the administrator's address and the certificate validity.
+Keep `localhost` for this computer only; to let phones on the same network reach TAK Server, give
+the machine's LAN address (the script shows it): the server certificate then carries it and the
+ports listen on all interfaces.
 
 It ends by printing the address of the UI (`http://localhost:8480`) and a one-time login code for
 the administrator. Other login codes arrive in the mail catcher at `http://localhost:8025`. On
 Linux, run it with `sudo`.
 
-To let phones on the same network reach TAK Server, give the machine's LAN address; the server
-certificate then carries it and the ports listen on all interfaces:
+Without questions:
 
 ```bash
-./install.sh --local --host 192.168.1.20 --admin-email you@example.org
+./install.sh --local --host 192.168.1.20 --admin-email you@example.org --non-interactive
 ```
 
 ### Install options
@@ -170,14 +196,16 @@ certificate then carries it and the ports listen on all interfaces:
 | `--tak-enroll-letsencrypt` | Production: Let's Encrypt certificate on port 8446 | off |
 | `--smtp-host`, `--smtp-port`, `--smtp-username`, `--smtp-password`, `--smtp-tls`, `--mail-from` | Outgoing e-mail | mail catcher in local mode |
 | `--acme-email <address>` | Contact given to Let's Encrypt | the administrator's |
-| `--zip <path>` | TAK Server ZIP | the one at the repository root |
-| `--upgrade-tak` | Move the installation to the TAK Server version of another ZIP ([Upgrading TAK Server](#upgrading-tak-server)) | |
+| `--zip <path>` | TAK Server ZIP, of any version | the one at the repository root; the newest if there are several (asked in a terminal) |
+| `--upgrade-tak` | Move the installation to a newer TAK Server ([Upgrading TAK Server](#upgrading-tak-server)) | |
+| `--non-interactive` | Ask nothing: options not given take their default | on when the script does not run in a terminal |
 | `--no-start` | Prepare everything without starting | |
 
-Mode, addresses and certificate validity are read on the **first run only**. Afterwards the
-settings live in `deploy/.env` ([configuration](docs/configuration.md)): edit that file and run
-`./install.sh` again to apply a change. The script is safe to run again; it keeps existing
-settings, certificates and images.
+The settings are asked, or read from the options, on the **first run only**. Afterwards they live
+in `deploy/.env` ([configuration](docs/configuration.md)): edit that file and run `./install.sh`
+again to apply a change. The script is safe to run again; it asks nothing and keeps existing
+settings, certificates and images. The ZIP is only read again when the TAK Server images have to
+be rebuilt.
 
 ### If the install stops
 
@@ -200,7 +228,7 @@ something waiting; nothing is ever updated from the web UI, on purpose.
 | Caddy, PostgreSQL, the mail catcher | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
 | The directory (OpenLDAP) | Pinned by digest in `deploy/docker-compose.yml`: change the digest, test, then `./install.sh` | "Pinned; a newer build exists" |
 | The server's packages | `sudo apt update && sudo apt full-upgrade`, then `sudo reboot` if asked | pending updates, security updates, restart required |
-| TAK Server | [Upgrading TAK Server](#upgrading-tak-server) | "TAK Server … is available", or a ZIP of another version at the repository root |
+| TAK Server | [Upgrading TAK Server](#upgrading-tak-server) | "TAK Server … is available", or a ZIP of a newer version at the repository root |
 
 ### Updating TeamTAK
 
@@ -245,10 +273,10 @@ step 1 ([Restoring](docs/backups.md#restoring)).
 
 tak.gov has no way to be asked automatically. Record in **Monitoring, Settings** the latest
 version you saw there; the monitoring page then says when it is newer than the installed one. It
-also notices by itself a ZIP of another version at the repository root.
+also notices by itself a ZIP of a newer version at the repository root.
 
 1. Download `takserver-docker-hardened-<new version>.zip` from tak.gov and put it at the root of
-   the repository, next to the installed one.
+   the repository, next to the installed one. `./install.sh` points it out on its next run.
 2. Read the release notes of that version for changes to `CoreConfig.xml`.
 3. Run the upgrade:
 
@@ -256,11 +284,16 @@ also notices by itself a ZIP of another version at the repository root.
 sudo ./install.sh --upgrade-tak
 ```
 
-It takes a backup first, builds the two images of the new version, checks that the new database
-image runs the same major version of PostgreSQL as the installed one (it stops before changing
-anything otherwise), writes the new version in `deploy/.env`, and restarts the stack; TAK Server's
-database image upgrades its own schema when it starts. It then checks that the platform reaches
-TAK Server, as a normal install does.
+It picks the ZIP newer than the installed version (if there are several, it asks which one; from
+a script, give it with `--zip <path>`), shows both versions and waits for a yes. A ZIP of an older
+version is refused. It then takes a backup, builds the two images of the new version, checks
+that the new database image runs the same major version of PostgreSQL as the installed one (it
+stops before changing anything otherwise), writes the new version in `deploy/.env`, and restarts
+the stack; TAK Server's database image upgrades its own schema when it starts. It then checks that
+the platform reaches TAK Server, as a normal install does.
+
+The ZIP of the old version can then be deleted: a ZIP is only read to build missing images. Keep
+it, though, if you may go back.
 
 To go back: put `TAK_VERSION`, `TAK_IMAGE` and `TAK_DB_IMAGE` back to the old version in
 `deploy/.env` and run `sudo ./install.sh`. If the new version already changed the database, restore

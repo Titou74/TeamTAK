@@ -4,6 +4,9 @@
 #
 # Usage: build-tak-images.sh <zip> <takserver image> <database image>
 #
+# The ZIP is only read when an image is missing: it may be given empty, or be gone, once
+# both images are built.
+#
 # The ZIP is extracted to deploy/data/build/ (git-ignored) and the extraction is removed at
 # the end: nothing from the ZIP stays outside the images.
 #
@@ -18,12 +21,14 @@ IMG_TAK="$2"
 IMG_DB="$3"
 BUILD_DIR="$DATA_DIR/build"
 
-[ -f "$ZIP" ] || die "TAK Server ZIP not found: $ZIP"
-
 have() { docker image inspect "$1" > /dev/null 2>&1; }
 if have "$IMG_TAK" && have "$IMG_DB"; then
   info "images already built: $IMG_TAK, $IMG_DB"
   exit 0
+fi
+
+if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
+  die "$IMG_TAK must be built from the TAK Server ZIP${ZIP:+, and $ZIP does not exist}: put takserver-docker-hardened-${IMG_TAK##*:}.zip (from tak.gov) at the repository root, or pass --zip <path>"
 fi
 
 command -v unzip > /dev/null || die "unzip is required to extract the TAK Server ZIP"
@@ -34,7 +39,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 log "Extracting $(basename "$ZIP")"
 unzip -q "$ZIP" -d "$BUILD_DIR"
 SRC="$(find "$BUILD_DIR" -maxdepth 1 -mindepth 1 -type d | head -n 1)"
-[ -f "$SRC/docker/Dockerfile.hardened-takserver" ] || die "unexpected ZIP layout: docker/Dockerfile.hardened-takserver not found"
+[ -f "$SRC/docker/Dockerfile.hardened-takserver" ] || die "$(basename "$ZIP") is not the \"hardened\" Docker ZIP of TAK Server (docker/Dockerfile.hardened-takserver not found): download takserver-docker-hardened-<version>.zip from tak.gov"
 info "TAK Server $(cat "$SRC/tak/version.txt" 2>/dev/null || echo '(version file missing)')"
 
 if [ "${ROCKY_REPOS_HTTPS:-1}" = 1 ]; then

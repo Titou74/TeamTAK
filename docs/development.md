@@ -22,10 +22,10 @@ together is in [architecture](architecture.md).
 Install a local stack first (see "Local mode" in the [README](../README.md#local-mode-development-tests-first-look)):
 
 ```bash
-./install.sh --local --admin-email you@example.org
+./install.sh --local --admin-email you@example.org --non-interactive
 ```
 
-To work on the UI with hot reload against the stack running in Docker:
+(Without `--non-interactive`, it asks for the settings not given.) To work on the UI with hot reload against the stack running in Docker:
 
 ```bash
 cd web && pnpm install && pnpm dev

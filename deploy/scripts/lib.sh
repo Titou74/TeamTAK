@@ -22,6 +22,50 @@ die() { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 rand() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "${1:-32}" || true; }
 
+# ----------------------------------------------------------------------------- TAK Server ZIPs
+# tak.gov publishes TAK Server as takserver-docker-hardened-<version>.zip, a new file for
+# each version. No version is written in the scripts: the version of a ZIP is read from the
+# ZIP itself (tak/version.txt), so a renamed download works too.
+
+# Version of TAK Server in a ZIP ("5.8-RELEASE-103"): its tak/version.txt, or else its file
+# name. Fails when neither gives something usable as an image tag.
+tak_zip_version() {
+  local zip="$1" entry="" v=""
+  if command -v unzip > /dev/null; then
+    entry="$(unzip -Z1 "$zip" 2>/dev/null | grep -E '^[^/]+/tak/version\.txt$' | head -n 1 || true)"
+    [ -z "$entry" ] || v="$(unzip -p "$zip" "$entry" 2>/dev/null | head -c 64 | tr -d '[:space:]' || true)"
+  fi
+  if [ -z "$v" ]; then
+    v="$(basename "$zip" .zip)"; v="${v#takserver-docker-}"; v="${v#hardened-}"
+  fi
+  case "$v" in [0-9]*) ;; *) return 1 ;; esac
+  case "$v" in *[!A-Za-z0-9.-]*) return 1 ;; esac
+  printf '%s\n' "$v"
+}
+
+# The TAK Server ZIPs at the repository root, oldest version first: "<version> <path>" lines.
+tak_zips() {
+  local zip v
+  for zip in "$REPO_DIR"/takserver-docker-hardened-*.zip; do
+    [ -f "$zip" ] || continue
+    v="$(tak_zip_version "$zip")" || continue
+    printf '%s %s\n' "$v" "$zip"
+  done | sort -k1,1V
+}
+
+# Path of the ZIP of one version at the repository root; empty when there is none.
+tak_zip_for_version() {
+  local v zip
+  tak_zips | while read -r v zip; do
+    if [ "$v" = "$1" ]; then printf '%s\n' "$zip"; break; fi
+  done
+}
+
+# True when version $1 is newer than version $2.
+version_newer() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+}
+
 # Loads deploy/.env into the environment. The file is read as KEY=VALUE lines, the way
 # Docker Compose reads it, not executed: values may hold spaces and shell characters.
 load_env() {

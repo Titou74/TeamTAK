@@ -85,7 +85,7 @@ pub struct TakView {
     pub installed_version: String,
     /// TAK Server ZIPs at the repository root.
     pub zip_versions: Vec<String>,
-    /// Among them, those of another version than the installed one: an upgrade is at hand.
+    /// Among them, those of a newer version than the installed one: an upgrade is at hand.
     pub other_zip_versions: Vec<String>,
     /// What the administrator last saw on tak.gov.
     pub latest_known_version: String,

@@ -382,7 +382,13 @@ impl Monitor {
             api_ok: version.is_some(),
             version: version.clone(),
             installed_version,
-            other_zip_versions: zip_versions.iter().filter(|z| current.is_some() && parse_tak_version(z) != current).cloned().collect(),
+            // Only newer ones: the ZIP of an older version (the one left after an upgrade) is
+            // nothing to act on, and install.sh --upgrade-tak refuses it.
+            other_zip_versions: zip_versions
+                .iter()
+                .filter(|z| matches!((parse_tak_version(z), current), (Some(zip), Some(current)) if zip > current))
+                .cloned()
+                .collect(),
             zip_versions,
             newer_known: matches!((parse_tak_version(&settings.tak_latest_known_version), current), (Some(known), Some(current)) if known > current),
             latest_known_version: settings.tak_latest_known_version.clone(),
