@@ -120,15 +120,8 @@ git clone https://github.com/Titou74/teamtak.git
 cd teamtak
 ```
 
-Then switch to the latest release, the highest `v<major>.<minor>.<patch>` tag: `main` is where
-development goes on, and may hold changes not yet released.
-
-```bash
-git checkout "$(git tag --list 'v*' --sort=-v:refname | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)"
-```
-
-Git says the checkout is in "detached HEAD" state: that is expected, it is on the release's tag
-rather than on a branch.
+The clone holds `main`, where development goes on. You do not have to pick a version: the install
+moves the checkout to the latest release by itself (step 5).
 
 **4. Add the TAK Server ZIP.** Download the latest `takserver-docker-hardened-<version>.zip` from
 tak.gov and put it at the root of the repository. From your own computer, for example:
@@ -210,6 +203,9 @@ It ends by printing the address of the UI (`http://localhost:8480`) and a one-ti
 the administrator. Other login codes arrive in the mail catcher at `http://localhost:8025`. On
 Linux, run it with `sudo`.
 
+Local mode installs the code of the checkout as it is, `main` or the branch being worked on; add
+`--release latest` to install the latest release instead.
+
 Without questions:
 
 ```bash
@@ -231,13 +227,15 @@ Without questions:
 | `--acme-email <address>` | Contact given to Let's Encrypt | the administrator's |
 | `--zip <path>` | TAK Server ZIP, of any version | the one at the repository root; the newest if there are several (asked in a terminal) |
 | `--upgrade-tak` | Move the installation to a newer TAK Server ([Upgrading TAK Server](#upgrading-tak-server)) | |
+| `--release <version\|latest\|current>` | TeamTAK release to install (`1.0.4`), moving the checkout to its tag first. `latest`: the newest release, pre-releases left out; `current`: the code as it is ([Updating TeamTAK](#updating-teamtak)) | `latest` in production, `current` in local mode |
 | `--non-interactive` | Ask nothing: options not given take their default | on when the script does not run in a terminal |
 | `--no-start` | Prepare everything without starting | |
 
 The settings are asked, or read from the options, on the **first run only**. Afterwards they live
 in `deploy/.env` ([configuration](docs/configuration.md)): edit that file and run `./install.sh`
-again to apply a change. The script is safe to run again; it asks nothing and keeps existing
-settings, certificates and images. The ZIP is only read again when the TAK Server images have to
+again to apply a change (in production, that run also moves TeamTAK to its latest release; add
+`--release current` to apply the change alone). The script is safe to run again; it asks nothing
+and keeps existing settings, certificates and images. The ZIP is only read again when the TAK Server images have to
 be rebuilt.
 
 ### If the install stops
@@ -257,7 +255,7 @@ something waiting; nothing is ever updated from the web UI, on purpose.
 
 | What | How | Said by the monitoring page |
 |---|---|---|
-| TeamTAK itself | `git fetch --tags`, `git checkout` of the latest release, then `sudo ./install.sh` ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
+| TeamTAK itself | `sudo ./install.sh`, which gets the latest release ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
 | Caddy, PostgreSQL, the mail catcher | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
 | The directory (OpenLDAP) | Pinned by digest in `deploy/docker-compose.yml`: change the digest, test, then `./install.sh` | "Pinned; a newer build exists" |
 | The server's packages | `sudo apt update && sudo apt full-upgrade`, then `sudo reboot` if asked | pending updates, security updates, restart required |
@@ -278,27 +276,22 @@ Run from the root of the repository, on the server.
 sudo deploy/scripts/backup.sh
 ```
 
-**2. Get the new version**: fetch the releases, then switch to the latest one.
-
-```bash
-git fetch --tags
-```
-
-```bash
-git checkout "$(git tag --list 'v*' --sort=-v:refname | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)"
-```
-
-The **Monitoring** page gives the same command with the release's tag written out
-(`git checkout v1.0.4`, for example). An installation made from `main` moves to the release the
-same way.
-
-**3. Apply it.**
+**2. Install the new version.**
 
 ```bash
 sudo ./install.sh
 ```
 
-No option is needed: the script reads `deploy/.env`. It keeps the settings, the secrets, the
+The script first fetches the releases from GitHub and moves the checkout to the latest one (its
+tag, `v1.0.4` for example; pre-releases are left out), then runs as that version. An installation
+made from `main` moves to the release the same way. To install a given release instead, the one the
+**Monitoring** page names for example:
+
+```bash
+sudo ./install.sh --release 1.0.4
+```
+
+No other option is needed: the script reads `deploy/.env`. It keeps the settings, the secrets, the
 certificate authority and the TAK Server images, adds to `deploy/.env` the settings a new version
 introduces, rebuilds the platform and agent images, tagged with the new version taken from git
 (`teamtak/app:<version>`), and restarts the services that changed; the images of the previous
@@ -307,15 +300,23 @@ platform applies its database migrations by itself when it starts. The script th
 checks as a first install and stops with an error if the platform cannot reach the directory or
 TAK Server.
 
-**4. Check.** The **Monitoring** page should show every service running, and:
+If files of the repository were changed by hand, the script stops and lists them rather than
+overwrite them. Without access to GitHub it says so and installs from the releases the checkout
+already knows. An installation ahead of the latest release (from `main` between two releases) is
+left where it is.
+
+**3. Check.** The **Monitoring** page should show every service running, and:
 
 ```bash
 cd deploy && docker compose exec app teamtak status
 ```
 
-**Going back.** Database migrations are not undone by returning to older code. Check out the
-previous release (`git checkout v1.0.2`, for example), run `sudo ./install.sh`, then restore the archive of
-step 1 ([Restoring](docs/backups.md#restoring)).
+**Going back.** Database migrations are not undone by returning to older code. Install the previous
+release (`sudo ./install.sh --release 1.0.2`, for example), then restore the archive of step 1
+([Restoring](docs/backups.md#restoring)).
+
+**In local mode** the install keeps the code as it is, since it is usually the code being
+developed: update with `./install.sh --release latest`.
 
 ### Upgrading TAK Server
 

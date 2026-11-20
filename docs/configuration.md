@@ -2,7 +2,8 @@
 
 `install.sh` generates `deploy/.env`; [`deploy/.env.example`](../deploy/.env.example) documents
 every variable. After editing it, run `./install.sh` again (`sudo ./install.sh` on Linux) to apply
-the change. It re-creates the containers whose settings changed, and restarts TAK Server when its
+the change; in production that run also moves TeamTAK to its latest release, unless
+`--release current` is added. It re-creates the containers whose settings changed, and restarts TAK Server when its
 `CoreConfig.xml` changed (`CERT_VALIDITY_DAYS`, `LDAP_UPDATE_INTERVAL`): the TAK clients are then
 disconnected for about a minute. `docker compose restart` does not read `deploy/.env` again.
 

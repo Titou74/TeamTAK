@@ -50,7 +50,10 @@ it starts the stack and checks that the platform reaches the directory and TAK S
 minutes.
 
 On a **new machine**: install Docker, clone this repository, put the TAK Server ZIP of the same
-version at its root, copy the archive over, and run the same command. The certificate authority
+version at its root, copy the archive over, and run the same command. The restore installs the
+code of the checkout as it is, never another release: after cloning, move it to the release the
+platform ran or a newer one (`git checkout v1.0.4`; the archive's `deploy/.env` names it as
+`TEAMTAK_VERSION`). The certificate authority
 comes back with the archive, so the zips already handed out keep working, provided the machine
 answers at the same name or address.
 

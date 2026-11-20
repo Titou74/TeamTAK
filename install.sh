@@ -61,6 +61,15 @@ TAK Server:
                              there are several). Backup, new images, restart. See README,
                              "Upgrading TAK Server".
 
+TeamTAK:
+  --release <version|latest|current>
+                             TeamTAK release to install: this checkout moves to its tag
+                             (v1.0.4) before anything else. latest: the newest release on
+                             GitHub, pre-releases left out. current: the code as it is.
+                             Default: latest in production, current in local mode (the code
+                             being developed). An installation ahead of the latest release
+                             is not moved back unless a version is given.
+
 Other:
   --non-interactive          Ask nothing: options not given take their default. Implied when
                              the script does not run in a terminal.
@@ -72,12 +81,18 @@ EOF
 MODE_ARG="" DOMAIN_ARG="" HOST_ARG="" ADMIN_EMAIL_ARG="" ACME_EMAIL_ARG="" VALIDITY_ARG=""
 ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0 TAK_PORTS_ARG="" TAK_ADMIN_PORT_ARG=""
 SMTP_HOST_ARG="" SMTP_PORT_ARG="" SMTP_USERNAME_ARG="" SMTP_PASSWORD_ARG="" SMTP_TLS_ARG="" MAIL_FROM_ARG=""
+RELEASE_ARG=""
 # Options given on the command line, between spaces: they are not asked.
 GIVEN=" "
+# The options but --release, for this script run again from the release it moved to, which
+# may be one that does not know --release.
+RERUN_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--tak-admin-port|--smtp-*|--mail-from|--zip)
-      [ $# -ge 2 ] || { usage >&2; die "$1 needs a value"; } ;;
+    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--tak-admin-port|--smtp-*|--mail-from|--zip|--release)
+      [ $# -ge 2 ] || { usage >&2; die "$1 needs a value"; }
+      [ "$1" = --release ] || RERUN_ARGS+=("$1" "$2") ;;
+    *) RERUN_ARGS+=("$1") ;;
   esac
   GIVEN="$GIVEN${1#--} "
   case "$1" in
@@ -98,6 +113,7 @@ while [ $# -gt 0 ]; do
     --mail-from) MAIL_FROM_ARG="$2"; shift ;;
     --zip) ZIP_ARG="$2"; shift ;;
     --upgrade-tak) UPGRADE_TAK=1 ;;
+    --release) RELEASE_ARG="$2"; shift ;;
     --non-interactive) NON_INTERACTIVE=1 ;;
     --no-start) NO_START=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -285,6 +301,69 @@ choose_first_zip() {
   [ -f "$ZIP" ] || die "TAK Server ZIP not found: $ZIP"
   TAK_VERSION="$(tak_zip_version "$ZIP")" || die "cannot tell the TAK Server version of $ZIP: tak/version.txt is missing and the name is not takserver-docker-hardened-<version>.zip"
 }
+
+# ----------------------------------------------------------------------------- TeamTAK release
+
+# Moves this checkout to the release asked for (--release; by default the latest in
+# production, the code as it is in local mode), then runs the script again from there: the
+# script is part of the release. Database migrations are never undone, so an installation
+# ahead of the latest release stays where it is unless a version is given.
+choose_release() {
+  local wanted="$RELEASE_ARG" mode tag target head changed installed=0
+  # Run again by itself, from the release it moved to.
+  [ -z "${TM_RELEASE_CHOSEN:-}" ] || return 0
+  if [ -z "$wanted" ]; then
+    mode="$MODE_ARG"
+    [ -n "$mode" ] || mode="$(env_get MODE)"
+    if [ "$mode" = local ]; then wanted=current; else wanted=latest; fi
+  fi
+  [ "$wanted" != current ] || return 0
+  [ ! -f "$ENV_FILE" ] || installed=1
+
+  log "Choosing the TeamTAK release"
+  if ! command -v git > /dev/null || ! repo_git rev-parse --git-dir > /dev/null 2>&1; then
+    [ "$wanted" = latest ] || die "--release needs git and a git checkout of TeamTAK (git clone)"
+    info "not a git checkout: TeamTAK is installed from these files as they are"
+    return 0
+  fi
+  repo_git fetch --quiet --tags \
+    || info "the releases could not be fetched (see above): only those this checkout already knows are used"
+  if [ "$wanted" = latest ]; then
+    tag="$(release_tags | sed -n 1p)"
+    if [ -z "$tag" ]; then
+      info "no release known: TeamTAK is installed from this checkout as it is"
+      return 0
+    fi
+  else
+    tag="v${wanted#[vV]}"
+    case "$tag" in v[0-9]*) ;; *) die "--release takes a version (1.0.4), latest or current, not: $wanted" ;; esac
+    case "$tag" in *[!A-Za-z0-9.-]*) die "--release takes a version (1.0.4), latest or current, not: $wanted" ;; esac
+    repo_git rev-parse --quiet --verify "refs/tags/$tag^{commit}" > /dev/null \
+      || die "no release $tag; the latest ones: $(release_tags | sed -n 1,5p | paste -s -d ' ' -)"
+  fi
+  target="$(repo_git rev-parse "refs/tags/$tag^{commit}")"
+  head="$(repo_git rev-parse HEAD)"
+  if [ "$target" = "$head" ]; then
+    info "TeamTAK ${tag#v}: this checkout is on it"
+    return 0
+  fi
+  if repo_git merge-base --is-ancestor "$target" HEAD && [ "$wanted" = latest ] && [ "$installed" = 1 ]; then
+    info "this checkout ($(teamtak_version)) is ahead of the latest release, ${tag#v}: kept as it is"
+    return 0
+  fi
+  changed="$(repo_git status --porcelain --untracked-files=no)"
+  [ -z "$changed" ] || die "files of this checkout were changed, so it cannot move to ${tag#v}:
+$changed
+Undo the changes (git checkout -- <file>), or keep this code as it is with --release current"
+  if [ "$installed" = 1 ] && repo_git merge-base --is-ancestor "$target" HEAD; then
+    info "going back to ${tag#v}: the database migrations of the newer code are not undone; restore a backup taken before them (README, \"Going back\")"
+  fi
+  info "TeamTAK $(teamtak_version) -> ${tag#v}"
+  repo_git -c advice.detachedHead=false checkout --quiet --detach "refs/tags/$tag" || die "could not check out $tag"
+  export TM_RELEASE_CHOSEN=1
+  exec bash "$REPO_DIR/install.sh" ${RERUN_ARGS[@]+"${RERUN_ARGS[@]}"}
+}
+choose_release
 
 # ----------------------------------------------------------------------------- preflight
 

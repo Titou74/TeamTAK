@@ -85,6 +85,28 @@ teamtak_version() {
   printf '%s\n' "${v:0:128}"
 }
 
+# git in this checkout, run as the user who owns it. install.sh runs as root: what git would
+# write as root (the files of .git, the checked-out files) would then refuse that user's own
+# git commands.
+repo_git() {
+  local owner home
+  owner="$(stat -c %U "$REPO_DIR" 2>/dev/null || stat -f %Su "$REPO_DIR" 2>/dev/null || true)"
+  if [ "$(id -u)" != 0 ] || [ -z "$owner" ] || [ "$owner" = root ] || [ "$owner" = UNKNOWN ]; then
+    git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" "$@"
+  elif command -v sudo > /dev/null; then
+    sudo -u "$owner" -H git -C "$REPO_DIR" "$@"
+  else
+    home="$(getent passwd "$owner" | cut -d: -f6 || true)"
+    runuser -u "$owner" -- env HOME="${home:-/}" git -C "$REPO_DIR" "$@"
+  fi
+}
+
+# The release tags this checkout knows, newest first: v<major>.<minor>.<patch>, pre-releases
+# (v1.1.0-rc.1) left out, as GitHub leaves them out of its latest release.
+release_tags() {
+  repo_git tag --list 'v*' --sort=-v:refname | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' || true
+}
+
 # Loads deploy/.env into the environment. The file is read as KEY=VALUE lines, the way
 # Docker Compose reads it, not executed: values may hold spaces and shell characters.
 load_env() {

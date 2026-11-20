@@ -65,7 +65,8 @@ Installed platforms ask GitHub for the latest release twice a day (see
 [monitoring](monitoring.md)): once it is published, their monitoring page and an alert tell their
 administrators. A draft or a pre-release is not offered to them.
 
-Installations run a release's tag, not `main`: the README has them check out the highest
-`v<major>.<minor>.<patch>` tag on install and on update, and the monitoring page's update command
-names the tag of the latest release. What is committed on `main` reaches them only once it is
-tagged; a tag with a suffix (`v1.1.0-rc.1`) is skipped.
+Installations run a release's tag, not `main`: in production, every run of `install.sh` fetches
+the tags and moves the checkout to the highest `v<major>.<minor>.<patch>` one, then runs again
+from there (`--release` picks another). What is committed on `main` reaches them only once it is
+tagged; a tag with a suffix (`v1.1.0-rc.1`) is skipped. Local mode keeps the checkout as it is, so
+`./install.sh` above runs the code being worked on.

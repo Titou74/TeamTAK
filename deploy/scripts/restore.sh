@@ -132,7 +132,9 @@ log "Preparing the images and the configuration"
 # Builds what is missing (TAK Server from the ZIP, the platform, the agent), renders the
 # configuration from the restored settings and sets the ownership of the restored files.
 # It keeps the restored certificate authority: it only generates one when there is none.
-"$REPO_DIR/install.sh" --no-start --non-interactive > "$WORK/install.log" 2>&1 || { tail -n 30 "$WORK/install.log" >&2; die "install.sh --no-start failed"; }
+# --release current, here and below: the code is the one of this checkout, as it is; it
+# must not move under this script.
+"$REPO_DIR/install.sh" --release current --no-start --non-interactive > "$WORK/install.log" 2>&1 || { tail -n 30 "$WORK/install.log" >&2; die "install.sh --no-start failed"; }
 load_env
 
 # ----------------------------------------------------------------------------- 4. the data
@@ -201,7 +203,7 @@ info "$(grep -c '^dn: ' "$WORK/ldap-restore.ldif") entries loaded"
 # ----------------------------------------------------------------------------- 5. everything
 
 log "Starting the whole stack"
-"$REPO_DIR/install.sh" --non-interactive || die "the stack did not start; see the messages above"
+"$REPO_DIR/install.sh" --release current --non-interactive || die "the stack did not start; see the messages above"
 
 log "Restored from $(basename "$ARCHIVE")"
 info "The platform now runs its first reconciliation: administration, \"TAK server sync\", should show"
