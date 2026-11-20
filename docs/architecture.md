@@ -24,12 +24,15 @@ Everything runs with Docker Compose, in the project `teamtak`.
 | 443, 80 | Web UI in production (80 serves the Let's Encrypt challenge and redirects to HTTPS) |
 | 8480 | Web UI in local mode |
 | 8089, and any other port of `TAK_CLIENT_PORTS` | TAK clients, mutual TLS ([Client ports](configuration.md#client-ports)) |
+| 8443 | TAK Server's API, for TAK clients, mutual TLS: their channels, the files they send ([Channels on the devices](#channels-on-the-devices)) |
 | 8446 | TAK certificate enrollment |
-| 8443, or `TAK_ADMIN_PORT` | TAK Server's own administration pages, served by Caddy to the platform's administrators ([TAK Server's administration](configuration.md#tak-servers-administration)) |
+| 8444, or `TAK_ADMIN_PORT` | TAK Server's own administration pages, served by Caddy to the platform's administrators ([TAK Server's administration](configuration.md#tak-servers-administration)) |
 
-TAK Server's own port 8443 (its API and administration pages) is not published: the platform and
-Caddy reach it over the Docker network. Every client port of the machine leads to the same TLS input of TAK Server, 8089 inside its
-container: TAK Server itself has a single input, and the monitoring watches that one.
+Every client port of the machine leads to the same TLS input of TAK Server, 8089 inside its
+container: TAK Server itself has a single input, and the monitoring watches that one. 8443 of the
+machine is TAK Server's own 8443, published as it is: it asks for a client certificate, and gives
+the administrator role to none of the certificates handed to TAK clients. The platform and Caddy
+reach it over the Docker network.
 
 ## How it works
 
@@ -39,7 +42,8 @@ container: TAK Server itself has a single input, and the monitoring watches that
   sign-in page passes an invisible anti-bot check, and a new code for the same address waits for a
   countdown (see [Login protections](#login-protections)). Who may sign up is a setting (see
   [Sign-ups and team approval](#sign-ups-and-team-approval)).
-- **Teams.** One team is one TAK group (its name is the channel shown in ATAK). By default an
+- **Teams.** One team is one TAK group (its name is the channel shown in ATAK and iTAK, see
+  [Channels on the devices](#channels-on-the-devices)). By default an
   administrator approves team requests and sets the member cap; that is the only approval step,
   and it can be turned off. A team leader invites members by e-mail, up to the cap.
 - **TAK accesses.** The leader picks the mode: one shared identity for the team (the default), or
@@ -69,6 +73,29 @@ container: TAK Server itself has a single input, and the monitoring watches that
   the difference: accounts, group memberships, passwords, certificates that should not work,
   sessions left with no group. What a pass corrects without the platform having asked for it is
   reported as drift in the administration area.
+
+## Channels on the devices
+
+A team's TAK group is what keeps it apart from the other teams: TAK Server only passes a device
+the traffic of its groups, whatever the device shows. ATAK and iTAK also list those groups as
+channels, which the user can switch off and on. Two things make that list appear:
+
+- **The list comes from TAK Server's API.** The device asks for it with its own certificate
+  (`GET /Marti/api/groups/all?useCache=true`) on port 8443 of the server, whatever port it streams
+  on; ATAK reads it there again when TAK Server says the groups changed, an event's group for
+  instance. Hence 8443 is published for TAK clients, and the monitoring shows it as not published
+  when Docker does not lead it to TAK Server. TeamTAK 1.0.7 and older kept 8443 for TAK Server's
+  administration pages, and devices showed no channel at all.
+- **ATAK shows its Channels tool only once told to**, by two preferences: `prefs_enable_channels`
+  and `prefs_enable_channels_host-<server>`. TAK Server hands them out in the profile a device gets
+  when it enrolls (a QR code, a username and password, a zip without certificate), because
+  channels are on in its configuration (`x509useGroupCache`). A device that connects with the
+  certificate of a zip never enrolls, so every zip carries both preferences, for the server's
+  address, as TAK Server writes them.
+
+The group is switched on from the start (`x509useGroupCacheDefaultActive`), and so is an event's
+group when it appears. With a shared identity, a channel switched off on one device is off for all
+the devices of the team (phase 0).
 
 ## Sign-ups and team approval
 

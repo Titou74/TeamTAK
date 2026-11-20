@@ -181,7 +181,7 @@ pub fn tak_admin_url(public_url: &str, raw_port: &str) -> Result<Option<String>>
     Ok(Some(format!("{scheme}://{host}:{port}")))
 }
 
-/// The ports of a list like `8089,8443` (commas or spaces): at least one, none twice, in
+/// The ports of a list like `8089,4443` (commas or spaces): at least one, none twice, in
 /// the order given.
 pub fn parse_ports(raw: &str) -> Result<Vec<u16>> {
     let mut ports = Vec::new();
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn client_ports() {
         assert_eq!(parse_ports("8089").unwrap(), [8089]);
-        assert_eq!(parse_ports("8089,8443, 4443").unwrap(), [8089, 8443, 4443]);
+        assert_eq!(parse_ports("8089,4443, 8090").unwrap(), [8089, 4443, 8090]);
         assert_eq!(parse_ports(" 8090 8089 ").unwrap(), [8090, 8089], "order kept: the first is the main one");
         for bad in ["", " , ", "8089,8089", "0", "65536", "80a", "-1", "8089;8090"] {
             assert!(parse_ports(bad).is_err(), "{bad:?} accepted");
@@ -324,27 +324,27 @@ mod tests {
             admin_ui_cert_name: String::new(),
             admin_ui_cert_file: None,
             public_host: "tak.example.org".into(),
-            client_ports: vec![8089, 8443],
+            client_ports: vec![8089, 4443],
             connection_name: "TeamTAK".into(),
             p12_format: Default::default(),
         };
         assert_eq!(tak.connection_name_on(8089), "TeamTAK");
-        assert_eq!(tak.connection_name_on(8443), "TeamTAK (8443)");
+        assert_eq!(tak.connection_name_on(4443), "TeamTAK (4443)");
     }
 
     #[test]
     fn tak_admin_address() {
         let url = |public: &str, port: &str| tak_admin_url(public, port).unwrap();
-        assert_eq!(url("https://tak.example.org", "8443").as_deref(), Some("https://tak.example.org:8443"));
-        assert_eq!(url("http://localhost:8480", "8443").as_deref(), Some("http://localhost:8443"), "the web UI's port is replaced");
+        assert_eq!(url("https://tak.example.org", "8444").as_deref(), Some("https://tak.example.org:8444"));
+        assert_eq!(url("http://localhost:8480", "8444").as_deref(), Some("http://localhost:8444"), "the web UI's port is replaced");
         assert_eq!(url("http://192.168.1.20:8480/", " 9443 ").as_deref(), Some("http://192.168.1.20:9443"));
-        assert_eq!(url("http://[::1]:8480", "8443").as_deref(), Some("http://[::1]:8443"));
+        assert_eq!(url("http://[::1]:8480", "8444").as_deref(), Some("http://[::1]:8444"));
         for off in ["off", "OFF", "none", ""] {
             assert_eq!(url("https://tak.example.org", off), None, "{off:?}");
         }
         for bad in ["0", "65536", "84a3", "-1"] {
             assert!(tak_admin_url("https://tak.example.org", bad).is_err(), "{bad:?} accepted");
         }
-        assert!(tak_admin_url("tak.example.org", "8443").is_err(), "no scheme");
+        assert!(tak_admin_url("tak.example.org", "8444").is_err(), "no scheme");
     }
 }

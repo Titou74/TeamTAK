@@ -465,6 +465,8 @@ async fn zips_carry_only_the_connection() {
         "useAuth0",
         "cacheCreds0",
         "displayServerConnectionWidget",
+        "prefs_enable_channels",
+        &format!("prefs_enable_channels_host-{host}"),
     ];
 
     let enrollment = Package::open(&team.leader.package(&access, "enrollment").await);
@@ -483,6 +485,9 @@ async fn zips_carry_only_the_connection() {
         for key in package.pref_keys() {
             assert!(allowed.contains(&key.as_str()), "unexpected preference {key}");
         }
+        // ATAK's channels, turned on for this server: the device lists its team's group.
+        assert_eq!(package.pref_value("prefs_enable_channels").as_deref(), Some("true"));
+        assert_eq!(package.pref_value(&format!("prefs_enable_channels_host-{host}")).as_deref(), Some("true"));
         let everything =
             format!("{}{}", package.pref(), String::from_utf8_lossy(&package.files["MANIFEST/manifest.xml"])).to_lowercase();
         for forbidden in ["callsign", "locationteam", "atakroletype", "group", "role"] {
@@ -613,6 +618,34 @@ async fn every_client_port_leads_to_tak_server() {
         assert!(first.sees(device, SEES).await, "the device on {} receives the one on {port}", ports[0]);
     }
     assert!(devices.iter().all(|d| !d.is_closed()));
+}
+
+/// ATAK and iTAK show a team's channel only if they can read it on TAK Server's API, with the
+/// device's certificate, on 8443 of the server whatever port they stream on.
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn a_device_reads_its_teams_channel_on_tak_servers_api() {
+    let admin = Session::admin().await;
+    let alpha = approved_team(&admin, "shared", 5).await;
+    let bravo = approved_team(&admin, "shared", 5).await;
+    let access = create_access(&alpha.leader, &alpha.id, json!({ "kind": "shared" })).await;
+    create_access(&bravo.leader, &bravo.id, json!({ "kind": "shared" })).await;
+    let identity = Package::open(&alpha.leader.package(&access, "certificate").await).identity();
+
+    // As a phone does: it connects, then asks for its channels.
+    let phone = TakClient::connect(&identity, "channels").await.expect("the device connects");
+    let channels = device_channels(&identity).await.unwrap_or_else(|e| {
+        panic!("TAK Server's API must answer TAK clients on {} with their certificate: {e}", tak_api_address())
+    });
+    let names: Vec<&str> = channels.iter().filter_map(|c| c["name"].as_str()).collect();
+    assert!(names.contains(&alpha.slug.as_str()), "the team's channel is listed: {channels:?}");
+    assert!(!names.contains(&bravo.slug.as_str()), "another team's is not: {channels:?}");
+    assert!(names.iter().all(|n| *n == alpha.slug), "nothing but the team's group: {channels:?}");
+    assert!(
+        channels.iter().filter(|c| c["name"] == alpha.slug.as_str()).all(|c| c["active"] == true),
+        "switched on from the start: {channels:?}"
+    );
+    assert!(!phone.is_closed());
 }
 
 #[tokio::test]

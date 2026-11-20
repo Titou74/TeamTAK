@@ -44,7 +44,8 @@ Settings (first run only):
   --tak-admin-port <port|off>
                              Port of this machine where the platform's administrators open
                              TAK Server's own administration pages, after signing in to the
-                             platform (default: 8443). off: not published.
+                             platform (default: 8444). off: not published. Not 8443, which
+                             TAK clients need for TAK Server's API (their channels).
   --tak-enroll-letsencrypt   Production: also give the Let's Encrypt certificate to TAK
                              Server's enrollment port (8446), which QR-code enrollment needs.
   --smtp-host <host> --smtp-port <port> --smtp-username <u> --smtp-password <p>
@@ -413,7 +414,7 @@ if [ ! -f "$ENV_FILE" ]; then
   ADMIN_EMAIL="$ADMIN_EMAIL_ARG" ACME_EMAIL="$ACME_EMAIL_ARG" VALIDITY="$VALIDITY_ARG"
   ENROLL_LE="${ENROLL_LE_ARG:-false}" TAK_PORTS="$TAK_PORTS_ARG"
   # Not asked: refused as a client port while the questions run.
-  TAK_ADMIN_PORT="${TAK_ADMIN_PORT_ARG:-8443}"
+  TAK_ADMIN_PORT="${TAK_ADMIN_PORT_ARG:-$TAK_ADMIN_PORT_DEFAULT}"
   SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="$SMTP_PORT_ARG" SMTP_TLS="$SMTP_TLS_ARG"
   SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG" MAIL_FROM="$MAIL_FROM_ARG"
 
@@ -526,7 +527,7 @@ if [ ! -f "$ENV_FILE" ]; then
     log "Summary"
     info "Mode:                  $MODE"
     info "Web:                   $PUBLIC_URL"
-    info "TAK clients:           $(client_ports_text "$TAK_PORTS"), enrollment $PUBLIC_HOST:8446"
+    info "TAK clients:           $(client_ports_text "$TAK_PORTS"), enrollment $PUBLIC_HOST:8446, API $PUBLIC_HOST:$TAK_API_PORT"
     info "TAK Server admin:      $(admin_text "$TAK_ADMIN_PORT")"
     info "Administrator:         ${ADMIN_EMAIL:-none (later: docker compose exec app teamtak grant-admin <email>)}"
     if [ "$MODE" = production ]; then
@@ -676,21 +677,35 @@ if [ -z "$(env_get TAK_CLIENT_PORTS)" ]; then
   env_set TAK_CLIENT_PORTS 8089
   info "added to $ENV_FILE: TAK_CLIENT_PORTS=8089 (ports TAK clients connect to; add others there)"
 fi
-# TAK Server's administration pages, through Caddy: 8443, unless a TAK client port or another
-# program of this machine already has it.
+# TAK Server's API, 8443 of the machine: TAK clients read their channels there. Until 1.0.7 it
+# was not published, and 8443 could be a client port.
+if port_list "$(env_get TAK_CLIENT_PORTS)" | grep -qx "$TAK_API_PORT"; then
+  die "TAK_CLIENT_PORTS in $ENV_FILE lists $TAK_API_PORT, which TAK clients now need for TAK Server's API (ATAK and iTAK read their channels there). Take $TAK_API_PORT out of TAK_CLIENT_PORTS, put another port in its place if a network needs one, and hand the devices that used it a zip for another port; then run ./install.sh again. TeamTAK was not updated"
+fi
+# TAK Server's administration pages, through Caddy: 8444 (8443 until 1.0.7, which TAK Server's
+# API now needs), unless a TAK client port or another program of this machine already has it.
 if [ -z "$(env_get TAK_ADMIN_UI_CERT_NAME)" ]; then
   env_set TAK_ADMIN_UI_CERT_NAME teamtak-admin-ui
 fi
-if [ -z "$(env_get TAK_ADMIN_PORT)" ]; then
-  if port_list "$(env_get TAK_CLIENT_PORTS)" | grep -qx 8443; then
-    env_set TAK_ADMIN_PORT off
-    info "added to $ENV_FILE: TAK_ADMIN_PORT=off (8443 is a TAK client port here; give another free port to open TAK Server's administration)"
-  elif [ -n "$(client_ports_taken 8443)" ]; then
-    env_set TAK_ADMIN_PORT off
-    info "added to $ENV_FILE: TAK_ADMIN_PORT=off (another program of this machine uses 8443; give another free port to open TAK Server's administration)"
+previous_admin_port="$(env_get TAK_ADMIN_PORT)"
+if [ -z "$previous_admin_port" ] || [ "$previous_admin_port" = "$TAK_API_PORT" ]; then
+  if [ -n "$previous_admin_port" ]; then
+    why="TAK Server's administration pages leave $TAK_API_PORT, which TAK clients now need for TAK Server's API, where they read their channels"
   else
-    env_set TAK_ADMIN_PORT 8443
-    info "added to $ENV_FILE: TAK_ADMIN_PORT=8443 (TAK Server's administration pages, for the platform's administrators)"
+    why="TAK Server's administration pages, for the platform's administrators"
+  fi
+  if port_list "$(env_get TAK_CLIENT_PORTS)" | grep -qx "$TAK_ADMIN_PORT_DEFAULT"; then
+    env_set TAK_ADMIN_PORT off
+    info "$ENV_FILE: TAK_ADMIN_PORT=off ($why; $TAK_ADMIN_PORT_DEFAULT is a TAK client port here: give another free port to open them)"
+  elif [ -n "$(client_ports_taken "$TAK_ADMIN_PORT_DEFAULT")" ]; then
+    env_set TAK_ADMIN_PORT off
+    info "$ENV_FILE: TAK_ADMIN_PORT=off ($why; another program of this machine uses $TAK_ADMIN_PORT_DEFAULT: give another free port to open them)"
+  else
+    env_set TAK_ADMIN_PORT "$TAK_ADMIN_PORT_DEFAULT"
+    info "$ENV_FILE: TAK_ADMIN_PORT=$TAK_ADMIN_PORT_DEFAULT ($why)"
+    if [ -n "$previous_admin_port" ] && [ "$(env_get MODE)" = production ]; then
+      info "open $TAK_ADMIN_PORT_DEFAULT/tcp in the firewall for the administration pages; keep $TAK_API_PORT/tcp open for TAK clients"
+    fi
   fi
 fi
 compose_files="$(env_get COMPOSE_FILE)"
@@ -782,7 +797,7 @@ if [ -z "$ZIP" ]; then
   fi
 fi
 info "mode: $MODE — public host: $PUBLIC_HOST — web: $PUBLIC_URL — client certificates: $CERT_VALIDITY_DAYS days"
-info "TAK clients: $(client_ports_text "$TAK_CLIENT_PORTS")"
+info "TAK clients: $(client_ports_text "$TAK_CLIENT_PORTS"), API (channels) $PUBLIC_HOST:$TAK_API_PORT"
 info "TAK Server admin: $(admin_text "$TAK_ADMIN_PORT")"
 if [ "$NO_START" = 0 ]; then
   # Docker cannot publish a port another program holds, and would only say so once
@@ -791,6 +806,8 @@ if [ "$NO_START" = 0 ]; then
   [ -z "$taken" ] || die "TAK clients' port(s) $taken already used on this machine by another program. Choose other ports in TAK_CLIENT_PORTS ($ENV_FILE), then run ./install.sh again"
   taken="$(client_ports_taken "$(admin_port "$TAK_ADMIN_PORT")")"
   [ -z "$taken" ] || die "port $taken of TAK Server's administration already used on this machine by another program. Choose another port in TAK_ADMIN_PORT ($ENV_FILE), or off, then run ./install.sh again"
+  taken="$(client_ports_taken "$TAK_API_PORT")"
+  [ -z "$taken" ] || die "port $TAK_API_PORT already used on this machine by another program. TAK clients need it to reach TAK Server's API, where they read their channels: free it, then run ./install.sh again"
 fi
 if [ "$MODE" = production ] && [ -z "$SMTP_HOST" ]; then
   info "WARNING: SMTP_HOST is empty in $ENV_FILE: login codes cannot be e-mailed until it is set."
@@ -899,7 +916,7 @@ if [ ! -f "$DATA_DIR/tak/UserAuthenticationFile.xml" ]; then
 fi
 render_core_config
 fix_ownership
-info "CoreConfig.xml rendered (client certificates valid $CERT_VALIDITY_DAYS days, 8443 not published)"
+info "CoreConfig.xml rendered (client certificates valid $CERT_VALIDITY_DAYS days)"
 
 # ----------------------------------------------------------------------------- platform image
 
@@ -928,6 +945,14 @@ fi
 # ----------------------------------------------------------------------------- start
 
 log "Starting the stack"
+# 8443 of the machine passes from Caddy (TAK Server's administration pages, 1.0.7 and older) to
+# TAK Server's API. Compose re-creates both, in no set order: Caddy lets the port go first, so
+# that Docker does not refuse it to TAK Server.
+caddy_id="$(svc_container caddy)"
+if [ -n "$caddy_id" ] && docker port "$caddy_id" 2>/dev/null | grep -q ":$TAK_API_PORT\$"; then
+  info "port $TAK_API_PORT goes from TAK Server's administration pages to TAK Server's API (TAK clients' channels)"
+  compose up -d --no-deps caddy 2>&1 | grep -v -E '^\s*$' | sed 's/^/   /' || true
+fi
 compose up -d --remove-orphans 2>&1 | grep -v -E '^\s*$' | sed 's/^/   /' || true
 if [ -n "$tak_running" ] && [ "$(svc_container takserver)" = "$tak_running" ]; then
   info "CoreConfig.xml changed: restarting TAK Server to load it (clients disconnected for about a minute)"
@@ -977,7 +1002,7 @@ done
 
 log "TeamTAK $TEAMTAK_VERSION is running"
 info "Web:               $PUBLIC_URL"
-info "TAK clients:       $(client_ports_text "$TAK_CLIENT_PORTS") (TLS)   enrollment: $PUBLIC_HOST:8446"
+info "TAK clients:       $(client_ports_text "$TAK_CLIENT_PORTS") (TLS)   enrollment: $PUBLIC_HOST:8446   API (channels): $PUBLIC_HOST:$TAK_API_PORT"
 info "TAK Server admin:  $(admin_text "$TAK_ADMIN_PORT")"
 if [ "$MODE" = local ]; then
   info "Mail catcher:      http://localhost:${MAILPIT_PORT:-8025} (login codes arrive here)"

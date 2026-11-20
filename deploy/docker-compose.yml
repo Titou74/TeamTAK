@@ -3,15 +3,14 @@
 # COMPOSE_FILE in .env:
 #   docker-compose.production.yml   public ports 80/443, Let's Encrypt
 #   docker-compose.local.yml        plain HTTP on localhost, mail catcher
-#   data/docker-compose.ports.yml   the TAK client ports and the port of TAK Server's
-#                                   administration, generated from TAK_CLIENT_PORTS and
-#                                   TAK_ADMIN_PORT
+#   data/docker-compose.ports.yml   the TAK client ports, TAK Server's API port and the
+#                                   port of TAK Server's administration, generated from
+#                                   TAK_CLIENT_PORTS and TAK_ADMIN_PORT
 #
 # Published ports: web (Caddy), the TAK client ports (TAK_CLIENT_PORTS, 8089 by default),
-# 8446 (TAK enrollment) and TAK_ADMIN_PORT (8443 by default: Caddy serves TAK Server's
+# 8446 (TAK enrollment), 8443 (TAK Server's API: TAK clients read their channels there, with
+# their certificate) and TAK_ADMIN_PORT (8444 by default: Caddy serves TAK Server's
 # administration pages there, to the platform's administrators once signed in).
-# TAK Server's own 8443 (API) is NOT published: the platform and Caddy reach it over the
-# Docker network.
 #
 # The host agent is the only service that holds the Docker socket. It sits alone on a
 # network without any way out ("agent"), which only the platform also joins.

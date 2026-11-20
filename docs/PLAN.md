@@ -57,11 +57,13 @@ Docker Compose services: `caddy`, `app` (Rust API + static UI), `postgres` (plat
 - **Host agent**: reports the VPS state and runs privileged actions from an allowlist; the web
   application has no access to the Docker socket.
 - **Exposed ports**: 443 (web; 80 as well, for the ACME challenge and the redirect), 8089 (TAK
-  clients, TLS) and 8446 (TAK enrollment). **TAK Server's 8443 (API) is not published**: the platform
-  reaches it over the Docker network (decided in phase 1). Caddy publishes 8443 of the machine
-  (`TAK_ADMIN_PORT`) for TAK Server's own administration pages: only for the platform's
-  administrators, through their TeamTAK session, with a certificate Caddy alone holds (decided on
-  2026-11-20).
+  clients, TLS), 8443 (TAK Server's API, for TAK clients, mutual TLS) and 8446 (TAK enrollment).
+  Phase 1 had kept TAK Server's 8443 unpublished; real devices then showed no channel, because
+  ATAK and iTAK read their list of groups there, on 8443 whatever port they stream on: it is
+  published as it is since 2026-11-20. Caddy publishes 8444 of the machine (`TAK_ADMIN_PORT`) for
+  TAK Server's own administration pages: only for the platform's administrators, through their
+  TeamTAK session, with a certificate Caddy alone holds (decided on 2026-11-20; on 8443 until the
+  devices needed it).
 
 TAK Server settings found in the official 5.8 guide (`tak/docs/TAK_Server_Configuration_Guide.pdf`
 inside the ZIP), to use in `CoreConfig.xml`, `<auth>` element:

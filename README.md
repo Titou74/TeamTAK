@@ -110,8 +110,9 @@ sudo apt update && sudo apt install -y git unzip openssl
 **2. Point the domain and open the ports.** Create a DNS record for the domain (for example
 `tak.example.org`) that points to the server, and open these ports in the firewall: 80/tcp,
 443/tcp and 443/udp (web), 8089/tcp (TAK clients, plus any other client port you choose at step 5),
-8446/tcp (enrollment) and 8443/tcp (TAK Server's administration pages, for the platform's
-administrators: [TAK Server's administration](docs/configuration.md#tak-servers-administration)).
+8443/tcp (TAK Server's API: TAK clients read their channels there), 8446/tcp (enrollment) and
+8444/tcp (TAK Server's administration pages, for the platform's administrators:
+[TAK Server's administration](docs/configuration.md#tak-servers-administration)).
 The domain must
 resolve before the install runs, because Caddy asks Let's Encrypt for the certificate as soon as it
 starts.
@@ -229,7 +230,7 @@ Without questions:
 | `--admin-email <address>` | First administrator | none |
 | `--cert-validity-days <n>` | Validity of TAK client certificates | 365 |
 | `--tak-client-ports <list>` | Ports TAK clients connect to, separated by commas; the first goes into the zips and QR codes ([Client ports](docs/configuration.md#client-ports)) | `8089` |
-| `--tak-admin-port <port\|off>` | Port where the platform's administrators open TAK Server's own administration pages, after signing in ([TAK Server's administration](docs/configuration.md#tak-servers-administration)) | `8443` |
+| `--tak-admin-port <port\|off>` | Port where the platform's administrators open TAK Server's own administration pages, after signing in; not 8443, which TAK clients need ([TAK Server's administration](docs/configuration.md#tak-servers-administration)) | `8444` |
 | `--tak-enroll-letsencrypt` | Production: Let's Encrypt certificate on port 8446 | off |
 | `--smtp-host`, `--smtp-port`, `--smtp-username`, `--smtp-password`, `--smtp-tls`, `--mail-from` | Outgoing e-mail | mail catcher in local mode |
 | `--acme-email <address>` | Contact given to Let's Encrypt | the administrator's |
@@ -307,6 +308,12 @@ version are removed at the end. The
 platform applies its database migrations by itself when it starts. The script then runs the same
 checks as a first install and stops with an error if the platform cannot reach the directory or
 TAK Server.
+
+**From 1.0.7 or older.** TAK clients now reach TAK Server's API on 8443, where they read their
+channels: without it, a device shows no channel at all. The script publishes it and moves TAK
+Server's administration pages from 8443 to 8444 (it says so). Keep 8443/tcp open in the firewall
+and open 8444/tcp. Devices see their team's channel once they reconnect; a device that still shows
+no Channels tool in ATAK needs its zip again, or its access scanned or entered again.
 
 If files of the repository were changed by hand, the script stops and lists them rather than
 overwrite them. Without access to GitHub it says so and installs from the releases the checkout

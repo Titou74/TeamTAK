@@ -1,11 +1,13 @@
 //! TAK Server's own administration pages, for the platform's administrators.
 //!
-//! Caddy serves them on a port of their own (`TAK_ADMIN_PORT`, 8443 by default) and passes
+//! Caddy serves them on a port of their own (`TAK_ADMIN_PORT`, 8444 by default) and passes
 //! each request on to TAK Server with a certificate TAK Server knows as administrator. Before
 //! that, it asks [`authorize`] whether the browser's TeamTAK session belongs to an
-//! administrator (`forward_auth`). The browser holds no certificate and TAK Server's own
-//! port 8443 is not published: signing in to TeamTAK is the only way in. A browser sends a
-//! cookie to every port of the host that set it, so the web UI's session reaches here.
+//! administrator (`forward_auth`). The browser holds no certificate, and TAK Server's own
+//! port 8443, published for TAK clients (their channels), asks for one and gives the
+//! administrator role to no client certificate: signing in to TeamTAK is the only way in. A
+//! browser sends a cookie to every port of the host that set it, so the web UI's session
+//! reaches here.
 
 use std::collections::HashMap;
 use std::sync::Mutex;

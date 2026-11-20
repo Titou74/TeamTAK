@@ -710,13 +710,14 @@
       "devices_other": "{{count}} connected devices",
       "port": {
         "clients": "TAK clients",
-        "api": "API",
+        "api": "API (devices' channels)",
         "enrollment": "enrollment"
       },
       "open": "answers",
       "closed": "does not answer",
       "notPublished": "not published",
-      "notPublishedHint": "Docker does not publish {{ports}} to TAK Server: run ./install.sh again to apply TAK_CLIENT_PORTS of deploy/.env.",
+      "notPublishedHint": "Docker does not publish {{ports}} to TAK Server: run ./install.sh again to apply deploy/.env.",
+      "apiNotPublishedHint": "Until port 8443 is published, devices do not show their channels.",
       "processes": "Processes",
       "process": {
         "config": "Configuration",

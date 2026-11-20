@@ -24,7 +24,7 @@ The settings worth knowing:
 | `TAK_API_MAX_HEAP`, `TAK_MESSAGING_MAX_HEAP`, … | Java heap sizes of TAK Server in MB; empty lets it size them from the machine's RAM |
 | `TAK_CONNECTION_NAME` | Name of the server shown in ATAK and iTAK (`TeamTAK` by default) |
 | `TAK_CLIENT_PORTS` | Ports of the machine TAK clients connect to, separated by commas (`8089` by default). See [Client ports](#client-ports) |
-| `TAK_ADMIN_PORT` | Port of the machine where the platform's administrators open TAK Server's own administration pages (`8443` by default; `off`: not published). See [TAK Server's administration](#tak-servers-administration) |
+| `TAK_ADMIN_PORT` | Port of the machine where the platform's administrators open TAK Server's own administration pages (`8444` by default; `off`: not published; never `8443`, which TAK clients need). See [TAK Server's administration](#tak-servers-administration) |
 | `SMTP_*`, `MAIL_FROM` | Outgoing e-mail; check it with `docker compose exec app teamtak send-test-mail you@example.org` |
 
 The settings `install.sh` asks for, or reads from its options, are used on the first run only;
@@ -46,8 +46,8 @@ The first port of the list is the default one: it goes into the zips and QR code
 the alternative ports. When there are some, the dialog of an access in the web UI shows them:
 
 - the QR code and zip tabs offer a choice of port, and the iTAK QR code and the zips follow it.
-  A zip for an alternative port carries it in its file name (`alpha-shared-8443.zip`) and in the
-  name of the connection on the device (`TeamTAK (8443)`), so a device holding several
+  A zip for an alternative port carries it in its file name (`alpha-shared-4443.zip`) and in the
+  name of the connection on the device (`TeamTAK (4443)`), so a device holding several
   connections tells them apart; so does the iTAK QR code;
 - the username and password tab lists them beside the default port, for a manual setup.
 
@@ -67,16 +67,21 @@ publish (`./install.sh` not run again) as not published, with an alert
 
 What is refused:
 
+- 8443: TAK Server's API, which TAK clients reach with their certificate to read their channels
+  and send files. ATAK and iTAK look for it on 8443 of the server whatever port they stream on, so
+  the install always publishes it, as it is ([Channels on the devices](architecture.md#channels-on-the-devices)).
+  An installation of 1.0.7 or older that listed 8443 here stops at the update, and says what to
+  change.
 - 8446 (enrollment) and the web interface's ports: 80 and 443 in production, 8480 and 8025 in
   local mode. In production, 443, the port almost every network lets through, belongs to the web
   interface.
-- The port of TAK Server's administration (`TAK_ADMIN_PORT`, 8443 by default).
+- The port of TAK Server's administration (`TAK_ADMIN_PORT`, 8444 by default).
 - A port another program of the machine listens on: the install says which, before building
   anything. Ports this stack already publishes are not counted.
 
-To give 8443 to TAK clients, move TAK Server's administration first: `TAK_ADMIN_PORT` set to
-another port, or to `off`. Enrollment stays on 8446 only: a device on a network that also blocks 8446 needs
-the zip with certificate, which connects without enrolling.
+Enrollment stays on 8446 only: a device on a network that also blocks 8446 needs the zip with
+certificate, which connects without enrolling. A network that blocks 8443 lets the device stream
+and see its team, but its channel list stays empty.
 
 ## TAK Server's administration
 
@@ -85,15 +90,16 @@ missions, data packages, WebTAK. TeamTAK opens them to its administrators, and t
 without any certificate in the browser:
 
 - Open the **TAK Server** link of the web UI's navigation (shown to administrators only), or
-  `https://tak.example.org:8443` directly (`http://localhost:8443` in local mode).
+  `https://tak.example.org:8444` directly (`http://localhost:8444` in local mode).
 - Without a session, or with the session of an account that is not an administrator, the browser
   is sent to the web UI, where the sign-in page is: nothing of TAK Server is shown. The session is
   the web UI's own, so signing in there is enough.
 - Caddy serves that port. For each request it asks the platform whether the session belongs to an
   administrator, then passes the request on to TAK Server's 8443 over the Docker network,
   presenting a certificate of its own (`teamtak-admin-ui`, signed by the platform's authority and
-  declared administrator in TAK Server by the install). TAK Server's own 8443 stays unpublished,
-  and no administrator certificate leaves the server.
+  declared administrator in TAK Server by the install). TAK Server's own 8443, published for TAK
+  clients, asks for a client certificate and gives the administrator role to none of theirs; no
+  administrator certificate leaves the server.
 - The [audit log](monitoring.md#audit-log) records who opened these pages, at most once an hour
   per administrator.
 
@@ -111,9 +117,10 @@ What to know:
   expires. To renew it, delete `deploy/data/tak/certs/teamtak-admin-ui*` and run `./install.sh`
   again.
 - Another port: `TAK_ADMIN_PORT=9443`; none: `TAK_ADMIN_PORT=off`. Then run `./install.sh` again,
-  and open or close the port in the firewall. An installation made before this setting existed
-  gets `8443`, or `off` when 8443 is already one of its TAK client ports or taken by another
-  program.
+  and open or close the port in the firewall. Not 8443, which TAK clients need.
+- An installation made before this setting existed, or with these pages on 8443 (1.0.7 and older),
+  gets `8444` at the update, or `off` when 8444 is one of its TAK client ports or taken by another
+  program; the install says so. Open 8444 in the firewall.
 
 ## Settings fixed at install
 

@@ -9,6 +9,6 @@
 }
 
 # TAK Server's administration pages, with the same certificate (see tak-admin.caddy).
-{$DOMAIN}:8443 {
+{$DOMAIN}:8444 {
 	import tak-admin.caddy
 }

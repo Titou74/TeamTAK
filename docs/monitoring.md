@@ -31,6 +31,11 @@ connections do not go through, and would raise false alarms. What a firewall or 
 front of the server lets through is therefore not seen. Without the agent, the input alone
 decides; the ports it last saw published are kept until it answers again.
 
+**TAK Server's API.** The 8443 line is TAK Server's API, where devices read their channels
+([Channels on the devices](architecture.md#channels-on-the-devices)). The platform reaches it over
+the Docker network; it is shown as **not published**, with the same alert, when Docker does not
+lead 8443 of the machine to it: devices then stream and see their team, but show no channel.
+
 **Swap.** The server's card shows the share of the swap space in use, as the kernel gives it
 (`SwapTotal` and `SwapFree` of `/proc/meminfo`), or "no swap" when the server has none, which is
 common on a VPS: a server without swap is never shown as 0 % used. Swap in use is not a problem by

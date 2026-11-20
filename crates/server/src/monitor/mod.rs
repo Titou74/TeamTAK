@@ -89,16 +89,35 @@ struct Targets {
 /// `TAK_CLIENT_PORTS` is published to it.
 const TAK_INPUT_PORT: u16 = 8089;
 
-/// Ports of the machine Docker publishes to TAK Server's input, from the agent's report.
-/// `None` when the report cannot tell: Docker did not answer, no TAK Server container, or
-/// an agent too old to report them.
-fn published_to_input(report: &Report) -> Option<Vec<u16>> {
+/// The port of the machine where TAK clients reach TAK Server's API: ATAK and iTAK read their
+/// channels there, on 8443 whatever port they stream on (install.sh publishes it as it is).
+const TAK_API_PUBLIC_PORT: u16 = 8443;
+
+/// What Docker publishes to TAK Server, from the agent's report: `(port inside the
+/// container, port of the machine)`, TCP only. `None` when the report cannot tell: Docker
+/// did not answer, no TAK Server container, or an agent too old to report them.
+fn published_to_takserver(report: &Report) -> Option<Vec<(u16, u16)>> {
     if report.containers.error.is_some() {
         return None;
     }
     let takserver = report.containers.containers.iter().find(|c| c.service == "takserver")?;
     let published = takserver.published_ports.as_ref()?;
-    Some(published.iter().filter(|p| p.container_port == TAK_INPUT_PORT && p.protocol == "tcp").map(|p| p.host_port).collect())
+    Some(published.iter().filter(|p| p.protocol == "tcp").map(|p| (p.container_port, p.host_port)).collect())
+}
+
+/// Ports of the machine published to a port of TAK Server's container.
+fn published_to(published: &[(u16, u16)], container_port: u16) -> Vec<u16> {
+    let mut ports: Vec<u16> = published.iter().filter(|(inside, _)| *inside == container_port).map(|(_, host)| *host).collect();
+    ports.sort_unstable();
+    ports.dedup();
+    ports
+}
+
+/// The view of TAK Server's API port. Inside the network the platform reaches it whatever
+/// Docker publishes; TAK clients reach it only when 8443 of the machine leads to it.
+fn api_port_view(api_port: u16, api_open: bool, published: Option<&[(u16, u16)]>) -> PortView {
+    let published = published.map(|list| published_to(list, api_port).contains(&TAK_API_PUBLIC_PORT));
+    PortView { port: api_port, role: "api", open: api_open && published != Some(false), published }
 }
 
 /// One view per port of TAK_CLIENT_PORTS. A port answers when TAK Server's input does and
@@ -129,8 +148,9 @@ pub struct Monitor {
     restarts: Mutex<RestartHistory>,
     /// Certificates the servers presented last time they answered.
     presented: Mutex<BTreeMap<&'static str, CertificateInfo>>,
-    /// Ports of the machine Docker publishes to TAK Server's input, last time the agent told.
-    published: Mutex<Option<Vec<u16>>>,
+    /// What Docker publishes to TAK Server (see [`published_to_takserver`]), last time the
+    /// agent told.
+    published: Mutex<Option<Vec<(u16, u16)>>>,
     last_sample: Mutex<Option<OffsetDateTime>>,
     /// One look at a time.
     cycle: tokio::sync::Mutex<()>,
@@ -423,13 +443,14 @@ impl Monitor {
         // the phones' connections do not go through: the platform would raise false alarms.
         let published = {
             let mut last = self.published.lock().unwrap();
-            if let Some(seen) = report.as_ref().and_then(published_to_input) {
+            if let Some(seen) = report.as_ref().and_then(published_to_takserver) {
                 *last = Some(seen);
             }
             last.clone()
         };
-        let mut ports = client_port_views(&t.client_ports, input_open, published.as_deref());
-        ports.push(PortView { port: t.tak_api_port, role: "api", open: api.open, published: None });
+        let to_input = published.as_deref().map(|list| published_to(list, TAK_INPUT_PORT));
+        let mut ports = client_port_views(&t.client_ports, input_open, to_input.as_deref());
+        ports.push(api_port_view(t.tak_api_port, api.open, published.as_deref()));
         ports.push(PortView { port: t.enroll_port, role: "enrollment", open: enroll.open, published: None });
         let mut failures: Vec<String> = Vec::new();
         for port in ports.iter().filter(|p| !p.open).map(|p| p.port.to_string()) {
@@ -882,11 +903,31 @@ mod tests {
             backups: Default::default(),
             letsencrypt: Default::default(),
         };
-        assert_eq!(published_to_input(&report(vec![takserver.clone()], None)), Some(vec![4443, 8089]));
-        assert_eq!(published_to_input(&report(vec![takserver.clone()], Some("docker: unavailable"))), None, "Docker did not answer");
-        assert_eq!(published_to_input(&report(vec![], None)), None, "no TAK Server container");
+        let published = published_to_takserver(&report(vec![takserver.clone()], None)).unwrap();
+        assert_eq!(published, vec![(8089, 4443), (8089, 8089), (8446, 8446)], "TCP only");
+        assert_eq!(published_to(&published, TAK_INPUT_PORT), vec![4443, 8089]);
+        assert_eq!(published_to_takserver(&report(vec![takserver.clone()], Some("docker: unavailable"))), None, "Docker did not answer");
+        assert_eq!(published_to_takserver(&report(vec![], None)), None, "no TAK Server container");
         let older_agent = ContainerReport { published_ports: None, ..takserver };
-        assert_eq!(published_to_input(&report(vec![older_agent], None)), None, "an agent that does not report them");
+        assert_eq!(published_to_takserver(&report(vec![older_agent], None)), None, "an agent that does not report them");
+    }
+
+    #[test]
+    fn tak_clients_reach_tak_servers_api_only_through_8443_of_the_machine() {
+        let view = |api_open, published: Option<&[(u16, u16)]>| {
+            let v = api_port_view(8443, api_open, published);
+            (v.port, v.role, v.open, v.published)
+        };
+        let both = [(8089, 8089), (8443, 8443)];
+        assert_eq!(view(true, Some(&both)), (8443, "api", true, Some(true)));
+        assert_eq!(
+            view(true, Some(&[(8089, 8089)])),
+            (8443, "api", false, Some(false)),
+            "installed with 1.0.7 or older and ./install.sh not run again: devices get no channels"
+        );
+        assert_eq!(view(true, Some(&[(8089, 8089), (8443, 9443)])), (8443, "api", false, Some(false)), "ATAK looks on 8443 only");
+        assert_eq!(view(false, Some(&both)), (8443, "api", false, Some(true)), "published, but TAK Server does not answer");
+        assert_eq!(view(true, None), (8443, "api", true, None), "without the agent, the network alone decides");
     }
 
     #[test]
