@@ -120,7 +120,10 @@ hammer. Four layers stand in front of the mail server, checked in this order:
    blocked for the hour (`LOGIN_MAX_FAILURES_PER_IP`).
 
 Codes made by the rescue command (`teamtak grant-admin`) go through none of these, nor through
-[invitation-only sign-ups](#sign-ups-and-team-approval): the command creates the account.
+[invitation-only sign-ups](#sign-ups-and-team-approval): the command creates the account. The
+sign-in page offers "I already have a code" only while one of them waits to be used, not consumed,
+not expired and not burnt (`rescue_code_pending` in `GET /api/config`): the first administrator
+sees it right after the install, and once they are in nobody does until the command is run again.
 
 ## QR codes and port 8446
 

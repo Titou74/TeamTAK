@@ -57,6 +57,8 @@ export interface PublicConfig {
   invitation_only: boolean;
   /** False: a team asked for is active at once, without an administrator. */
   team_approval: boolean;
+  /** A code made by the rescue command waits to be used: the sign-in page offers to type it. */
+  rescue_code_pending: boolean;
 }
 
 /** Anti-bot challenge solved before asking for a login code (lib/login-proof.ts). */

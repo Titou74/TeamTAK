@@ -29,7 +29,7 @@ export function LoginPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const errorText = useErrorText();
-  const config = usePublicConfig();
+  const config = usePublicConfig({ refetchOnFocus: true });
   const serverName = config.data?.server_name;
   // Unknown until the configuration is in: the page then says nothing about sign-ups.
   const invitationOnly = config.data?.invitation_only === true;
@@ -173,22 +173,26 @@ export function LoginPage() {
                   <MailIcon />
                   {pending ? t("common.working") : t("login.send")}
                 </Button>
-                {/* For a code obtained another way: the administrator's rescue command. */}
-                <div className="text-center text-sm">
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="px-0"
-                    disabled={!email}
-                    onClick={() => {
-                      setCodeSent(false);
-                      setStep("code");
-                      setError(null);
-                    }}
-                  >
-                    {t("login.haveCode")}
-                  </Button>
-                </div>
+                {/* For a code obtained another way, the administrator's rescue command: offered
+                    only while such a code waits to be used, so not once the first administrator
+                    is in. */}
+                {config.data?.rescue_code_pending && (
+                  <div className="text-center text-sm">
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="px-0"
+                      disabled={!email}
+                      onClick={() => {
+                        setCodeSent(false);
+                        setStep("code");
+                        setError(null);
+                      }}
+                    >
+                      {t("login.haveCode")}
+                    </Button>
+                  </div>
+                )}
               </form>
             ) : (
               <form key="code" onSubmit={(e) => void verify(e)} className="space-y-4">
