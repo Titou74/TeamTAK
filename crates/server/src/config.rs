@@ -65,6 +65,16 @@ impl TakConfig {
     pub fn client_port(&self) -> u16 {
         self.client_ports[0]
     }
+
+    /// Name of the connection in the phones' server list for `port`. An alternative port is
+    /// added to it, so that a device holding the connections of two ports tells them apart.
+    pub fn connection_name_on(&self, port: u16) -> String {
+        if port == self.client_port() {
+            self.connection_name.clone()
+        } else {
+            format!("{} ({port})", self.connection_name)
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -237,7 +247,7 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_ports, parse_release_repository, DEFAULT_RELEASE_REPOSITORY};
+    use super::{parse_ports, parse_release_repository, TakConfig, DEFAULT_RELEASE_REPOSITORY};
 
     #[test]
     fn release_repository() {
@@ -260,5 +270,23 @@ mod tests {
         for bad in ["", " , ", "8089,8089", "0", "65536", "80a", "-1", "8089;8090"] {
             assert!(parse_ports(bad).is_err(), "{bad:?} accepted");
         }
+    }
+
+    #[test]
+    fn connection_name_per_port() {
+        let tak = TakConfig {
+            api_url: String::new(),
+            enroll_url: String::new(),
+            ca_file: Default::default(),
+            api_cert_file: Default::default(),
+            api_key_file: Default::default(),
+            api_cert_name: String::new(),
+            public_host: "tak.example.org".into(),
+            client_ports: vec![8089, 8443],
+            connection_name: "TeamTAK".into(),
+            p12_format: Default::default(),
+        };
+        assert_eq!(tak.connection_name_on(8089), "TeamTAK");
+        assert_eq!(tak.connection_name_on(8443), "TeamTAK (8443)");
     }
 }

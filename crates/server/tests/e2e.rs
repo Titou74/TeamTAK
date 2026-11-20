@@ -268,9 +268,11 @@ async fn zips_carry_only_the_connection() {
     assert_eq!(detail["server"]["port"], main);
     assert_eq!(detail["server"]["ports"], json!(ports));
 
-    // QR strings in the formats found in phase 0, the iTAK one for each client port.
-    for port in &ports {
-        assert_eq!(detail["qr"]["itak"][port.to_string()], format!("TeamTAK,{host},{port},ssl"));
+    // QR strings in the formats found in phase 0, the iTAK one for each client port; the
+    // connection on an alternative port is named after it.
+    assert_eq!(detail["qr"]["itak"][main.to_string()], format!("TeamTAK,{host},{main},ssl"));
+    for port in &ports[1..] {
+        assert_eq!(detail["qr"]["itak"][port.to_string()], format!("TeamTAK ({port}),{host},{port},ssl"));
     }
     assert_eq!(detail["qr"]["atak"], format!("tak://com.atakmap.app/enroll?host={host}&username={username}&token={password}"));
 
@@ -313,10 +315,19 @@ async fn zips_carry_only_the_connection() {
         }
     }
 
-    // A zip can connect on any client port, and on no other.
+    // A zip can connect on any client port, and on no other. The zip of an alternative port
+    // carries it in its file name and in the name of the connection.
     for port in &ports {
-        let zip = Package::open(&team.leader.package_at(&access, "enrollment", &format!("?port={port}")).await);
+        let (name, bytes) = team.leader.package_at(&access, "enrollment", &format!("?port={port}")).await;
+        let zip = Package::open(&bytes);
         assert_eq!(zip.pref_value("connectString0").unwrap(), format!("{host}:{port}:ssl"));
+        if *port == main {
+            assert_eq!(name, format!("{username}-enrollment.zip"));
+            assert_eq!(zip.pref_value("description0").as_deref(), Some("TeamTAK"));
+        } else {
+            assert_eq!(name, format!("{username}-enrollment-{port}.zip"));
+            assert_eq!(zip.pref_value("description0").unwrap(), format!("TeamTAK ({port})"));
+        }
     }
     for port in ["1", "8446", "x"] {
         team.leader.get(&format!("/accesses/{access}/package/enrollment?port={port}")).await.expect_error(400, "invalid_input");

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DownloadIcon, EyeIcon, EyeOffIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -52,16 +52,25 @@ function QrPanel({ value, title, help }: { value: string; title: string; help: s
 /** The port ATAK connects on after enrolling from its QR code, which carries none. */
 const ATAK_DEFAULT_PORT = 8089;
 
-/** Which of TAK Server's client ports the QR code, the zips and the manual setup use. */
-function PortPicker({ ports, main, value, onChange }: { ports: number[]; main: number; value: number; onChange: (port: number) => void }) {
+interface PortPickerProps {
+  ports: number[];
+  main: number;
+  value: number;
+  onChange: (port: number) => void;
+  help: string;
+}
+
+/** Which of TAK Server's client ports the QR code or the zips of a tab use. */
+function PortPicker({ ports, main, value, onChange, help }: PortPickerProps) {
   const { t } = useTranslation();
+  const labelId = useId();
   return (
     <div className="space-y-2 rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span id="access-port-label" className="text-sm font-medium">
+        <span id={labelId} className="text-sm font-medium">
           {t("access.port.label")}
         </span>
-        <div role="radiogroup" aria-labelledby="access-port-label" className="flex flex-wrap gap-1.5">
+        <div role="radiogroup" aria-labelledby={labelId} className="flex flex-wrap gap-1.5">
           {ports.map((port) => (
             <Button
               key={port}
@@ -78,7 +87,7 @@ function PortPicker({ ports, main, value, onChange }: { ports: number[]; main: n
           ))}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">{t("access.port.help", { port: main })}</p>
+      <p className="text-xs text-muted-foreground">{help}</p>
     </div>
   );
 }
@@ -106,8 +115,12 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
   const notifyError = useNotifyError();
   const [downloading, setDownloading] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"regenerate" | "remove" | null>(null);
+  // The port of the iTAK QR code and of the zips; the manual setup lists them all.
   const [port, setPort] = useState(access.server.port);
-  const severalPorts = access.server.ports.length > 1;
+  const main = access.server.port;
+  const alternatives = access.server.ports.filter((p) => p !== main);
+  const picker = (help: string) =>
+    alternatives.length > 0 && <PortPicker ports={access.server.ports} main={main} value={port} onChange={setPort} help={help} />;
 
   async function download(form: "enrollment" | "certificate") {
     setDownloading(form);
@@ -152,7 +165,6 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
           <AlertDescription>{t("access.sharedNote.text")}</AlertDescription>
         </Alert>
       )}
-      {severalPorts && <PortPicker ports={access.server.ports} main={access.server.port} value={port} onChange={setPort} />}
       <Tabs defaultValue="qr">
         <TabsList className="w-full">
           <TabsTrigger value="qr">{t("access.tabs.qr")}</TabsTrigger>
@@ -161,6 +173,7 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
         </TabsList>
 
         <TabsContent value="qr" className="space-y-3 pt-2">
+          {picker(t("access.port.qrHelp", { port: main }))}
           <div className="grid gap-3 sm:grid-cols-2">
             <QrPanel
               value={access.qr.atak}
@@ -173,6 +186,7 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
         </TabsContent>
 
         <TabsContent value="zip" className="space-y-3 pt-2">
+          {picker(t("access.port.zipHelp", { port: main }))}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
               <p className="font-medium">{t("access.zip.certificateTitle")}</p>
@@ -191,21 +205,22 @@ function AccessBody({ access, onChanged, onClose }: AccessBodyProps) {
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {t("access.zip.note")}
-            {severalPorts && <> {t("access.zip.port", { port })}</>}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("access.zip.note")}</p>
         </TabsContent>
 
         <TabsContent value="manual" className="pt-2">
           <dl className="rounded-lg border bg-card px-3 text-sm">
             <Field label={t("access.manual.host")} value={access.server.host} />
-            <Field label={t("access.manual.port")} value={String(port)} />
+            <Field label={t("access.manual.port")} value={String(main)} />
+            {alternatives.length > 0 && <Field label={t("access.manual.alternativePorts")} value={alternatives.join(", ")} />}
             <Field label={t("access.manual.enrollPort")} value={String(access.server.enroll_port)} />
             <Field label={t("access.manual.username")} value={access.username} />
             <Field label={t("access.manual.password")} value={access.password} secret />
           </dl>
-          <p className="pt-2 text-xs text-muted-foreground">{t("access.manual.help")}</p>
+          <p className="pt-2 text-xs text-muted-foreground">
+            {t("access.manual.help")}
+            {alternatives.length > 0 && <> {t("access.manual.alternativeHelp", { port: main })}</>}
+          </p>
         </TabsContent>
       </Tabs>
 

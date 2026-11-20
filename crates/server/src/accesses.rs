@@ -353,7 +353,7 @@ pub async fn access_detail(
     let itak: serde_json::Map<String, Value> = tak
         .client_ports
         .iter()
-        .map(|port| (port.to_string(), json!(itak_qr(&tak.connection_name, &tak.public_host, *port))))
+        .map(|port| (port.to_string(), json!(itak_qr(&tak.connection_name_on(*port), &tak.public_host, *port))))
         .collect();
     Ok(Json(json!({
         "id": access.id,
@@ -449,7 +449,8 @@ pub struct PackageQuery {
 /// `GET /api/accesses/{id}/package/{form}?port=`: a connection zip. `enrollment` holds the
 /// server address and the truststore, and the client enrolls with the username and
 /// password; `certificate` also holds a client certificate and connects as it is. The zip
-/// connects on `port`, which must be one of the client ports.
+/// connects on `port`, which must be one of the client ports; an alternative port is added
+/// to the zip's name and to the name of the connection.
 pub async fn access_package(
     State(state): State<SharedState>,
     CurrentAccount(account): CurrentAccount,
@@ -462,16 +463,18 @@ pub async fn access_package(
         Some(raw) => raw.parse().ok().filter(|p| tak.client_ports.contains(p)).ok_or(ApiError::InvalidInput)?,
     };
     let (access, ctx, _) = access_context(&state, access_id, &account).await?;
+    // The zip of an alternative port carries it in its name, beside the zips of the main one.
+    let suffix = if port == tak.client_port() { String::new() } else { format!("-{port}") };
     let (client, file_name) = match form.as_str() {
-        "enrollment" => (None, format!("{}-enrollment.zip", access.username)),
+        "enrollment" => (None, format!("{}-enrollment{suffix}.zip", access.username)),
         "certificate" => {
             ctx.team.require_active()?;
-            (Some(package_certificate(&state, &access).await?), format!("{}.zip", access.username))
+            (Some(package_certificate(&state, &access).await?), format!("{}{suffix}.zip", access.username))
         }
         _ => return Err(ApiError::NotFound),
     };
     let package = ConnectionPackage {
-        description: tak.connection_name.clone(),
+        description: tak.connection_name_on(port),
         host: tak.public_host.clone(),
         port,
         truststore_p12: state.truststore_p12.clone(),

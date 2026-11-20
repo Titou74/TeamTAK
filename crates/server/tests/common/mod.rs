@@ -420,16 +420,19 @@ impl Session {
 
     /// Downloads a connection zip.
     pub async fn package(&self, access_id: &str, form: &str) -> Vec<u8> {
-        self.package_at(access_id, form, "").await
+        self.package_at(access_id, form, "").await.1
     }
 
-    /// Downloads a connection zip with a query string (`?port=8443`).
-    pub async fn package_at(&self, access_id: &str, form: &str, query: &str) -> Vec<u8> {
+    /// Downloads a connection zip with a query string (`?port=8443`): its file name and its
+    /// bytes.
+    pub async fn package_at(&self, access_id: &str, form: &str, query: &str) -> (String, Vec<u8>) {
         let url = format!("{}/api/accesses/{access_id}/package/{form}{query}", base_url());
         let response = self.http.get(url).send().await.unwrap();
         assert!(response.status().is_success(), "package {form}: HTTP {}", response.status());
         assert_eq!(response.headers()["content-type"], "application/zip");
-        response.bytes().await.unwrap().to_vec()
+        let disposition = response.headers()["content-disposition"].to_str().unwrap();
+        let name = disposition.split("filename=\"").nth(1).and_then(|rest| rest.split('"').next()).unwrap().to_string();
+        (name, response.bytes().await.unwrap().to_vec())
     }
 }
 

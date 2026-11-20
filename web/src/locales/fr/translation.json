@@ -191,7 +191,8 @@
     "port": {
       "label": "Port du serveur",
       "main": "{{port}} (par défaut)",
-      "help": "Si le port {{port}} est bloqué sur le réseau de l'appareil, choisissez-en un autre. Le QR code iTAK, les zips et la configuration manuelle utilisent le port choisi ici."
+      "qrHelp": "Si le port {{port}} est bloqué sur le réseau de l'appareil, choisissez un port alternatif : le QR code iTAK l'utilise.",
+      "zipHelp": "Si le port {{port}} est bloqué sur le réseau de l'appareil, choisissez un port alternatif : les zips l'utilisent."
     },
     "tabs": {
       "qr": "QR code",
@@ -212,18 +213,19 @@
       "enrollmentTitle": "Zip sans certificat",
       "enrollmentHelp": "L'appareil demande l'identifiant et le mot de passe, puis obtient son propre certificat auprès du serveur.",
       "download": "Télécharger",
-      "note": "Importez le fichier dans ATAK ou iTAK (Importer, puis choisissez le zip).",
-      "port": "Ces zips se connectent sur le port {{port}}."
+      "note": "Importez le fichier dans ATAK ou iTAK (Importer, puis choisissez le zip)."
     },
     "manual": {
       "host": "Adresse du serveur",
       "port": "Port",
+      "alternativePorts": "Ports alternatifs",
       "enrollPort": "Port d'enrôlement",
       "username": "Identifiant",
       "password": "Mot de passe",
       "show": "Afficher le mot de passe",
       "hide": "Masquer le mot de passe",
-      "help": "Pour une configuration manuelle : ajoutez un serveur TAK avec cette adresse et ce port en SSL, cochez « Enroll for client certificate », puis saisissez l'identifiant et le mot de passe."
+      "help": "Pour une configuration manuelle : ajoutez un serveur TAK avec cette adresse et ce port en SSL, cochez « Enroll for client certificate », puis saisissez l'identifiant et le mot de passe.",
+      "alternativeHelp": "Si le port {{port}} est bloqué sur le réseau de l'appareil, utilisez plutôt l'un des ports alternatifs."
     },
     "certificates": {
       "none": "Aucun certificat émis pour l'instant.",

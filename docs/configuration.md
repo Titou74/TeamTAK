@@ -38,11 +38,18 @@ TAK clients connect to TAK Server on port 8089 by default. Two situations call f
 TAK_CLIENT_PORTS=8089,8443,4443
 ```
 
-The first port of the list is the default one: it goes into the zips and QR codes. When the list
-holds several ports, the dialog of an access in the web UI shows a choice of port; the iTAK QR
-code, the zips and the manual setup then use the port chosen. The ATAK QR code carries no port,
-so ATAK connects on its default port, 8089 (not checked on a device): for another port, hand over
-a zip, or change the port in ATAK's server settings after scanning.
+The first port of the list is the default one: it goes into the zips and QR codes. The others are
+the alternative ports. When there are some, the dialog of an access in the web UI shows them:
+
+- the QR code and zip tabs offer a choice of port, and the iTAK QR code and the zips follow it.
+  A zip for an alternative port carries it in its file name (`alpha-shared-8443.zip`) and in the
+  name of the connection on the device (`TeamTAK (8443)`), so a device holding several
+  connections tells them apart; so does the iTAK QR code;
+- the username and password tab lists them beside the default port, for a manual setup.
+
+The ATAK QR code carries no port, so ATAK connects on its default port, 8089 (not checked on a
+device): for another port, hand over a zip, or change the port in ATAK's server settings after
+scanning.
 
 Every port listed leads to the same TLS input of TAK Server (8089 inside its container), so TAK
 Server's configuration does not change. Docker publishes them through

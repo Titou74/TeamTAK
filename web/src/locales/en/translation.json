@@ -184,7 +184,8 @@
     "port": {
       "label": "Server port",
       "main": "{{port}} (default)",
-      "help": "If port {{port}} is blocked on the device's network, choose another one. The iTAK QR code, the zips and the manual setup use the port chosen here."
+      "qrHelp": "If port {{port}} is blocked on the device's network, choose an alternative port: the iTAK QR code uses it.",
+      "zipHelp": "If port {{port}} is blocked on the device's network, choose an alternative port: the zips use it."
     },
     "tabs": {
       "qr": "QR code",
@@ -205,18 +206,19 @@
       "enrollmentTitle": "Zip without certificate",
       "enrollmentHelp": "The device asks for the username and password, then obtains its own certificate from the server.",
       "download": "Download",
-      "note": "Import the file in ATAK or iTAK (Import, then pick the zip).",
-      "port": "These zips connect on port {{port}}."
+      "note": "Import the file in ATAK or iTAK (Import, then pick the zip)."
     },
     "manual": {
       "host": "Server address",
       "port": "Port",
+      "alternativePorts": "Alternative ports",
       "enrollPort": "Enrollment port",
       "username": "Username",
       "password": "Password",
       "show": "Show the password",
       "hide": "Hide the password",
-      "help": "For a manual setup: add a TAK server with this address and port over SSL, tick “Enroll for client certificate”, and enter the username and password."
+      "help": "For a manual setup: add a TAK server with this address and port over SSL, tick “Enroll for client certificate”, and enter the username and password.",
+      "alternativeHelp": "If port {{port}} is blocked on the device's network, use one of the alternative ports instead."
     },
     "certificates": {
       "none": "No certificate issued yet.",
