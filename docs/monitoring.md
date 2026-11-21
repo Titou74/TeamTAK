@@ -10,6 +10,7 @@ probed while a page loads.
 | The server: processor, load, memory, swap, each filesystem (Docker's data included), uptime, whether the clock is synchronised, pending system updates with the security ones apart, "restart required" | The host agent |
 | The services of this stack: state, health, restarts, image, and whether a newer image exists | The host agent, and the registries for the last point |
 | TAK Server: each port of `TAK_CLIENT_PORTS` (8089 by default), 8443 and 8446, version, its five processes, connected devices | The platform itself, over the Docker network; which ports Docker publishes, and the processes, from the agent |
+| The video server, when it is on: the streams live now (team, protocol, since when, how many watch), how many streams the teams declared, its ports | Its control API, over the Docker network; never a key |
 | Certificates: root and intermediate authority, TAK Server's, the platform's, the one of TAK Server's administration pages (when they are open), the Let's Encrypt ones, client certificates | The platform's files, what each port presents, and its database |
 | The platform: last clean synchronisation, drift, whether the starts and ends of events were applied, e-mails that failed | The platform's database |
 | TeamTAK's version, and the latest release published on GitHub | The platform itself, and GitHub for the last point |
@@ -35,6 +36,14 @@ decides; the ports it last saw published are kept until it answers again.
 ([Channels on the devices](architecture.md#channels-on-the-devices)). The platform reaches it over
 the Docker network; it is shown as **not published**, with the same alert, when Docker does not
 lead 8443 of the machine to it: devices then stream and see their team, but show no channel.
+
+**The video server.** Its card lists the streams someone publishes to or watches, with the team
+that declared each one, how the device publishes (RTSP, RTMP, SRT) and how many devices watch: each
+of them costs the server as much upload as the stream's bitrate. The keys are a secret of the
+teams and are not shown. The `mediamtx` service is in the services table like the others, with its
+alerts and its restart button; restarting it cuts every stream for a few seconds, and devices
+reconnect by themselves. Its image holds no shell, so it has no health check: when its control API
+does not answer, the card says so.
 
 **Swap.** The server's card shows the share of the swap space in use, as the kernel gives it
 (`SwapTotal` and `SwapFree` of `/proc/meminfo`), or "no swap" when the server has none, which is
@@ -109,7 +118,7 @@ simulates an upgrade against the package lists the server last downloaded; it do
 them. If the page says the lists are old, the server's own daily `apt update` is not running
 (`unattended-upgrades` or `apt-daily.timer`).
 
-"A newer image exists" means, for an image pulled by tag (Caddy, PostgreSQL), that the registry now
+"A newer image exists" means, for an image pulled by tag (Caddy, PostgreSQL, the video server), that the registry now
 serves another image under the same tag. The directory's image is pinned to one exact build; a
 newer build is shown for information. Registries are asked twice a day at most. The images built on
 the server carry their version: TAK Server's (`teamtak/takserver:5.8-RELEASE-103`), and for the

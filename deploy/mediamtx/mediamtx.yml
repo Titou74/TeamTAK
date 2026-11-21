@@ -1,0 +1,52 @@
+# The video server of TeamTAK: MediaMTX 1.21, mounted read-only by docker-compose.video.yml.
+# Only the settings that differ from MediaMTX's defaults, or that TeamTAK relies on, are here.
+# The published ports of the machine are set in deploy/.env (VIDEO_*_PORT); inside the
+# container they stay these.
+
+logLevel: info
+
+# Every device that wants to publish or watch is checked by the platform, on its internal
+# port: a declared stream, valid now (its team active, its event running), and the right key
+# (crates/server/src/video.rs). The user says which key: "publish" or "view".
+authMethod: http
+authHTTPAddress: http://app:8081/internal/video/auth
+# The control API asks for nothing: only the platform reaches it, over the "video" network,
+# and its port is not published.
+authHTTPExclude:
+  - action: api
+api: true
+apiAddress: :9997
+metrics: false
+pprof: false
+playback: false
+
+# RTSP over TCP only: one port to open in the firewall, and it goes through NAT. The feeds
+# TAK Server hands to ATAK ask for TCP.
+rtsp: true
+rtspTransports: [tcp]
+rtspEncryption: "no"
+rtspAddress: :8554
+# Basic: the platform needs the key itself to check it.
+rtspAuthMethods: [basic]
+
+rtmp: true
+rtmpEncryption: "no"
+rtmpAddress: :1935
+
+# UDP. The user and the key go in the stream ID: publish:<path>:<user>:<key>.
+srt: true
+srtAddress: :8890
+
+# Not offered for now: watching in a browser, and the newer protocols.
+hls: false
+webrtc: false
+moq: false
+
+pathDefaults:
+  source: publisher
+  # Nothing is recorded.
+  record: false
+
+# Any path: the platform decides which ones exist (the declared streams).
+paths:
+  all_others:

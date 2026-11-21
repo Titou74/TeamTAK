@@ -1,5 +1,5 @@
 //! What the platform asks of TAK Server: issue and revoke certificates, push group changes
-//! to connected clients, list and cut sessions.
+//! to connected clients, list and cut sessions, register video feeds.
 //!
 //! [`TakServer`] is the only way the rest of the code reaches it. The production backend
 //! talks to the TAK Server 5.8 HTTPS API ([`http::HttpTakServer`]);
@@ -57,6 +57,18 @@ pub struct Subscription {
     pub client: Option<String>,
 }
 
+/// A video feed of TAK Server's video manager, as the platform reads and writes it: one feed
+/// per video collection, both with the same identifier and name. TAK Server hands it to the
+/// clients that share a group with it (ATAK lists it among its videos).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VideoFeed {
+    pub uid: String,
+    /// The name devices show.
+    pub alias: String,
+    /// Where devices play it from, credentials included.
+    pub url: String,
+}
+
 /// A certificate the platform obtained on behalf of an account.
 #[derive(Clone)]
 pub struct EnrolledCertificate {
@@ -99,6 +111,14 @@ pub trait TakServer: Send + Sync {
     /// Obtains a certificate for `username` the way a TAK client does: a key and a signing
     /// request made here, signed by the server after it checked `password` in the directory.
     async fn enroll(&self, username: &str, password: &str, client_uid: &str) -> Result<EnrolledCertificate, TakError>;
+    /// Every video feed of the video manager. The platform's certificate sees them all,
+    /// whatever their group.
+    async fn video_feeds(&self) -> Result<Vec<VideoFeed>, TakError>;
+    /// Registers a feed for the members of `group` only.
+    async fn add_video_feed(&self, feed: &VideoFeed, group: &str) -> Result<(), TakError>;
+    /// Changes the name and address of a feed; its group stays.
+    async fn update_video_feed(&self, feed: &VideoFeed) -> Result<(), TakError>;
+    async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError>;
 }
 
 /// SHA-256 fingerprint in the form used across the platform.

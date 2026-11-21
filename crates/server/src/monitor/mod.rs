@@ -45,6 +45,7 @@ use tokio::sync::Notify;
 use crate::config::Config;
 use crate::mail::Mailer;
 use crate::settings::{self, Stored};
+use crate::video::VideoServer;
 
 use self::agent::{AgentCallError, AgentClient};
 use self::probes::{host_port, tcp_open, tls_probe, TlsProbe};
@@ -160,6 +161,8 @@ pub struct Monitor {
     release_running: AtomicBool,
     /// When the webhook was last posted to, and the outcome.
     webhook_last: Mutex<Option<(OffsetDateTime, Result<u16, String>)>>,
+    /// The video server; `None` when it is turned off.
+    video: Option<Arc<VideoServer>>,
 }
 
 /// Restart counters of each service over the recent past.
@@ -198,7 +201,14 @@ struct Collected {
 }
 
 impl Monitor {
-    pub fn new(config: &Config, db: PgPool, tak: Arc<dyn TakServer>, mailer: Arc<Mailer>, secrets: SecretBox) -> Self {
+    pub fn new(
+        config: &Config,
+        db: PgPool,
+        tak: Arc<dyn TakServer>,
+        mailer: Arc<Mailer>,
+        secrets: SecretBox,
+        video: Option<Arc<VideoServer>>,
+    ) -> Self {
         let (tak_host, tak_api_port) = host_port(&config.tak.api_url, 8443).unwrap_or(("takserver".into(), 8443));
         let (enroll_host, enroll_port) = host_port(&config.tak.enroll_url, 8446).unwrap_or((tak_host.clone(), 8446));
         // The proxy's certificate is only worth reading when the UI is served over HTTPS.
@@ -255,7 +265,48 @@ impl Monitor {
             images_running: AtomicBool::new(false),
             release_running: AtomicBool::new(false),
             webhook_last: Mutex::new(None),
+            video,
         }
+    }
+
+    /// What the video server carries now: the streams someone publishes to or watches, with
+    /// their team. Never a key.
+    async fn video_view(&self) -> Option<VideoView> {
+        let server = self.video.as_ref()?;
+        let answer = tokio::time::timeout(Duration::from_secs(6), server.live_paths())
+            .await
+            .unwrap_or_else(|_| Err("the video server did not answer in time".into()));
+        let declared: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT s.group_name || '/' || s.name, s.label, t.name FROM video_streams s JOIN teams t ON t.id = s.team_id",
+        )
+        .fetch_all(&self.db)
+        .await
+        .unwrap_or_default();
+        let endpoints = &server.endpoints;
+        let ports = VideoPorts { rtsp: endpoints.rtsp_port, rtmp: endpoints.rtmp_port, srt: endpoints.srt_port };
+        Some(match answer {
+            Ok(paths) => {
+                let mut live: Vec<LiveStreamView> = paths
+                    .iter()
+                    .filter(|p| p.ready || !p.readers.is_empty())
+                    .map(|p| {
+                        let known = declared.iter().find(|(path, _, _)| *path == p.name);
+                        LiveStreamView {
+                            path: p.name.clone(),
+                            label: known.map(|(_, label, _)| label.clone()),
+                            team: known.map(|(_, _, team)| team.clone()),
+                            publishing: p.ready,
+                            since: p.ready_time.clone(),
+                            protocol: p.source.as_ref().map(|s| s.protocol()),
+                            readers: p.readers.len(),
+                        }
+                    })
+                    .collect();
+                live.sort_by(|a, b| a.path.cmp(&b.path));
+                VideoView { reachable: true, error: None, declared: declared.len(), live, ports }
+            }
+            Err(e) => VideoView { reachable: false, error: Some(e), declared: declared.len(), live: Vec::new(), ports },
+        })
     }
 
     /// The latest look; `None` until the first one is done.
@@ -558,6 +609,7 @@ impl Monitor {
             identified: subscriptions.as_ref().map(|s| s.iter().filter(|s| !s.username.is_empty()).count()).unwrap_or(0),
             unidentified: subscriptions.as_ref().map(|s| s.iter().filter(|s| s.username.is_empty()).count()).unwrap_or(0),
         };
+        let video = self.video_view().await;
         let snapshot = Snapshot {
             collected_at: now,
             interval_seconds: t.interval.as_secs(),
@@ -572,6 +624,7 @@ impl Monitor {
             platform,
             backups,
             devices,
+            video,
         };
         Ok(Collected { snapshot, observations: obs, subscriptions })
     }

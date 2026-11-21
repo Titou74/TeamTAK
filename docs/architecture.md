@@ -16,6 +16,7 @@ Everything runs with Docker Compose, in the project `teamtak`.
 | `takserver`, `takserver-db` | TAK Server and its database, built from the official tak.gov ZIP of the installed version (5.8 so far) |
 | `agent` | The host agent: reads the state of the machine and of this stack, takes the backups, restarts a service on request. The only service that holds the Docker socket |
 | `mailpit` | Local mode only: catches outgoing e-mail so login codes can be read |
+| `mediamtx` | The video server ([MediaMTX](https://github.com/bluenviron/mediamtx), MIT licence), when `VIDEO=on`: drones, cameras and phones publish to it, ATAK and other players watch from it ([Video streams](#video-streams)) |
 
 ## Ports
 
@@ -27,6 +28,7 @@ Everything runs with Docker Compose, in the project `teamtak`.
 | 8443 | TAK Server's API, for TAK clients, mutual TLS: their channels, the files they send ([Channels on the devices](#channels-on-the-devices)) |
 | 8446 | TAK certificate enrollment |
 | 8444, or `TAK_ADMIN_PORT` | TAK Server's own administration pages, served by Caddy to the platform's administrators ([TAK Server's administration](configuration.md#tak-servers-administration)) |
+| 8554/tcp, 1935/tcp, 8890/udp, or `VIDEO_*_PORT` | The video server, when `VIDEO=on`: RTSP, RTMP and SRT ([Video streams](#video-streams)) |
 
 Every client port of the machine leads to the same TLS input of TAK Server, 8089 inside its
 container: TAK Server itself has a single input, and the monitoring watches that one. 8443 of the
@@ -68,11 +70,16 @@ reach it over the Docker network.
   it. The leaders of a team put in are told by e-mail and can still make their team leave; the
   administrators are then told. An event hosted by a team stays the team's to run: an
   administrator can only cancel it.
+- **Video streams.** A member or a leader declares a stream (a drone, a camera, a phone) for the
+  team's channel or for an event's; it gets an address to publish to and one to watch from, each
+  with its own key, and TAK Server lists it to the members of that channel, so ATAK shows it
+  without anything to type ([Video streams](#video-streams)).
 - **Reconciliation.** PostgreSQL is the source of truth. After every change, every minute, and at
   the instant an event starts or ends, a pass compares it with OpenLDAP and TAK Server and corrects
   the difference: accounts, group memberships, passwords, certificates that should not work,
-  sessions left with no group. What a pass corrects without the platform having asked for it is
-  reported as drift in the administration area.
+  sessions left with no group, the video feeds TAK Server lists, and the devices still using a
+  video stream that no longer works. What a pass corrects without the platform having asked for
+  it is reported as drift in the administration area.
 
 ## Channels on the devices
 
@@ -96,6 +103,54 @@ channels, which the user can switch off and on. Two things make that list appear
 The group is switched on from the start (`x509useGroupCacheDefaultActive`), and so is an event's
 group when it appears. With a shared identity, a channel switched off on one device is off for all
 the devices of the team (phase 0).
+
+## Video streams
+
+The video server, MediaMTX, runs next to TAK Server when `VIDEO=on` (the default of a new
+installation; [configuration](configuration.md#video-server)). It carries the streams; the
+platform decides which exist and who may use them.
+
+- **A stream is declared.** On the team page, a leader or a member gives it a name ("Drone 1") and
+  a channel: the team's, or that of an event the team takes part in and that is not over. Its path
+  on the video server is `<channel>/<name>`, for example `alpha/drone-1` or
+  `evt-exercise/drone-1`. A team has at most 20 streams per channel. A member manages (changes the
+  keys of, deletes) the streams they declared, a leader every stream of the team.
+- **Two keys of its own.** One to publish (`publish` user), one to watch (`view` user). They are
+  not TAK passwords: RTSP, RTMP and SRT send them unencrypted, and a key that leaks opens that one
+  stream, never a TAK account. They are derived from `APP_SECRET`, the stream's identifier and a
+  generation that *Change the keys* raises; nothing is stored. The keys are a secret of the team:
+  its leaders and members see them, an administrator does not, and the audit log records who was
+  shown them.
+- **The addresses handed out** name the public host and the published ports:
+  `rtsp://publish:<key>@host:8554/alpha/drone-1`,
+  `rtmp://host:1935/alpha/drone-1?user=publish&pass=<key>`,
+  `srt://host:8890?streamid=publish:alpha/drone-1:publish:<key>` (and the same with `view` and
+  `read` to watch). RTSP only goes over TCP: one port to open, and it crosses NAT.
+- **The video server asks the platform** about every device that connects (MediaMTX's HTTP
+  authentication): the platform answers on its internal port, 8081, which Caddy does not pass on,
+  over a Docker network the two share alone (`video`). A device is let in when the path is that of
+  a declared stream, the stream is valid now, and the key is the right one for what it asks:
+  publishing takes the publish key, watching either key.
+- **Valid while its channel exists**: the team is active and, for an event's stream, the event
+  runs and the team takes part. It is the rule of the team's TAK groups, applied at the same
+  instants. Outside it, the keys are refused.
+- **In ATAK by itself.** The reconciliation registers each valid stream in TAK Server's video
+  manager, for the channel's group only (`POST /Marti/api/video?group=…`), with the view address
+  and RTSP over TCP. TAK Server hands a feed to the devices that share a group with it, so a
+  stream shows up in ATAK among the server's videos for the channel's members and nobody else; an
+  event's streams appear at its start and leave at its end. New keys update the address there.
+  Feeds whose identifier does not start with `teamtak-video-` were registered by someone else and
+  are left alone.
+- **Devices cut when a stream stops working.** The video server checks a key when a device
+  connects, not afterwards. *Change the keys* and *Delete* disconnect at once whoever publishes
+  to or watches the stream; at the end of an event, when a team is suspended or deleted, the
+  reconciliation pass does the same (journal: "Devices disconnected from a video stream").
+- **Nothing is recorded**, and nothing of the video server needs a backup: the streams are in the
+  platform's database, their keys follow from `APP_SECRET`.
+
+What the platform reads of the video server, the live streams and their viewers, comes from its
+control API (9997), which is not published either. The team page shows each stream live or not;
+the monitoring page lists the live streams of every team ([monitoring](monitoring.md)).
 
 ## Sign-ups and team approval
 

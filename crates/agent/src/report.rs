@@ -14,9 +14,13 @@ pub const CORE_SERVICES: &[&str] = &["caddy", "app", "postgres", "openldap", "ta
 /// Present in local mode only (the mail catcher).
 pub const LOCAL_SERVICES: &[&str] = &["mailpit"];
 
+/// Present when the video server is turned on (`VIDEO=on` in deploy/.env).
+pub const VIDEO_SERVICES: &[&str] = &["mediamtx"];
+
 /// Services an administrator may restart from the web UI. The agent itself is not in it: a
 /// process cannot reliably answer a request that kills it.
-pub const RESTARTABLE_SERVICES: &[&str] = &["caddy", "app", "postgres", "openldap", "takserver", "takserver-db", "mailpit"];
+pub const RESTARTABLE_SERVICES: &[&str] =
+    &["caddy", "app", "postgres", "openldap", "takserver", "takserver-db", "mailpit", "mediamtx"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Report {
@@ -302,7 +306,10 @@ mod tests {
     fn the_agent_never_offers_to_restart_itself_or_an_unknown_service() {
         assert!(!RESTARTABLE_SERVICES.contains(&"agent"));
         for service in RESTARTABLE_SERVICES {
-            assert!(CORE_SERVICES.contains(service) || LOCAL_SERVICES.contains(service), "{service}");
+            assert!(
+                CORE_SERVICES.contains(service) || LOCAL_SERVICES.contains(service) || VIDEO_SERVICES.contains(service),
+                "{service}"
+            );
         }
     }
 

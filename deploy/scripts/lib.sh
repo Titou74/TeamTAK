@@ -180,7 +180,8 @@ port_list() { printf '%s\n' "$1" | tr ', \t' '\n\n\n' | grep -v '^$' || true; }
 # A list written the way deploy/.env keeps it: "8089,4443".
 normalize_ports() { port_list "$1" | paste -s -d , - ; }
 
-# What TeamTAK itself publishes on a port of the machine, in a mode; empty when nothing.
+# What TeamTAK itself publishes on a port of the machine (TCP), in a mode; empty when
+# nothing. The video server's ports count while it is turned on (VIDEO).
 own_port_use() {
   case "$2:$1" in
     *:8446) echo "TAK Server's enrollment port" ;;
@@ -188,6 +189,13 @@ own_port_use() {
     production:80|production:443) echo "the web interface's" ;;
     local:"${WEB_PORT:-8480}") echo "the web interface's" ;;
     local:"${MAILPIT_PORT:-8025}") echo "the mail catcher's" ;;
+    *)
+      if video_on "${VIDEO:-off}"; then
+        case "$1" in
+          "${VIDEO_RTSP_PORT:-$VIDEO_RTSP_PORT_DEFAULT}") echo "the video server's RTSP port (VIDEO_RTSP_PORT)" ;;
+          "${VIDEO_RTMP_PORT:-$VIDEO_RTMP_PORT_DEFAULT}") echo "the video server's RTMP port (VIDEO_RTMP_PORT)" ;;
+        esac
+      fi ;;
   esac
 }
 
@@ -257,6 +265,61 @@ render_ports_compose() {
       echo "      - \"\${BIND_ADDRESS}:$admin:$TAK_ADMIN_CADDY_PORT\""
     fi
   } > "$DEPLOY_DIR/$PORTS_COMPOSE_FILE"
+}
+
+# ----------------------------------------------------------------------------- video server
+# The video server (MediaMTX, docker-compose.video.yml) runs when VIDEO=on. Devices reach it
+# on three ports of the machine: RTSP and RTMP over TCP, SRT over UDP. Inside its container
+# they stay 8554, 1935 and 8890.
+VIDEO_COMPOSE_FILE="docker-compose.video.yml"
+VIDEO_RTSP_PORT_DEFAULT=8554
+VIDEO_RTMP_PORT_DEFAULT=1935
+VIDEO_SRT_PORT_DEFAULT=8890
+
+# True for a switch that is on (VIDEO=on).
+video_on() {
+  case "${1:-}" in on|ON|On|true|yes) return 0 ;; esac
+  return 1
+}
+
+# The video server's TCP ports, separated by spaces; empty when it is off.
+video_tcp_ports() {
+  video_on "${VIDEO:-off}" || return 0
+  printf '%s %s' "${VIDEO_RTSP_PORT:-$VIDEO_RTSP_PORT_DEFAULT}" "${VIDEO_RTMP_PORT:-$VIDEO_RTMP_PORT_DEFAULT}"
+}
+
+# Prints why the video server's ports cannot be used, and fails; silent when they can, or
+# when it is off. Usage: video_ports_problem <mode>
+video_ports_problem() {
+  local rtsp="${VIDEO_RTSP_PORT:-$VIDEO_RTSP_PORT_DEFAULT}" rtmp="${VIDEO_RTMP_PORT:-$VIDEO_RTMP_PORT_DEFAULT}"
+  local srt="${VIDEO_SRT_PORT:-$VIDEO_SRT_PORT_DEFAULT}" port use
+  video_on "${VIDEO:-off}" || return 0
+  for port in "$rtsp" "$rtmp" "$srt"; do
+    case "$port" in ''|*[!0-9]*|0*) echo "$port is not a port number"; return 1 ;; esac
+    [ "${#port}" -le 5 ] && [ "$port" -le 65535 ] || { echo "$port is not a port number"; return 1; }
+  done
+  [ "$rtsp" != "$rtmp" ] || { echo "VIDEO_RTSP_PORT and VIDEO_RTMP_PORT are the same port, $rtsp"; return 1; }
+  # Against everything else TeamTAK publishes over TCP, the video server itself left out
+  # (the subshell keeps VIDEO=off to itself).
+  for port in "$rtsp" "$rtmp"; do
+    use="$(VIDEO=off own_port_use "$port" "$1")"
+    [ -z "$use" ] || { echo "port $port is $use"; return 1; }
+    if port_list "${TAK_CLIENT_PORTS:-8089}" | grep -qx "$port"; then echo "port $port is a TAK client port (TAK_CLIENT_PORTS)"; return 1; fi
+    [ "$port" != "$(admin_port "${TAK_ADMIN_PORT:-}")" ] || { echo "port $port is TAK Server's administration port (TAK_ADMIN_PORT)"; return 1; }
+  done
+  # Caddy answers HTTP/3 on 443/udp in production.
+  if [ "$1" = production ] && [ "$srt" = 443 ]; then echo "port 443/udp is the web interface's"; return 1; fi
+  return 0
+}
+
+# The text of install.sh's summary: where devices reach the video server.
+video_text() {
+  if video_on "${VIDEO:-off}"; then
+    printf 'RTSP %s:%s, RTMP %s:%s, SRT %s:%s/udp' "$PUBLIC_HOST" "${VIDEO_RTSP_PORT:-$VIDEO_RTSP_PORT_DEFAULT}" \
+      "$PUBLIC_HOST" "${VIDEO_RTMP_PORT:-$VIDEO_RTMP_PORT_DEFAULT}" "$PUBLIC_HOST" "${VIDEO_SRT_PORT:-$VIDEO_SRT_PORT_DEFAULT}"
+  else
+    printf 'off (VIDEO=off)'
+  fi
 }
 
 # ----------------------------------------------------------------------------- TAK Server administration

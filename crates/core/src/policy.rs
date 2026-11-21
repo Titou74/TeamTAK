@@ -120,6 +120,20 @@ pub enum Action {
     /// Restart a service, run a backup, hand over the Let's Encrypt certificate, change the
     /// monitoring settings: everything that goes through the host agent.
     OperatePlatform,
+    /// Declare a video stream for the team's channel, or for the channel of an event the
+    /// team takes part in.
+    CreateVideoStream,
+    /// See the addresses and keys of one of the team's video streams.
+    UseVideoStream,
+    /// Regenerate the keys of a video stream of the team, or delete it.
+    ManageVideoStream(VideoStreamRef),
+}
+
+/// How the video stream looked at relates to the caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoStreamRef {
+    /// True when the caller declared it.
+    pub declared_by_actor: bool,
 }
 
 /// The single authorisation rule of the platform.
@@ -139,6 +153,11 @@ pub enum Action {
 ///   inviting or answering belongs to the teams. An administrator can also organise an
 ///   event of their own, which no team hosts, and put teams in it directly; such a team
 ///   takes part without answering, and its leaders can still make it leave.
+///
+/// Video streams belong to the team, like its accesses: every leader and member declares
+/// streams (a phone, a drone) and sees the keys of the team's streams; a member manages the
+/// streams they declared, a leader every stream of the team. An administrator sees that they
+/// exist, not their keys.
 ///
 /// Monitoring belongs to the administrators: the machine, the services, the alerts, the
 /// audit log and the actions on the stack. One part of it is shared with team leaders, for
@@ -170,6 +189,12 @@ pub fn can(actor: Actor, action: Action) -> bool {
         }
         Action::ViewTeamDevices => actor.is_admin || actor.team_role == Some(Leader),
         Action::ViewAllDevices | Action::ViewMonitoring | Action::OperatePlatform => actor.is_admin,
+        Action::CreateVideoStream | Action::UseVideoStream => actor.team_role.is_some(),
+        Action::ManageVideoStream(v) => match actor.team_role {
+            Some(Leader) => true,
+            Some(Member) => v.declared_by_actor,
+            None => false,
+        },
     }
 }
 
@@ -229,8 +254,27 @@ mod tests {
             Action::ViewAllDevices,
             Action::ViewMonitoring,
             Action::OperatePlatform,
+            Action::CreateVideoStream,
+            Action::UseVideoStream,
+            Action::ManageVideoStream(VideoStreamRef { declared_by_actor: true }),
         ] {
             assert!(!can(OUTSIDER, action), "{action:?}");
+        }
+    }
+
+    #[test]
+    fn video_streams_belong_to_the_team() {
+        let mine = Action::ManageVideoStream(VideoStreamRef { declared_by_actor: true });
+        let someone_elses = Action::ManageVideoStream(VideoStreamRef { declared_by_actor: false });
+        for actor in [LEADER, MEMBER] {
+            assert!(can(actor, Action::CreateVideoStream), "{actor:?}");
+            assert!(can(actor, Action::UseVideoStream), "{actor:?}");
+            assert!(can(actor, mine), "{actor:?}");
+        }
+        assert!(can(LEADER, someone_elses), "a leader manages every stream of the team");
+        assert!(!can(MEMBER, someone_elses), "a member, only the ones they declared");
+        for action in [Action::CreateVideoStream, Action::UseVideoStream, mine, someone_elses] {
+            assert!(!can(ADMIN, action), "an administrator holds no key of a team: {action:?}");
         }
     }
 

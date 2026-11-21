@@ -32,6 +32,8 @@ import type {
   TeamEvents,
   TeamMode,
   TeamRole,
+  TeamVideo,
+  VideoStreamDetail,
 } from "./types";
 
 export class ApiError extends Error {
@@ -147,6 +149,15 @@ export const api = {
   answerEvent: (teamId: string, eventId: string, accept: boolean) =>
     json<Synced & { accepted: boolean }>("POST", `/teams/${teamId}/events/${eventId}/answer`, { accept }),
   leaveEvent: (teamId: string, eventId: string) => json<Synced>("POST", `/teams/${teamId}/events/${eventId}/leave`),
+
+  // Video streams of a team's channel and of the events it takes part in.
+  teamVideo: (teamId: string) => json<TeamVideo>("GET", `/teams/${teamId}/video`),
+  /** `event_id`: the event whose channel the stream is for; none for the team's own. */
+  createVideoStream: (teamId: string, body: { label: string; event_id?: string }) =>
+    json<Synced & { id: string; path: string }>("POST", `/teams/${teamId}/video`, body),
+  videoStream: (id: string) => json<VideoStreamDetail>("GET", `/video-streams/${id}`),
+  regenerateVideoStream: (id: string) => json<Synced>("POST", `/video-streams/${id}/regenerate`),
+  deleteVideoStream: (id: string) => json<Synced>("DELETE", `/video-streams/${id}`),
 
   adminTeams: () => json<AdminTeams>("GET", "/admin/teams"),
   adminEvents: () => json<{ events: TeamEvent[] }>("GET", "/admin/events"),

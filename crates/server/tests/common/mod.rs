@@ -131,6 +131,97 @@ pub async fn start_platform() {
     }
 }
 
+// ------------------------------------------------------------------------------- video
+
+/// Image of the scripted video devices: MediaMTX's own, with ffmpeg in it.
+pub const FFMPEG_IMAGE: &str = "bluenviron/mediamtx:1.21.4-ffmpeg";
+
+/// The Compose project of the stack: `COMPOSE_PROJECT_NAME` of deploy/.env, else `teamtak`.
+pub fn compose_project() -> String {
+    env().get("COMPOSE_PROJECT_NAME").cloned().unwrap_or_else(|| "teamtak".to_string())
+}
+
+/// The network the video server listens on, where the scripted devices are started: they
+/// reach it as `mediamtx`, on the ports inside its container.
+pub fn video_network() -> String {
+    format!("{}_video", compose_project())
+}
+
+/// Runs ffmpeg in a container of the video network until it ends; true when it succeeded,
+/// with what it printed.
+pub fn ffmpeg(args: &[&str]) -> (bool, String) {
+    let output = Command::new("docker")
+        .args(["run", "--rm", "--network", &video_network(), "--entrypoint", "ffmpeg", FFMPEG_IMAGE, "-hide_banner", "-loglevel", "error"])
+        .args(args)
+        .output()
+        .expect("docker run");
+    (output.status.success(), format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)))
+}
+
+/// Publishes a test picture for `seconds` (H.264, 10 frames a second) in `format` (`rtsp`,
+/// `flv` for RTMP, `mpegts` for SRT); true when it was accepted throughout.
+pub fn publish_for(seconds: u32, format: &str, url: &str) -> (bool, String) {
+    let duration = seconds.to_string();
+    ffmpeg(&[
+        "-re", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10", "-t", &duration, "-c:v", "libx264", "-preset", "ultrafast",
+        "-tune", "zerolatency", "-g", "10", "-f", format, url,
+    ])
+}
+
+/// Reads a stream for two seconds; true when frames came.
+pub fn watch(url: &str) -> (bool, String) {
+    let mut args = vec![];
+    if url.starts_with("rtsp://") {
+        args.extend(["-rtsp_transport", "tcp"]);
+    }
+    args.extend(["-i", url, "-t", "2", "-f", "null", "-"]);
+    ffmpeg(&args)
+}
+
+/// A device publishing in the background until it is stopped, or the video server cuts it.
+pub struct Publisher {
+    name: String,
+}
+
+impl Publisher {
+    pub fn start(format: &str, url: &str, seconds: u32) -> Self {
+        let name = unique("e2e-publisher-");
+        let duration = seconds.to_string();
+        let output = Command::new("docker")
+            .args(["run", "-d", "--name", &name, "--network", &video_network(), "--entrypoint", "ffmpeg", FFMPEG_IMAGE])
+            .args(["-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10", "-t", &duration])
+            .args(["-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-g", "10", "-f", format, url])
+            .output()
+            .expect("docker run");
+        assert!(output.status.success(), "publisher not started: {}", String::from_utf8_lossy(&output.stderr));
+        Self { name }
+    }
+
+    /// True while its ffmpeg runs.
+    pub fn is_running(&self) -> bool {
+        let output = Command::new("docker").args(["inspect", "-f", "{{.State.Running}}", &self.name]).output().unwrap();
+        String::from_utf8_lossy(&output.stdout).trim() == "true"
+    }
+
+    /// Waits until it stops by itself (cut by the video server, or refused); false on timeout.
+    pub async fn stopped_within(&self, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if !self.is_running() {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        false
+    }
+}
+
+impl Drop for Publisher {
+    fn drop(&mut self) {
+        let _ = Command::new("docker").args(["rm", "-f", &self.name]).output();
+    }
+}
+
 // ------------------------------------------------------------------------------- settings
 
 /// Platform settings changed for the length of a test. When it is dropped, at the end of the
@@ -833,6 +924,21 @@ pub fn tak_api_address() -> std::net::SocketAddr {
 /// (`GET /Marti/api/groups/all?useCache=true`). Each entry has `name`, `direction` (`IN`,
 /// `OUT`) and `active`. An error says what answered instead.
 pub async fn device_channels(identity: &Identity) -> Result<Vec<Value>, String> {
+    let value = device_api_get(identity, "/Marti/api/groups/all?useCache=true").await?;
+    value["data"].as_array().cloned().ok_or_else(|| format!("no data: {value}"))
+}
+
+/// The video feeds TAK Server lists to a device, the way ATAK reads the server's videos: on
+/// its API, with the device's certificate (`GET /Marti/api/video`). Each entry is a video
+/// collection: `uuid`, `alias`, and its `feeds` with their `url`.
+pub async fn device_video_feeds(identity: &Identity) -> Result<Vec<Value>, String> {
+    let value = device_api_get(identity, "/Marti/api/video").await?;
+    value["videoConnections"].as_array().cloned().ok_or_else(|| format!("no videoConnections: {value}"))
+}
+
+/// A GET on TAK Server's API with a device's certificate, as JSON. An error says what
+/// answered instead.
+pub async fn device_api_get(identity: &Identity, path: &str) -> Result<Value, String> {
     install_crypto();
     let chain: Vec<CertificateDer<'static>> = identity.chain.iter().cloned().map(CertificateDer::from).collect();
     let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key.clone()));
@@ -847,15 +953,14 @@ pub async fn device_channels(identity: &Identity) -> Result<Vec<Value>, String> 
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())?;
-    let url = format!("https://{TAK_SERVER_NAME}:{}/Marti/api/groups/all?useCache=true", address.port());
-    let answer = http.get(&url).send().await.map_err(|e| format!("{url} ({address}): {e:?}"))?;
+    let url = format!("https://{TAK_SERVER_NAME}:{}{path}", address.port());
+    let answer = http.get(&url).header("Accept", "application/json").send().await.map_err(|e| format!("{url} ({address}): {e:?}"))?;
     let status = answer.status();
     let body = answer.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!("{url} ({address}): HTTP {status}: {body}"));
     }
-    let value: Value = serde_json::from_str(&body).map_err(|e| format!("{url}: not JSON ({e}): {body}"))?;
-    value["data"].as_array().cloned().ok_or_else(|| format!("{url}: no data: {body}"))
+    serde_json::from_str(&body).map_err(|e| format!("{url}: not JSON ({e}): {body}"))
 }
 
 // ------------------------------------------------------------------------------- TAK client

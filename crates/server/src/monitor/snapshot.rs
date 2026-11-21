@@ -25,6 +25,43 @@ pub struct Snapshot {
     pub backups: BackupsView,
     pub letsencrypt: Option<LetsEncryptReport>,
     pub devices: DeviceCounts,
+    /// The video server; `None` when it is turned off.
+    pub video: Option<VideoView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VideoView {
+    /// Its control API answered.
+    pub reachable: bool,
+    pub error: Option<String>,
+    /// Streams the teams declared, valid or not.
+    pub declared: usize,
+    /// Streams someone publishes to or watches now.
+    pub live: Vec<LiveStreamView>,
+    pub ports: VideoPorts,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VideoPorts {
+    pub rtsp: u16,
+    pub rtmp: u16,
+    /// UDP.
+    pub srt: u16,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LiveStreamView {
+    pub path: String,
+    /// The stream's label and team, when a team declared it.
+    pub label: Option<String>,
+    pub team: Option<String>,
+    /// A device publishes to it.
+    pub publishing: bool,
+    pub since: Option<String>,
+    /// `rtsp`, `rtmp`, `srt`…: how the device publishes.
+    pub protocol: Option<&'static str>,
+    /// Devices watching it.
+    pub readers: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -388,6 +388,100 @@
       "done": "Votre équipe a quitté l'événement."
     }
   },
+  "video": {
+    "title": "Vidéo",
+    "description": "Les drones, caméras et téléphones qui diffusent sur un canal. Chaque flux apparaît tout seul dans ATAK, pour les membres de son canal et personne d'autre, tant que le canal existe.",
+    "unreachable": "Le serveur vidéo ne répond pas : impossible de savoir pour l'instant quels flux sont en direct.",
+    "none": "Aucun flux pour l'instant.",
+    "byTeam": "par {{team}}",
+    "addresses": "Adresses",
+    "declaredOn": "Déclaré le {{date}}",
+    "regeneratedOn": "Clés changées le {{date}}",
+    "qrHelp": "Scannez-le avec le téléphone qui filme, puis collez l'adresse dans son application de diffusion.",
+    "channel": {
+      "team": "Canal de l'équipe",
+      "event": "Événement « {{name}} »",
+      "scheduledHelp": "Les flux de cet événement fonctionnent de son début à sa fin, et seulement pour les équipes qui y participent."
+    },
+    "state": {
+      "live": "En direct",
+      "offline": "Ne diffuse pas",
+      "inactive": "Inactif",
+      "watching_one": "{{count}} spectateur",
+      "watching_many": "{{count}} spectateurs",
+      "watching_other": "{{count}} spectateurs",
+      "waiting_one": "{{count}} en attente",
+      "waiting_many": "{{count}} en attente",
+      "waiting_other": "{{count}} en attente",
+      "since": "depuis {{relative}}"
+    },
+    "add": {
+      "label": "Nouveau flux",
+      "placeholder": "Drone 1, Caméra avant…",
+      "channel": "Canal",
+      "submit": "Déclarer",
+      "help": "Le nom qu'affiche ATAK. Il donne aussi la fin de l'adresse du flux (drone-1). Chaque flux a ses propres clés : une pour diffuser, une pour regarder.",
+      "pendingSync": "Le flux est déclaré, mais TAK Server n'a pas encore pu être prévenu : il apparaîtra dans ATAK d'ici une minute."
+    },
+    "dialog": {
+      "description": "Où diffuser ce flux, et où le regarder.",
+      "teamChannel": "{{path}}, sur le canal de l'équipe.",
+      "eventChannel": "{{path}}, sur le canal de l'événement « {{event}} »."
+    },
+    "inactive": {
+      "title": "Ce flux ne fonctionne pas en ce moment",
+      "event": "Son événement n'a pas commencé, est terminé, ou l'équipe n'y participe plus : le serveur vidéo refuse ses clés et ATAK ne le liste pas. Il refonctionne pendant que l'événement se déroule.",
+      "team": "L'équipe n'est pas active : le serveur vidéo refuse ses clés et ATAK ne le liste pas."
+    },
+    "tabs": {
+      "publish": "Diffuser",
+      "view": "Regarder",
+      "manual": "Réglages"
+    },
+    "publish": {
+      "intro": "Donnez l'une de ces adresses au drone, à la caméra ou au téléphone qui filme. Elles contiennent la clé de diffusion.",
+      "rtmpHelp": "DJI, OBS, Larix",
+      "srtHelp": "réseaux instables (UDP)",
+      "rtspHelp": "caméras, ffmpeg",
+      "qrTitle": "Adresse en QR code",
+      "warning": "Qui a la clé de diffusion peut diffuser à la place de ce flux. Les protocoles ne la chiffrent pas : si elle est allée où il ne fallait pas, changez les clés."
+    },
+    "view": {
+      "atakTitle": "Rien à saisir dans ATAK",
+      "atakText": "TAK Server liste ce flux aux membres du canal {{channel}}, et à personne d'autre : il apparaît parmi les vidéos du serveur dans ATAK. Les adresses ci-dessous servent aux autres lecteurs.",
+      "rtspHelp": "ATAK, iTAK, VLC",
+      "srtHelp": "VLC, ffmpeg (UDP)",
+      "rtmpHelp": "anciens lecteurs",
+      "warning": "La clé de lecture permet seulement de regarder. Changer les clés déconnecte tous ceux qui regardent."
+    },
+    "manual": {
+      "host": "Serveur",
+      "ports": "Ports",
+      "portsValue": "RTSP {{rtsp}}, RTMP {{rtmp}}, SRT {{srt}} (UDP)",
+      "path": "Chemin",
+      "publishUser": "Utilisateur de diffusion",
+      "publishKey": "Clé de diffusion",
+      "viewUser": "Utilisateur de lecture",
+      "viewKey": "Clé de lecture",
+      "help": "Pour une application qui demande chaque élément à part. En RTMP, l'utilisateur et la clé vont dans l'adresse (?user=…&pass=…) ; en SRT, dans l'identifiant du flux (publish:chemin:utilisateur:clé, ou read:… pour regarder)."
+    },
+    "regenerate": {
+      "action": "Changer les clés",
+      "title": "Changer les clés de ce flux ?",
+      "text": "Tout appareil qui y diffuse ou le regarde est déconnecté. Il faut redonner les nouvelles adresses aux drones, caméras et lecteurs ; ATAK reçoit la sienne de TAK Server.",
+      "confirm": "Changer les clés",
+      "done": "Nouvelles clés : donnez les nouvelles adresses aux appareils.",
+      "pending": "Nouvelles clés. TAK Server n'a pas encore pu être prévenu : ATAK reçoit la nouvelle adresse d'ici une minute."
+    },
+    "remove": {
+      "action": "Supprimer",
+      "title": "Supprimer ce flux ?",
+      "text": "Il disparaît d'ATAK, et tout appareil qui y diffuse ou le regarde est déconnecté. Ses clés ne fonctionnent plus, définitivement.",
+      "confirm": "Supprimer le flux",
+      "done": "Flux supprimé.",
+      "pending": "Flux supprimé. TAK Server n'a pas encore pu être prévenu : il quitte ATAK d'ici une minute."
+    }
+  },
   "profile": {
     "title": "Profil",
     "description": "La façon dont vous apparaissez aux membres de vos équipes, la langue de ce site et des e-mails que vous recevez, et l'affichage clair ou sombre de ce site.",
@@ -522,7 +616,11 @@
       "certificate_revoked": "Certificat révoqué",
       "orphan_certificate_revoked": "Certificat sans accès révoqué",
       "session_cut": "Session coupée",
-      "groups_refreshed": "Groupes transmis à l'appareil connecté"
+      "groups_refreshed": "Groupes transmis à l'appareil connecté",
+      "video_feed_added": "Flux vidéo listé dans TAK Server",
+      "video_feed_updated": "Adresse d'un flux vidéo mise à jour dans TAK Server",
+      "video_feed_removed": "Flux vidéo retiré de TAK Server",
+      "video_stopped": "Appareils déconnectés d'un flux vidéo"
     },
     "triggers": {
       "change": "Modification sur la plateforme",
@@ -705,7 +803,7 @@
         "unknown": "Pas encore comparée"
       },
       "updateHelpTitle": "Ce que veut dire « image plus récente », et comment mettre à jour",
-      "updateHelp": "Chaque image est figée. Pour une image tirée par son étiquette (Caddy, PostgreSQL, le capteur de mails), « plus récente » veut dire que le registre sert désormais une autre image sous la même étiquette : une version corrective ou une reconstruction. L'image de l'annuaire est figée sur une construction précise, volontairement ; une construction plus récente est signalée pour information, et y passer est un changement du fichier Compose à tester d'abord. Les images construites sur ce serveur suivent la version de TAK Server et ce dépôt. Les registres sont interrogés au plus deux fois par jour. La plateforme ne télécharge jamais une image d'elle-même ; en SSH :",
+      "updateHelp": "Chaque image est figée. Pour une image tirée par son étiquette (Caddy, PostgreSQL, le capteur de mails, le serveur vidéo), « plus récente » veut dire que le registre sert désormais une autre image sous la même étiquette : une version corrective ou une reconstruction. L'image de l'annuaire est figée sur une construction précise, volontairement ; une construction plus récente est signalée pour information, et y passer est un changement du fichier Compose à tester d'abord. Les images construites sur ce serveur suivent la version de TAK Server et ce dépôt. Les registres sont interrogés au plus deux fois par jour. La plateforme ne télécharge jamais une image d'elle-même ; en SSH :",
       "updateCommandLabel": "la commande qui met à jour les images",
       "updateAvailable": "Une image plus récente est disponible pour au moins un service.",
       "restart": "Redémarrer",
@@ -718,7 +816,8 @@
         "app": "Ce site ne répond plus pendant quelques secondes, puis revient. Les clients TAK ne sont pas touchés.",
         "caddy": "Ce site devient inaccessible pendant quelques secondes, puis revient. Les clients TAK ne sont pas touchés.",
         "other": "Le service s'arrête quelques secondes et redémarre.",
-        "mailpit": "Le capteur de mails s'arrête quelques secondes et oublie les messages qu'il détient."
+        "mailpit": "Le capteur de mails s'arrête quelques secondes et oublie les messages qu'il détient.",
+        "mediamtx": "Tous les flux s'arrêtent quelques secondes ; les drones, caméras et lecteurs se reconnectent d'eux-mêmes. Les clients TAK ne sont pas concernés."
       },
       "restarted": "{{service}} a été redémarré.",
       "restartAccepted": "{{service}} redémarre : cette page peut cesser de répondre un instant."
@@ -763,6 +862,23 @@
       "unidentified_one": "{{count}} session sans canal",
       "unidentified_many": "{{count}} sessions sans canal",
       "unidentified_other": "{{count}} sessions sans canal"
+    },
+    "video": {
+      "title": "Serveur vidéo",
+      "notAnswering": "Ne répond pas",
+      "live_one": "{{count}} flux en direct",
+      "live_many": "{{count}} flux en direct",
+      "live_other": "{{count}} flux en direct",
+      "readers_one": "{{count}} spectateur",
+      "readers_many": "{{count}} spectateurs",
+      "readers_other": "{{count}} spectateurs",
+      "declared_one": "{{count}} flux déclaré",
+      "declared_many": "{{count}} flux déclarés",
+      "declared_other": "{{count}} flux déclarés",
+      "ports": "Les appareils le joignent sur les ports RTSP {{rtsp}}/tcp, RTMP {{rtmp}}/tcp et SRT {{srt}}/udp de ce serveur.",
+      "streamLive": "en direct depuis {{relative}} · {{protocol}}",
+      "streamWaiting": "personne ne diffuse",
+      "help": "Les équipes déclarent leurs flux sur leur propre page ; leurs clés ne sont pas affichées ici. Chaque spectateur coûte au serveur autant de débit montant que le flux."
     },
     "certs": {
       "title": "Certificats",
@@ -1084,6 +1200,10 @@
       "event_rescheduled": "Dates d'un événement modifiées",
       "event_ended_early": "Événement terminé avant l'heure",
       "event_cancelled": "Événement annulé",
+      "video_stream_created": "Flux vidéo déclaré",
+      "video_stream_keys_viewed": "Adresses et clés d'un flux vidéo affichées",
+      "video_stream_regenerated": "Clés d'un flux vidéo changées",
+      "video_stream_removed": "Flux vidéo supprimé",
       "reconciliation_requested": "Vérification du serveur TAK demandée",
       "settings_changed": "Réglages modifiés",
       "service_restarted": "Service redémarré",
@@ -1109,7 +1229,8 @@
       "size_bytes": "Taille :",
       "encrypted": "Chiffrée :",
       "settings": "Réglages modifiés :",
-      "deleted_files": "Fichiers nettoyés :"
+      "deleted_files": "Fichiers nettoyés :",
+      "channel": "Canal :"
     },
     "values": {
       "mode_shared": "identité partagée",
@@ -1245,6 +1366,10 @@
     "service_not_allowed": "Ce service ne peut pas être redémarré d'ici.",
     "action_failed": "L'action a été tentée et a échoué. Le journal du serveur en donne la raison.",
     "webhook_not_set": "Aucune adresse de webhook n'est encore enregistrée.",
-    "mail_not_configured": "Aucun serveur de messagerie n'est configuré (SMTP_HOST est vide dans deploy/.env) : aucun e-mail ne peut partir."
+    "mail_not_configured": "Aucun serveur de messagerie n'est configuré (SMTP_HOST est vide dans deploy/.env) : aucun e-mail ne peut partir.",
+    "video_off": "Le serveur vidéo est désactivé sur cette installation (VIDEO=off dans deploy/.env).",
+    "invalid_stream_name": "Ce nom ne donne aucune adresse utilisable : utilisez des lettres ou des chiffres.",
+    "stream_name_taken": "Un flux de ce canal porte déjà ce nom : choisissez-en un autre.",
+    "too_many_video_streams": "L'équipe a déjà le nombre maximal de flux sur ce canal : supprimez-en un d'abord."
   }
 }

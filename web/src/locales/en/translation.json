@@ -379,6 +379,98 @@
       "done": "Your team left the event."
     }
   },
+  "video": {
+    "title": "Video",
+    "description": "Drones, cameras and phones that stream to a channel. Each stream is listed in ATAK by itself, to the members of its channel and to nobody else, while the channel exists.",
+    "unreachable": "The video server does not answer: whether a stream is live cannot be told right now.",
+    "none": "No stream yet.",
+    "byTeam": "by {{team}}",
+    "addresses": "Addresses",
+    "declaredOn": "Declared on {{date}}",
+    "regeneratedOn": "Keys changed on {{date}}",
+    "qrHelp": "Scan it with the phone that films, then paste the address into its streaming app.",
+    "channel": {
+      "team": "Team channel",
+      "event": "Event “{{name}}”",
+      "scheduledHelp": "The streams of this event work from its start to its end, and only for the teams that take part."
+    },
+    "state": {
+      "live": "Live",
+      "offline": "Not streaming",
+      "inactive": "Inactive",
+      "watching_one": "{{count}} watching",
+      "watching_other": "{{count}} watching",
+      "waiting_one": "{{count}} waiting",
+      "waiting_other": "{{count}} waiting",
+      "since": "since {{relative}}"
+    },
+    "add": {
+      "label": "New stream",
+      "placeholder": "Drone 1, Front camera…",
+      "channel": "Channel",
+      "submit": "Declare",
+      "help": "The name ATAK shows. It also gives the end of the stream's address (drone-1). Each stream gets its own keys: to publish, and to watch.",
+      "pendingSync": "The stream is declared, but TAK Server could not be told yet: it will appear in ATAK within a minute."
+    },
+    "dialog": {
+      "description": "Where to publish this stream, and where to watch it.",
+      "teamChannel": "{{path}}, on the team's channel.",
+      "eventChannel": "{{path}}, on the channel of the event “{{event}}”."
+    },
+    "inactive": {
+      "title": "This stream does not work right now",
+      "event": "Its event has not started, is over, or the team no longer takes part: the video server refuses its keys and ATAK does not list it. It works again while the event runs.",
+      "team": "The team is not active: the video server refuses its keys and ATAK does not list it."
+    },
+    "tabs": {
+      "publish": "Publish",
+      "view": "Watch",
+      "manual": "Settings"
+    },
+    "publish": {
+      "intro": "Give one of these addresses to the drone, the camera or the phone that films. They hold the publish key.",
+      "rtmpHelp": "DJI, OBS, Larix",
+      "srtHelp": "unsteady networks (UDP)",
+      "rtspHelp": "cameras, ffmpeg",
+      "qrTitle": "Address as a QR code",
+      "warning": "Whoever has the publish key can stream in this stream's place. The protocols do not encrypt it: if it went where it should not, change the keys."
+    },
+    "view": {
+      "atakTitle": "Nothing to type in ATAK",
+      "atakText": "TAK Server lists this stream to the members of the channel {{channel}}, and to nobody else: it appears among the server's videos in ATAK. The addresses below are for other players.",
+      "rtspHelp": "ATAK, iTAK, VLC",
+      "srtHelp": "VLC, ffmpeg (UDP)",
+      "rtmpHelp": "older players",
+      "warning": "The view key only lets one watch. Changing the keys disconnects everyone who watches."
+    },
+    "manual": {
+      "host": "Server",
+      "ports": "Ports",
+      "portsValue": "RTSP {{rtsp}}, RTMP {{rtmp}}, SRT {{srt}} (UDP)",
+      "path": "Path",
+      "publishUser": "Publish user",
+      "publishKey": "Publish key",
+      "viewUser": "View user",
+      "viewKey": "View key",
+      "help": "For an app that asks for each part apart. In RTMP, the user and the key go in the address (?user=…&pass=…); in SRT, in the stream ID (publish:path:user:key, or read:… to watch)."
+    },
+    "regenerate": {
+      "action": "Change the keys",
+      "title": "Change the keys of this stream?",
+      "text": "Whoever publishes to it or watches it is disconnected. The drones, cameras and players must be given the new addresses; ATAK gets its own from TAK Server.",
+      "confirm": "Change the keys",
+      "done": "New keys: give the new addresses to the devices.",
+      "pending": "New keys. TAK Server could not be told yet: ATAK gets the new address within a minute."
+    },
+    "remove": {
+      "action": "Delete",
+      "title": "Delete this stream?",
+      "text": "It disappears from ATAK, and whoever publishes to it or watches it is disconnected. Its keys stop working for good.",
+      "confirm": "Delete the stream",
+      "done": "Stream deleted.",
+      "pending": "Stream deleted. TAK Server could not be told yet: it leaves ATAK within a minute."
+    }
+  },
   "profile": {
     "title": "Profile",
     "description": "How you appear to the members of your teams, the language of this site and of the e-mails you receive, and whether this site is light or dark.",
@@ -509,7 +601,11 @@
       "certificate_revoked": "Certificate revoked",
       "orphan_certificate_revoked": "Certificate without access revoked",
       "session_cut": "Session cut",
-      "groups_refreshed": "Groups pushed to the connected device"
+      "groups_refreshed": "Groups pushed to the connected device",
+      "video_feed_added": "Video stream listed in TAK Server",
+      "video_feed_updated": "Address of a video stream updated in TAK Server",
+      "video_feed_removed": "Video stream withdrawn from TAK Server",
+      "video_stopped": "Devices disconnected from a video stream"
     },
     "triggers": {
       "change": "Platform change",
@@ -684,7 +780,7 @@
         "unknown": "Not compared yet"
       },
       "updateHelpTitle": "What “newer image” means, and how to update",
-      "updateHelp": "Every image is pinned. For an image pulled by its tag (Caddy, PostgreSQL, the mail catcher), “newer” means the registry now serves another image under the same tag: a patch release or a rebuild. The directory's image is pinned to one exact build on purpose; a newer build is shown for information, and moving to it is a change of the Compose file to test first. The images built on this server follow the TAK Server version and this repository. Registries are asked twice a day at most. The platform never pulls an image by itself; over SSH:",
+      "updateHelp": "Every image is pinned. For an image pulled by its tag (Caddy, PostgreSQL, the mail catcher, the video server), “newer” means the registry now serves another image under the same tag: a patch release or a rebuild. The directory's image is pinned to one exact build on purpose; a newer build is shown for information, and moving to it is a change of the Compose file to test first. The images built on this server follow the TAK Server version and this repository. Registries are asked twice a day at most. The platform never pulls an image by itself; over SSH:",
       "updateCommandLabel": "the command that updates the images",
       "updateAvailable": "A newer image is available for at least one service.",
       "restart": "Restart",
@@ -697,7 +793,8 @@
         "app": "This site stops answering for a few seconds, then comes back. TAK clients are not affected.",
         "caddy": "This site becomes unreachable for a few seconds, then comes back. TAK clients are not affected.",
         "other": "The service stops for a few seconds and starts again.",
-        "mailpit": "The mail catcher stops for a few seconds and forgets the messages it holds."
+        "mailpit": "The mail catcher stops for a few seconds and forgets the messages it holds.",
+        "mediamtx": "Every stream stops for a few seconds; the drones, cameras and players reconnect by themselves. TAK clients are not affected."
       },
       "restarted": "{{service}} was restarted.",
       "restartAccepted": "{{service}} is restarting: this page may stop answering for a moment."
@@ -740,6 +837,20 @@
       "versionHelp": "tak.gov cannot be asked automatically. When you see a newer version there, record it in the settings: this page will then remind you. A ZIP of another version placed at the root of the repository is noticed by itself.",
       "unidentified_one": "{{count}} session without a channel",
       "unidentified_other": "{{count}} sessions without a channel"
+    },
+    "video": {
+      "title": "Video server",
+      "notAnswering": "Not answering",
+      "live_one": "{{count}} stream live",
+      "live_other": "{{count}} streams live",
+      "readers_one": "{{count}} watching",
+      "readers_other": "{{count}} watching",
+      "declared_one": "{{count}} stream declared",
+      "declared_other": "{{count}} streams declared",
+      "ports": "Devices reach it on RTSP {{rtsp}}/tcp, RTMP {{rtmp}}/tcp and SRT {{srt}}/udp of this server.",
+      "streamLive": "live since {{relative}} · {{protocol}}",
+      "streamWaiting": "nobody publishing",
+      "help": "Teams declare their streams on their own page; their keys are not shown here. Each viewer costs the server as much upload as the stream's bitrate."
     },
     "certs": {
       "title": "Certificates",
@@ -1045,6 +1156,10 @@
       "event_rescheduled": "Event dates changed",
       "event_ended_early": "Event ended early",
       "event_cancelled": "Event cancelled",
+      "video_stream_created": "Video stream declared",
+      "video_stream_keys_viewed": "Addresses and keys of a video stream shown",
+      "video_stream_regenerated": "Keys of a video stream changed",
+      "video_stream_removed": "Video stream deleted",
       "reconciliation_requested": "TAK server check requested",
       "settings_changed": "Settings changed",
       "service_restarted": "Service restarted",
@@ -1070,7 +1185,8 @@
       "size_bytes": "Size:",
       "encrypted": "Encrypted:",
       "settings": "Settings changed:",
-      "deleted_files": "Files cleaned:"
+      "deleted_files": "Files cleaned:",
+      "channel": "Channel:"
     },
     "values": {
       "mode_shared": "shared identity",
@@ -1206,6 +1322,10 @@
     "service_not_allowed": "This service cannot be restarted from here.",
     "action_failed": "The action was attempted and failed. The server's log has the reason.",
     "webhook_not_set": "No webhook address is saved yet.",
-    "mail_not_configured": "No mail server is set (SMTP_HOST is empty in deploy/.env): no e-mail can be sent."
+    "mail_not_configured": "No mail server is set (SMTP_HOST is empty in deploy/.env): no e-mail can be sent.",
+    "video_off": "The video server is turned off on this installation (VIDEO=off in deploy/.env).",
+    "invalid_stream_name": "This name gives no usable address: use letters or digits.",
+    "stream_name_taken": "A stream of this channel already has this name: choose another one.",
+    "too_many_video_streams": "The team already has the maximum number of streams on this channel: delete one first."
   }
 }

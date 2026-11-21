@@ -48,6 +48,9 @@ Settings (first run only):
                              TAK clients need for TAK Server's API (their channels).
   --tak-enroll-letsencrypt   Production: also give the Let's Encrypt certificate to TAK
                              Server's enrollment port (8446), which QR-code enrollment needs.
+  --video <on|off>           The video server (MediaMTX): drones, cameras and phones stream
+                             to the teams' channels, and ATAK lists the streams by itself
+                             (default: on). Ports 8554/tcp, 1935/tcp and 8890/udp.
   --smtp-host <host> --smtp-port <port> --smtp-username <u> --smtp-password <p>
   --smtp-tls <starttls|tls|none> --mail-from <address>
                              Outgoing e-mail (production). Local mode uses the mail catcher.
@@ -82,7 +85,7 @@ EOF
 MODE_ARG="" DOMAIN_ARG="" HOST_ARG="" ADMIN_EMAIL_ARG="" ACME_EMAIL_ARG="" VALIDITY_ARG=""
 ENROLL_LE_ARG="" ZIP_ARG="" NO_START=0 UPGRADE_TAK=0 NON_INTERACTIVE=0 TAK_PORTS_ARG="" TAK_ADMIN_PORT_ARG=""
 SMTP_HOST_ARG="" SMTP_PORT_ARG="" SMTP_USERNAME_ARG="" SMTP_PASSWORD_ARG="" SMTP_TLS_ARG="" MAIL_FROM_ARG=""
-RELEASE_ARG=""
+RELEASE_ARG="" VIDEO_ARG=""
 # Options given on the command line, between spaces: they are not asked.
 GIVEN=" "
 # The options but --release, for this script run again from the release it moved to, which
@@ -90,7 +93,7 @@ GIVEN=" "
 RERUN_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--tak-admin-port|--smtp-*|--mail-from|--zip|--release)
+    --domain|--host|--admin-email|--acme-email|--cert-validity-days|--tak-client-ports|--tak-admin-port|--video|--smtp-*|--mail-from|--zip|--release)
       [ $# -ge 2 ] || { usage >&2; die "$1 needs a value"; }
       [ "$1" = --release ] || RERUN_ARGS+=("$1" "$2") ;;
     *) RERUN_ARGS+=("$1") ;;
@@ -106,6 +109,7 @@ while [ $# -gt 0 ]; do
     --tak-enroll-letsencrypt) ENROLL_LE_ARG=true ;;
     --tak-client-ports) TAK_PORTS_ARG="$2"; shift ;;
     --tak-admin-port) TAK_ADMIN_PORT_ARG="$2"; shift ;;
+    --video) VIDEO_ARG="$2"; shift ;;
     --smtp-host) SMTP_HOST_ARG="$2"; shift ;;
     --smtp-port) SMTP_PORT_ARG="$2"; shift ;;
     --smtp-username) SMTP_USERNAME_ARG="$2"; shift ;;
@@ -229,6 +233,10 @@ check_client_ports() {
   taken="$(client_ports_taken "$1")"
   [ -n "$taken" ] || return 0
   echo "already used on this machine by another program: $taken; choose other ports"; return 1
+}
+check_video() {
+  case "$1" in on|off) return 0 ;; esac
+  echo "answer on or off"; return 1
 }
 check_tls() {
   case "$1" in starttls|tls|none) return 0 ;; esac
@@ -415,6 +423,12 @@ if [ ! -f "$ENV_FILE" ]; then
   ENROLL_LE="${ENROLL_LE_ARG:-false}" TAK_PORTS="$TAK_PORTS_ARG"
   # Not asked: refused as a client port while the questions run.
   TAK_ADMIN_PORT="${TAK_ADMIN_PORT_ARG:-$TAK_ADMIN_PORT_DEFAULT}"
+  if [ -n "$VIDEO_ARG" ]; then
+    check_video "$VIDEO_ARG" > /dev/null || die "--video takes on or off, not: $VIDEO_ARG"
+  fi
+  # Asked before the client ports, which must then leave the video server's alone.
+  VIDEO="${VIDEO_ARG:-on}"
+  VIDEO_TAKEN="$(client_ports_taken "$VIDEO_RTSP_PORT_DEFAULT $VIDEO_RTMP_PORT_DEFAULT")"
   SMTP_HOST="$SMTP_HOST_ARG" SMTP_PORT="$SMTP_PORT_ARG" SMTP_TLS="$SMTP_TLS_ARG"
   SMTP_USERNAME="$SMTP_USERNAME_ARG" SMTP_PASSWORD="$SMTP_PASSWORD_ARG" MAIL_FROM="$MAIL_FROM_ARG"
 
@@ -430,6 +444,19 @@ if [ ! -f "$ENV_FILE" ]; then
       say "Address TAK clients use to reach this machine. localhost: this computer only. To let"
       say "phones on the local network connect, give this machine's LAN address${lan:+ (here: $lan)}."
       ask CLIENT_HOST "Address" localhost check_host
+    fi
+    if ! given video; then
+      echo >&2
+      say "Video server (MediaMTX): drones, cameras and phones stream to a team's channel, and ATAK"
+      say "lists the streams by itself, to that channel only. It uses ports $VIDEO_RTSP_PORT_DEFAULT/tcp (RTSP),"
+      say "$VIDEO_RTMP_PORT_DEFAULT/tcp (RTMP) and $VIDEO_SRT_PORT_DEFAULT/udp (SRT). Can be changed later in deploy/.env."
+      video_default=y
+      if [ -n "$VIDEO_TAKEN" ]; then
+        say "Another program of this machine already uses port(s) $VIDEO_TAKEN: answer n, or free them first."
+        video_default=n
+      fi
+      ask_yes_no VIDEO_YES "Install the video server" "$video_default"
+      if [ "$VIDEO_YES" = true ]; then VIDEO=on; else VIDEO=off; fi
     fi
     if ! given tak-client-ports; then
       echo >&2
@@ -521,7 +548,15 @@ if [ ! -f "$ENV_FILE" ]; then
   check_tls "$SMTP_TLS" > /dev/null || die "--smtp-tls must be starttls, tls or none"
   why="$(admin_port_problem "$TAK_ADMIN_PORT" "$MODE")" || die "--tak-admin-port: $why"
   TAK_PORTS="$(normalize_ports "${TAK_PORTS:-8089}")"
+  # Without a terminal, a video server whose ports another program holds is left off,
+  # unless it was asked for.
+  if [ "$VIDEO" = on ] && [ -n "$VIDEO_TAKEN" ] && ! given video; then
+    info "the video server is left off: another program of this machine uses port(s) $VIDEO_TAKEN (VIDEO in deploy/.env, later)"
+    VIDEO=off
+  fi
   why="$(client_ports_problem "$TAK_PORTS" "$MODE")" || die "--tak-client-ports: $why"
+  why="$(TAK_CLIENT_PORTS="$TAK_PORTS" video_ports_problem "$MODE")" || die "the video server's ports: $why"
+  COMPOSE_FILES="$COMPOSE_FILES$(video_on "$VIDEO" && printf ':%s' "$VIDEO_COMPOSE_FILE")"
 
   if [ "$INTERACTIVE" = 1 ]; then
     log "Summary"
@@ -529,6 +564,7 @@ if [ ! -f "$ENV_FILE" ]; then
     info "Web:                   $PUBLIC_URL"
     info "TAK clients:           $(client_ports_text "$TAK_PORTS"), enrollment $PUBLIC_HOST:8446, API $PUBLIC_HOST:$TAK_API_PORT"
     info "TAK Server admin:      $(admin_text "$TAK_ADMIN_PORT")"
+    info "Video server:          $(video_text)"
     info "Administrator:         ${ADMIN_EMAIL:-none (later: docker compose exec app teamtak grant-admin <email>)}"
     if [ "$MODE" = production ]; then
       info "Let's Encrypt contact: ${ACME_EMAIL:-none}"
@@ -575,6 +611,14 @@ TAK_ADMIN_PORT=$TAK_ADMIN_PORT
 COOKIE_SECURE=$COOKIE_SECURE
 ADMIN_EMAIL=$ADMIN_EMAIL
 ACME_EMAIL=$ACME_EMAIL
+
+# --- Video server (MediaMTX): drones, cameras and phones stream to the teams' channels.
+# on: started with the stack; off: not run. The ports of this machine devices reach it on
+# (RTSP and RTMP over TCP, SRT over UDP).
+VIDEO=$VIDEO
+VIDEO_RTSP_PORT=$VIDEO_RTSP_PORT_DEFAULT
+VIDEO_RTMP_PORT=$VIDEO_RTMP_PORT_DEFAULT
+VIDEO_SRT_PORT=$VIDEO_SRT_PORT_DEFAULT
 
 # --- TAK Server
 TAK_VERSION=$TAK_VERSION
@@ -644,7 +688,7 @@ ENVEOF
   chmod 600 "$ENV_FILE"
 else
   info "keeping existing settings: $ENV_FILE"
-  for option in local domain host admin-email acme-email cert-validity-days tak-client-ports tak-admin-port tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
+  for option in local domain host admin-email acme-email cert-validity-days tak-client-ports tak-admin-port video tak-enroll-letsencrypt smtp-host smtp-port smtp-username smtp-password smtp-tls mail-from; do
     if given "$option"; then
       info "note: --$option and the other settings options are only read on the first run; edit $ENV_FILE to change them"
       break
@@ -713,9 +757,47 @@ case ":$compose_files:" in
   *":$PORTS_COMPOSE_FILE:"*) ;;
   *) env_set COMPOSE_FILE "${compose_files:+$compose_files:}$PORTS_COMPOSE_FILE" ;;
 esac
+# The video server, new after 1.0.8: on, unless one of its ports is a TAK client port or another
+# program of this machine already uses it.
+if [ -z "$(env_get VIDEO)" ]; then
+  for setting in RTSP:$VIDEO_RTSP_PORT_DEFAULT RTMP:$VIDEO_RTMP_PORT_DEFAULT SRT:$VIDEO_SRT_PORT_DEFAULT; do
+    [ -n "$(env_get "VIDEO_${setting%%:*}_PORT")" ] || env_set "VIDEO_${setting%%:*}_PORT" "${setting#*:}"
+  done
+  video_tcp="$(env_get VIDEO_RTSP_PORT) $(env_get VIDEO_RTMP_PORT)"
+  clash=""
+  for port in $video_tcp; do
+    if port_list "$(env_get TAK_CLIENT_PORTS)" | grep -qx "$port" || [ "$port" = "$(admin_port "$(env_get TAK_ADMIN_PORT)")" ]; then
+      clash="$clash${clash:+ }$port"
+    fi
+  done
+  taken="$(client_ports_taken "$video_tcp")"
+  if [ -n "$clash" ]; then
+    env_set VIDEO off
+    info "$ENV_FILE: VIDEO=off (the video server is new; port(s) $clash of it are already TAK ports here: set other VIDEO_*_PORT values, then VIDEO=on)"
+  elif [ -n "$taken" ]; then
+    env_set VIDEO off
+    info "$ENV_FILE: VIDEO=off (the video server is new; another program of this machine uses port(s) $taken: set other VIDEO_*_PORT values, then VIDEO=on)"
+  else
+    env_set VIDEO on
+    info "$ENV_FILE: VIDEO=on (the video server is new: drones, cameras and phones stream to the teams' channels)"
+    if [ "$(env_get MODE)" = production ]; then
+      info "open $(env_get VIDEO_RTSP_PORT)/tcp, $(env_get VIDEO_RTMP_PORT)/tcp and $(env_get VIDEO_SRT_PORT)/udp in the firewall for it, or set VIDEO=off"
+    fi
+  fi
+fi
+# The video server's Compose file is listed while it is on, and only then.
+compose_files="$(env_get COMPOSE_FILE)"
+without_video="$(printf '%s' "$compose_files" | tr ':' '\n' | grep -vx "$VIDEO_COMPOSE_FILE" | paste -s -d : - || true)"
+if video_on "$(env_get VIDEO)"; then
+  [ "$without_video:$VIDEO_COMPOSE_FILE" = "$compose_files" ] || env_set COMPOSE_FILE "$without_video:$VIDEO_COMPOSE_FILE"
+else
+  [ "$without_video" = "$compose_files" ] || env_set COMPOSE_FILE "$without_video"
+fi
 load_env
 why="$(admin_port_problem "$TAK_ADMIN_PORT" "$MODE")" || die "TAK_ADMIN_PORT in $ENV_FILE: $why"
 why="$(client_ports_problem "$TAK_CLIENT_PORTS" "$MODE")" || die "TAK_CLIENT_PORTS in $ENV_FILE: $why"
+case "${VIDEO:-off}" in on|off|ON|OFF|true|false|yes|no) ;; *) die "VIDEO in $ENV_FILE must be on or off, not: $VIDEO" ;; esac
+why="$(video_ports_problem "$MODE")" || die "VIDEO_*_PORT in $ENV_FILE: $why"
 render_ports_compose
 # Backup archives are written here by the host agent. They hold every secret.
 mkdir -p "$DEPLOY_DIR/backups"
@@ -799,6 +881,7 @@ fi
 info "mode: $MODE — public host: $PUBLIC_HOST — web: $PUBLIC_URL — client certificates: $CERT_VALIDITY_DAYS days"
 info "TAK clients: $(client_ports_text "$TAK_CLIENT_PORTS"), API (channels) $PUBLIC_HOST:$TAK_API_PORT"
 info "TAK Server admin: $(admin_text "$TAK_ADMIN_PORT")"
+info "video server: $(video_text)"
 if [ "$NO_START" = 0 ]; then
   # Docker cannot publish a port another program holds, and would only say so once
   # everything is built.
@@ -808,6 +891,8 @@ if [ "$NO_START" = 0 ]; then
   [ -z "$taken" ] || die "port $taken of TAK Server's administration already used on this machine by another program. Choose another port in TAK_ADMIN_PORT ($ENV_FILE), or off, then run ./install.sh again"
   taken="$(client_ports_taken "$TAK_API_PORT")"
   [ -z "$taken" ] || die "port $TAK_API_PORT already used on this machine by another program. TAK clients need it to reach TAK Server's API, where they read their channels: free it, then run ./install.sh again"
+  taken="$(client_ports_taken "$(video_tcp_ports)")"
+  [ -z "$taken" ] || die "the video server's port(s) $taken already used on this machine by another program. Choose other ports in VIDEO_RTSP_PORT and VIDEO_RTMP_PORT ($ENV_FILE), or VIDEO=off, then run ./install.sh again"
 fi
 if [ "$MODE" = production ] && [ -z "$SMTP_HOST" ]; then
   info "WARNING: SMTP_HOST is empty in $ENV_FILE: login codes cannot be e-mailed until it is set."
@@ -1004,6 +1089,7 @@ log "TeamTAK $TEAMTAK_VERSION is running"
 info "Web:               $PUBLIC_URL"
 info "TAK clients:       $(client_ports_text "$TAK_CLIENT_PORTS") (TLS)   enrollment: $PUBLIC_HOST:8446   API (channels): $PUBLIC_HOST:$TAK_API_PORT"
 info "TAK Server admin:  $(admin_text "$TAK_ADMIN_PORT")"
+info "Video server:      $(video_text)"
 if [ "$MODE" = local ]; then
   info "Mail catcher:      http://localhost:${MAILPIT_PORT:-8025} (login codes arrive here)"
 fi

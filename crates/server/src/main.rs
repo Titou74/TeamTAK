@@ -15,6 +15,7 @@ mod settings;
 mod state;
 mod tak_admin;
 mod teams;
+mod video;
 
 use std::net::SocketAddr;
 
@@ -144,6 +145,9 @@ fn api_router(state: SharedState) -> Router {
         .route("/teams/{id}/events/{event_id}/teams/{other_team_id}", delete(events::remove_team))
         .route("/teams/{id}/events/{event_id}/answer", post(events::answer_event))
         .route("/teams/{id}/events/{event_id}/leave", post(events::leave_event))
+        .route("/teams/{id}/video", get(video::team_video).post(video::create_stream))
+        .route("/video-streams/{id}", get(video::stream_detail).delete(video::delete_stream))
+        .route("/video-streams/{id}/regenerate", post(video::regenerate_stream))
         .route("/invitations/{id}/answer", post(teams::answer_invitation))
         .route("/accesses/{id}", get(accesses::access_detail).delete(accesses::delete_access))
         .route("/accesses/{id}/package/{form}", get(accesses::access_package))
@@ -184,6 +188,17 @@ fn api_router(state: SharedState) -> Router {
         .with_state(state)
 }
 
+/// What the other services of the stack ask the platform, on its internal port: the video
+/// server, about each device that wants to publish or watch. Caddy passes nothing to this
+/// port, so nothing outside the stack reaches it.
+fn internal_router(state: SharedState) -> Router {
+    Router::new()
+        .route("/internal/video/auth", post(video::authorize))
+        .fallback(|| async { StatusCode::NOT_FOUND })
+        .layer(middleware::from_fn(read_whole_body))
+        .with_state(state)
+}
+
 fn app(state: SharedState) -> Router {
     let web_dir = state.config.web_dir.clone();
     let router = Router::new().nest("/api", api_router(state));
@@ -197,13 +212,21 @@ fn app(state: SharedState) -> Router {
 
 async fn serve(config: Config) -> Result<()> {
     let listen_addr = config.listen_addr;
+    let internal_addr = config.internal_listen_addr;
     let interval = config.reconcile_interval;
     let state = state::build_state(config).await?;
     tokio::spawn(reconciler::run_periodically(state.reconciler.clone(), interval));
     tokio::spawn(monitor::run_periodically(state.monitor.clone()));
 
+    let internal = tokio::net::TcpListener::bind(internal_addr).await.with_context(|| format!("listening on {internal_addr}"))?;
+    let internal_app = internal_router(state.clone());
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(internal, internal_app).await {
+            tracing::error!(error = %e, "the internal port stopped");
+        }
+    });
     let listener = tokio::net::TcpListener::bind(listen_addr).await.with_context(|| format!("listening on {listen_addr}"))?;
-    tracing::info!(%listen_addr, languages = ?locale::languages(), "TeamTAK is listening");
+    tracing::info!(%listen_addr, %internal_addr, video = state.video.is_some(), languages = ?locale::languages(), "TeamTAK is listening");
     axum::serve(listener, app(state).into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(async {
             let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("signal handler");

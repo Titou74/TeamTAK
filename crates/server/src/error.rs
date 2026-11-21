@@ -104,6 +104,14 @@ api_errors! {
     WebhookNotSet => ("webhook_not_set", CONFLICT),
     /// No mail server is set (`SMTP_HOST` is empty): no e-mail can be sent.
     MailNotConfigured => ("mail_not_configured", CONFLICT),
+    /// The video server is turned off on this installation (`VIDEO=off`).
+    VideoOff => ("video_off", CONFLICT),
+    /// A stream label that yields no usable name.
+    InvalidStreamName => ("invalid_stream_name", BAD_REQUEST),
+    /// Another stream of the same channel has this name.
+    StreamNameTaken => ("stream_name_taken", CONFLICT),
+    /// The team already has the maximum number of streams in this channel.
+    TooManyVideoStreams => ("too_many_video_streams", CONFLICT),
     Internal => ("internal", INTERNAL_SERVER_ERROR),
 }
 

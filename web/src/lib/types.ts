@@ -264,3 +264,85 @@ export interface Reconciliation {
   drift_last_7_days: number;
   events: ReconcileEvent[];
 }
+
+// Video streams (crates/server/src/video.rs).
+
+/** What the video server says of a stream someone publishes to or watches. */
+export interface VideoLive {
+  /** A device publishes to it. */
+  ready: boolean;
+  since: string | null;
+  readers: number;
+  tracks: string[];
+  protocol: string | null;
+}
+
+/** A stream in the team's list: no key in it. */
+export interface VideoStreamSummary {
+  id: string;
+  label: string;
+  name: string;
+  path: string;
+  team_name: string;
+  /** Declared by this team; otherwise another team of the event declared it. */
+  own: boolean;
+  declared_by_me: boolean;
+  created_at: string;
+  regenerated_at: string | null;
+  /** Its channel exists now: the video server takes its keys and ATAK lists it. */
+  valid: boolean;
+  live: VideoLive | null;
+  can_use: boolean;
+  can_manage: boolean;
+}
+
+export interface VideoServerAddress {
+  host: string;
+  rtsp_port: number;
+  rtmp_port: number;
+  /** UDP. */
+  srt_port: number;
+}
+
+export interface VideoChannel {
+  /** The TAK group: the team's slug or the event's group name. */
+  group: string;
+  kind: "team" | "event";
+  name: string;
+  event_id: string | null;
+  phase: EventPhase | null;
+  streams: VideoStreamSummary[];
+}
+
+export type TeamVideo =
+  | { enabled: false }
+  | {
+      enabled: true;
+      /** The video server answered: the live state is known. */
+      reachable: boolean;
+      server: VideoServerAddress;
+      channels: VideoChannel[];
+      permissions: { create: boolean };
+    };
+
+export interface StreamUrls {
+  rtsp: string;
+  rtmp: string;
+  srt: string;
+}
+
+export interface VideoStreamDetail {
+  id: string;
+  label: string;
+  name: string;
+  path: string;
+  channel: { group: string; kind: "team" | "event"; name: string; phase: EventPhase | null };
+  valid: boolean;
+  live: VideoLive | null;
+  server: VideoServerAddress;
+  publish: { user: string; key: string; urls: StreamUrls };
+  view: { user: string; key: string; urls: StreamUrls };
+  created_at: string;
+  regenerated_at: string | null;
+  can_manage: boolean;
+}

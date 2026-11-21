@@ -164,7 +164,11 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     // share this Docker.
     let listed = services(&monitoring);
     let names: Vec<&str> = listed.iter().map(|s| s["service"].as_str().unwrap()).collect();
-    assert_eq!(names, vec!["caddy", "app", "postgres", "openldap", "takserver", "takserver-db", "agent", "mailpit"]);
+    let mut stack = vec!["caddy", "app", "postgres", "openldap", "takserver", "takserver-db", "agent", "mailpit"];
+    if env().get("VIDEO").is_some_and(|v| v == "on") {
+        stack.push("mediamtx");
+    }
+    assert_eq!(names, stack);
     for service in &listed {
         assert_eq!((service["present"].as_bool(), service["state"].as_str()), (Some(true), Some("running")), "{service}");
     }
@@ -226,7 +230,7 @@ async fn the_agent_reports_the_machine_and_this_stack_only() {
     let (status, report) = agent_call("GET", "/v1/report", None);
     assert_eq!(status, 200);
     let containers = report["containers"]["containers"].as_array().unwrap();
-    assert_eq!(containers.len(), 8);
+    assert_eq!(containers.len(), stack.len());
     assert!(containers.iter().all(|c| c["name"].as_str().unwrap().starts_with("teamtak-")), "only this project's containers: {containers:?}");
     let text = report.to_string();
     for secret in ["APP_SECRET", "AGENT_TOKEN", "POSTGRES_PASSWORD", "TAK_CERT_PASSWORD"] {
