@@ -374,6 +374,9 @@ async fn main() -> Result<()> {
             for error in &report.errors {
                 println!("ERROR {error}");
             }
+            for warning in &report.warnings {
+                println!("WARNING {warning}");
+            }
             println!("{} change(s), {} error(s)", report.changes.len(), report.errors.len());
             if report.errors.is_empty() {
                 Ok(())

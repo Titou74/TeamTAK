@@ -1,7 +1,7 @@
 //! In-memory TAK Server for unit tests: it records what it is asked and keeps a list of
 //! certificates and sessions that tests can prepare.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -23,6 +23,8 @@ struct State {
     faulty_cuts: BTreeMap<String, (u16, bool)>,
     /// Video feeds and the group each one was registered for.
     video_feeds: Vec<(VideoFeed, String)>,
+    /// Sessions listed with no connection behind them: no cut or revocation removes them.
+    leftovers: BTreeSet<String>,
 }
 
 #[derive(Default)]
@@ -65,6 +67,14 @@ impl MemoryTakServer {
             groups: groups.iter().map(|g| g.to_string()).collect(),
             ..Default::default()
         });
+    }
+
+    /// Adds an entry TAK Server 5.8 keeps listing after the connection is gone, as it does when
+    /// a client disconnects right after its first message: no group, sometimes the account's
+    /// username, and every cut answers 400 and leaves it listed.
+    pub fn add_leftover(&self, uid: &str, username: &str) {
+        self.add_subscription(uid, username, &[]);
+        self.state.lock().unwrap().leftovers.insert(uid.into());
     }
 
     /// The next listing still shows this session, which closes right after it, as when a
@@ -139,6 +149,9 @@ impl TakServer for MemoryTakServer {
         let mut s = self.enter(format!("cut_subscription {subscription_uid}"))?;
         let answered =
             |status| TakError::Status { call: format!("DELETE /Marti/api/subscriptions/delete/{subscription_uid}"), status };
+        if s.leftovers.contains(subscription_uid) {
+            return Err(answered(400));
+        }
         let listed = s.subscriptions.iter().any(|x| x.subscription_uid == subscription_uid);
         let fault = s.faulty_cuts.remove(subscription_uid);
         if listed && fault.is_none_or(|(_, closes)| closes) {
@@ -164,7 +177,8 @@ impl TakServer for MemoryTakServer {
         // per account in these tests, that means the account's sessions.
         if let Some(username) = username {
             if !s.certificates.iter().any(|c| c.username == username) {
-                s.subscriptions.retain(|x| x.username != username);
+                let State { subscriptions, leftovers, .. } = &mut *s;
+                subscriptions.retain(|x| x.username != username || leftovers.contains(&x.subscription_uid));
             }
         }
         Ok(())

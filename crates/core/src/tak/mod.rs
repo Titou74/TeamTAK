@@ -100,8 +100,9 @@ pub trait TakServer: Send + Sync {
     /// sessions, instead of waiting for the next periodic refresh.
     async fn refresh_groups(&self, username: &str) -> Result<(), TakError>;
     async fn subscriptions(&self) -> Result<Vec<Subscription>, TakError>;
-    /// TAK Server 5.8 answers 400 for a session it does not list, and sometimes for one it
-    /// has just cut (see [`crate::reconcile::settle_failed_cuts`]).
+    /// TAK Server 5.8 answers 400 for any identifier it has no connection for: a session it
+    /// does not list, sometimes one it has just cut, and a leftover entry it keeps listing
+    /// after the connection is gone (see [`crate::reconcile::settle_failed_cuts`]).
     async fn cut_subscription(&self, subscription_uid: &str) -> Result<(), TakError>;
     /// Every certificate issued through enrollment that TAK Server still accepts: neither
     /// revoked nor expired, including those a device replaced by enrolling again.
