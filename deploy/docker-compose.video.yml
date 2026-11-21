@@ -1,0 +1,40 @@
+# The video server (MediaMTX), when VIDEO=on in deploy/.env: install.sh then lists this file
+# in COMPOSE_FILE, and takes it out when VIDEO=off.
+#
+# Drones, cameras and phones publish to it; ATAK, iTAK and other players watch from it. It
+# keeps nothing: no recording, no state. For every device that connects it asks the platform
+# (app:8081, the platform's internal port) whether the stream is declared, valid now, and
+# whether the key is right. The platform reads its control API (9997, never published) to
+# show the live streams and to disconnect devices.
+#
+# Both talk over a network of their own ("video"): no other service of the stack reaches the
+# control API, which asks for no credentials.
+services:
+  mediamtx:
+    # Pinned to a release; the monitoring page says when the registry serves a newer image
+    # under this tag. The image holds the binary only (no shell): no healthcheck, the
+    # platform asks its control API instead.
+    image: bluenviron/mediamtx:1.21.4
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "${BIND_ADDRESS}:${VIDEO_RTSP_PORT:-8554}:8554"
+      - "${BIND_ADDRESS}:${VIDEO_RTMP_PORT:-1935}:1935"
+      - "${BIND_ADDRESS}:${VIDEO_SRT_PORT:-8890}:8890/udp"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - video
+
+  app:
+    networks:
+      - video
+
+networks:
+  video:

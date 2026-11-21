@@ -111,6 +111,13 @@ audit_actions! {
     EventEndedEarly => "event_ended_early",
     EventCancelled => "event_cancelled",
 
+    /// A video stream was declared, for the team's channel or an event's.
+    VideoStreamCreated => "video_stream_created",
+    /// The addresses and keys of a video stream were shown.
+    VideoStreamKeysViewed => "video_stream_keys_viewed",
+    VideoStreamRegenerated => "video_stream_regenerated",
+    VideoStreamRemoved => "video_stream_removed",
+
     ReconciliationRequested => "reconciliation_requested",
     SettingsChanged => "settings_changed",
 
@@ -155,6 +162,8 @@ pub enum Detail {
     Settings,
     /// Number of files a housekeeping run deleted.
     DeletedFiles,
+    /// The TAK group, team or event, a video stream belongs to.
+    Channel,
 }
 
 impl Detail {
@@ -178,6 +187,7 @@ impl Detail {
         Detail::Encrypted,
         Detail::Settings,
         Detail::DeletedFiles,
+        Detail::Channel,
     ];
 
     pub fn name(self) -> &'static str {
@@ -200,6 +210,7 @@ impl Detail {
             Detail::Encrypted => "encrypted",
             Detail::Settings => "settings",
             Detail::DeletedFiles => "deleted_files",
+            Detail::Channel => "channel",
         }
     }
 }

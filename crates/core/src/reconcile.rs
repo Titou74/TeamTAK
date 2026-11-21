@@ -13,11 +13,15 @@
 //!
 //! and one found in phase 1: a session opened while its account had no group never receives
 //! the groups added later, so it is cut as well (the client reconnects by itself).
+//!
+//! The video feeds TAK Server lists follow the same way ([`crate::video::plan_feeds`]): one
+//! per valid video stream, for the group of the stream.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::directory::{Directory, DirectorySnapshot};
 use crate::tak::{IssuedCertificate, Subscription, TakServer};
+use crate::video::{path_of_url, plan_feeds, split_path, DesiredFeed, FeedAction};
 
 /// A TAK account that must exist, with the groups it must be in.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +42,9 @@ pub struct DesiredState {
     pub revoke_fingerprints: BTreeSet<String>,
     /// Usernames the platform never touches in TAK Server, such as its own API certificate.
     pub protected_usernames: BTreeSet<String>,
+    /// The video feeds TAK Server must list, one per valid video stream; `None` leaves its
+    /// video feeds as they are.
+    pub video_feeds: Option<Vec<DesiredFeed>>,
 }
 
 impl DesiredState {
@@ -254,6 +261,15 @@ pub enum Change {
     CertificateRevoked { username: String, fingerprint: String, reason: RevocationReason },
     SessionCut { username: String, subscription_uid: String },
     GroupsRefreshed { username: String },
+    /// A video stream listed in TAK Server for the members of its group.
+    VideoFeedAdded { path: String, group: String },
+    /// Its name or address changed (keys regenerated, team renamed).
+    VideoFeedUpdated { path: String, group: String },
+    /// The stream is gone, or its group is (the event is over, the team suspended).
+    VideoFeedRemoved { path: String, group: String },
+    /// Devices publishing or watching a stream that is no longer valid were disconnected
+    /// from the video server.
+    VideoStopped { path: String, group: String },
 }
 
 /// Every value [`Change::kind`] can return; the UI has a text for each
@@ -269,6 +285,10 @@ pub const CHANGE_KINDS: &[&str] = &[
     "orphan_certificate_revoked",
     "session_cut",
     "groups_refreshed",
+    "video_feed_added",
+    "video_feed_updated",
+    "video_feed_removed",
+    "video_stopped",
 ];
 
 impl Change {
@@ -285,11 +305,16 @@ impl Change {
             Change::CertificateRevoked { reason: RevocationReason::NoAccess, .. } => "orphan_certificate_revoked",
             Change::SessionCut { .. } => "session_cut",
             Change::GroupsRefreshed { .. } => "groups_refreshed",
+            Change::VideoFeedAdded { .. } => "video_feed_added",
+            Change::VideoFeedUpdated { .. } => "video_feed_updated",
+            Change::VideoFeedRemoved { .. } => "video_feed_removed",
+            Change::VideoStopped { .. } => "video_stopped",
         }
     }
 
     /// The account concerned (the raw member identifier for a foreign member; the callsign
-    /// of the device for a session TAK Server lists without a username).
+    /// of the device for a session TAK Server lists without a username); for video, the path
+    /// of the stream.
     pub fn subject(&self) -> &str {
         match self {
             Change::UserCreated { username }
@@ -301,15 +326,23 @@ impl Change {
             | Change::SessionCut { username, .. }
             | Change::GroupsRefreshed { username } => username,
             Change::ForeignMemberRemoved { member, .. } => member,
+            Change::VideoFeedAdded { path, .. }
+            | Change::VideoFeedUpdated { path, .. }
+            | Change::VideoFeedRemoved { path, .. }
+            | Change::VideoStopped { path, .. } => path,
         }
     }
 
-    /// The group, when the change is about a membership.
+    /// The group, when the change is about a membership or a video stream of that group.
     pub fn group(&self) -> Option<&str> {
         match self {
             Change::MemberAdded { group, .. }
             | Change::MemberRemoved { group, .. }
             | Change::ForeignMemberRemoved { group, .. } => Some(group),
+            Change::VideoFeedAdded { group, .. }
+            | Change::VideoFeedUpdated { group, .. }
+            | Change::VideoFeedRemoved { group, .. }
+            | Change::VideoStopped { group, .. } => Some(group.as_str()).filter(|g| !g.is_empty()),
             _ => None,
         }
     }
@@ -526,7 +559,40 @@ pub async fn run_pass_with(
             }
         }
     }
+
+    // 6. Video feeds: one per valid stream, listed to the members of its group only.
+    if let Some(feeds) = &desired.video_feeds {
+        sync_video_feeds(feeds, tak, &mut report).await;
+    }
     report
+}
+
+async fn sync_video_feeds(desired: &[DesiredFeed], tak: &dyn TakServer, report: &mut PassReport) {
+    let listed = match tak.video_feeds().await {
+        Ok(listed) => listed,
+        Err(e) => return report.errors.push(format!("listing video feeds: {e}")),
+    };
+    for action in plan_feeds(desired, &listed) {
+        let (result, change) = match &action {
+            FeedAction::Add(want) => (
+                tak.add_video_feed(&want.feed, &want.group).await,
+                Change::VideoFeedAdded { path: want.path.clone(), group: want.group.clone() },
+            ),
+            FeedAction::Update(want) => (
+                tak.update_video_feed(&want.feed).await,
+                Change::VideoFeedUpdated { path: want.path.clone(), group: want.group.clone() },
+            ),
+            FeedAction::Remove(have) => {
+                let path = path_of_url(&have.url).unwrap_or_else(|| have.uid.clone());
+                let group = split_path(&path).map(|(g, _)| g.to_string()).unwrap_or_default();
+                (tak.delete_video_feed(&have.uid).await, Change::VideoFeedRemoved { path, group })
+            }
+        };
+        match result {
+            Ok(()) => report.changes.push(change),
+            Err(e) => report.errors.push(format!("video feed of {}: {e}", change.subject())),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -939,9 +1005,62 @@ mod tests {
             Change::CertificateRevoked { username: u(), fingerprint: u(), reason: RevocationReason::NoAccess },
             Change::SessionCut { username: u(), subscription_uid: u() },
             Change::GroupsRefreshed { username: u() },
+            Change::VideoFeedAdded { path: u(), group: u() },
+            Change::VideoFeedUpdated { path: u(), group: u() },
+            Change::VideoFeedRemoved { path: u(), group: u() },
+            Change::VideoStopped { path: u(), group: u() },
         ];
         let kinds: BTreeSet<&str> = all.iter().map(Change::kind).collect();
         assert_eq!(kinds, CHANGE_KINDS.iter().copied().collect::<BTreeSet<_>>());
+    }
+
+    fn video(stream: &str, group: &str, key: &str) -> DesiredFeed {
+        let path = format!("{group}/{stream}");
+        DesiredFeed {
+            feed: crate::tak::VideoFeed {
+                uid: format!("{}{stream}", crate::video::FEED_UID_PREFIX),
+                alias: stream.to_string(),
+                url: format!("rtsp://view:{key}@tak.example.org:8554/{path}"),
+            },
+            group: group.into(),
+            path,
+        }
+    }
+
+    #[tokio::test]
+    async fn video_feeds_follow_the_valid_streams() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        let mut want = two_teams();
+        let foreign = crate::tak::VideoFeed { uid: "gate-camera".into(), alias: "Gate".into(), url: "rtsp://cam/1".into() };
+        tak.add_foreign_video_feed(foreign.clone(), "alpha");
+
+        want.video_feeds = Some(vec![video("drone", "alpha", "k1"), video("cam", "evt-exercise", "k2")]);
+        let report = run_pass(&want, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let added: Vec<(&str, Option<&str>)> =
+            report.changes.iter().filter(|c| c.kind() == "video_feed_added").map(|c| (c.subject(), c.group())).collect();
+        assert_eq!(added, vec![("alpha/drone", Some("alpha")), ("evt-exercise/cam", Some("evt-exercise"))]);
+        let groups: Vec<(String, String)> = tak.video_feeds_by_group().into_iter().map(|(f, g)| (f.uid, g)).collect();
+        assert!(groups.contains(&("teamtak-video-drone".into(), "alpha".into())), "{groups:?}");
+        assert!(groups.contains(&("teamtak-video-cam".into(), "evt-exercise".into())), "{groups:?}");
+
+        assert!(run_pass(&want, &dir, &tak).await.is_clean(), "nothing to do the second time");
+
+        // Keys regenerated for one stream; the event is over for the other.
+        want.video_feeds = Some(vec![video("drone", "alpha", "k3")]);
+        let report = run_pass(&want, &dir, &tak).await;
+        let kinds: Vec<(&str, &str)> = report.changes.iter().map(|c| (c.kind(), c.subject())).collect();
+        assert_eq!(kinds, vec![("video_feed_updated", "alpha/drone"), ("video_feed_removed", "evt-exercise/cam")]);
+        assert_eq!(report.changes[1].group(), Some("evt-exercise"), "read back from the address");
+        let listed = tak.video_feeds_by_group();
+        assert!(listed.iter().any(|(f, _)| f.url.contains("view:k3@")));
+        assert!(listed.iter().any(|(f, _)| *f == foreign), "a feed registered by someone else stays");
+
+        // Video left alone: nothing asked of TAK Server's video manager.
+        want.video_feeds = None;
+        tak.clear_calls();
+        run_pass(&want, &dir, &tak).await;
+        assert!(!tak.calls().iter().any(|c| c.contains("video")), "{:?}", tak.calls());
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! TAK Server 5.8 over HTTPS, with the calls validated in phase 0:
 //!
-//! - port 8443, client certificate declared administrator: groups, sessions, certificates;
+//! - port 8443, client certificate declared administrator: groups, sessions, certificates,
+//!   video feeds;
 //! - port 8446, HTTP Basic with the directory account: certificate enrollment.
 
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use super::enroll;
-use super::{normalize_fingerprint, EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer};
+use super::{normalize_fingerprint, EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer, VideoFeed};
 
 #[derive(Clone)]
 pub struct HttpTakConfig {
@@ -132,6 +133,16 @@ impl HttpTakServer {
         Ok(response)
     }
 
+    /// A call with a JSON body.
+    async fn api_send(&self, method: reqwest::Method, path: &str, body: &Value) -> Result<(), TakError> {
+        let url = format!("{}{}", self.config.api_url, path);
+        let response = self.api.request(method.clone(), &url).json(body).send().await.map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: format!("{method} {path}"), status: response.status().as_u16() });
+        }
+        Ok(())
+    }
+
     async fn api_data(&self, path: &str) -> Result<Vec<Value>, TakError> {
         let body: Value = self.api_call(reqwest::Method::GET, path).await?.json().await.map_err(unavailable)?;
         match body.get("data") {
@@ -171,6 +182,44 @@ pub fn is_usable(v: &Value, now: OffsetDateTime) -> bool {
     let revoked = v.get("revocationDate").is_some_and(|d| !d.is_null());
     let expired = date(v, "expirationDate").is_some_and(|expiry| expiry <= now);
     !revoked && !expired
+}
+
+/// Reads the answer of `GET /Marti/api/video` (video connection manager, version 2): one
+/// feed per collection, the first one, which is how the platform registers them.
+pub fn parse_video_collections(body: &Value) -> Result<Vec<VideoFeed>, TakError> {
+    let items = match body.get("videoConnections") {
+        Some(Value::Array(items)) => items,
+        Some(Value::Null) | None => return Ok(Vec::new()),
+        Some(other) => return Err(TakError::Protocol(format!("/Marti/api/video: videoConnections is not a list: {other}"))),
+    };
+    Ok(items
+        .iter()
+        .filter_map(|collection| {
+            let feed = collection.get("feeds").and_then(|f| f.as_array()).and_then(|f| f.first());
+            Some(VideoFeed {
+                uid: text(collection, "uuid")?,
+                alias: text(collection, "alias").unwrap_or_default(),
+                url: feed.and_then(|f| text(f, "url")).unwrap_or_default(),
+            })
+        })
+        .collect())
+}
+
+/// A video collection holding one feed, as `POST` and `PUT /Marti/api/video` take it. The
+/// feed asks ATAK for RTSP over TCP (`rtspReliable`): the video server only takes TCP.
+pub fn video_collection(feed: &VideoFeed) -> Value {
+    serde_json::json!({
+        "uuid": feed.uid,
+        "active": true,
+        "alias": feed.alias,
+        "feeds": [{
+            "uuid": feed.uid,
+            "active": true,
+            "alias": feed.alias,
+            "url": feed.url,
+            "rtspReliable": "1",
+        }],
+    })
 }
 
 /// Reads one element of `subscriptions/all`.
@@ -277,6 +326,25 @@ impl TakServer for HttpTakServer {
         let body: Value = response.json().await.map_err(unavailable)?;
         enroll::read_signed_response(username, made.private_key_der, &body)
     }
+
+    async fn video_feeds(&self) -> Result<Vec<VideoFeed>, TakError> {
+        let body: Value = self.api_call(reqwest::Method::GET, "/Marti/api/video").await?.json().await.map_err(unavailable)?;
+        parse_video_collections(&body)
+    }
+
+    async fn add_video_feed(&self, feed: &VideoFeed, group: &str) -> Result<(), TakError> {
+        let path = format!("/Marti/api/video?group={}", encode_segment(group));
+        self.api_send(reqwest::Method::POST, &path, &serde_json::json!({ "videoConnections": [video_collection(feed)] })).await
+    }
+
+    async fn update_video_feed(&self, feed: &VideoFeed) -> Result<(), TakError> {
+        let path = format!("/Marti/api/video/{}", encode_segment(&feed.uid));
+        self.api_send(reqwest::Method::PUT, &path, &video_collection(feed)).await
+    }
+
+    async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError> {
+        self.api_call(reqwest::Method::DELETE, &format!("/Marti/api/video/{}", encode_segment(uid))).await.map(|_| ())
+    }
 }
 
 #[cfg(test)]
@@ -339,6 +407,27 @@ mod tests {
             "takVersion": "", "role": "unknown", "ipAddress": "", "groups": []});
         let s = parse_subscription(&ghost).unwrap();
         assert_eq!((s.username.as_str(), s.client, s.ip_address), ("", None, None));
+    }
+
+    #[test]
+    fn video_feeds_are_read_as_the_server_lists_them() {
+        // Shape observed on TAK Server 5.8-RELEASE-103.
+        let body = json!({"videoConnections": [{"active": true, "alias": "Drone 1 · Alpha", "thumbnail": null, "classification": null,
+            "feeds": [{"uuid": "teamtak-video-1", "active": true, "alias": "Drone 1 · Alpha", "url": "rtsp://view:k@h:8554/alpha/drone-1",
+                "order": null, "macAddress": null, "rtspReliable": "1"}],
+            "uuid": "teamtak-video-1"}, {"uuid": "empty-collection", "alias": "x", "feeds": []}, {"alias": "no uid"}]});
+        let feeds = parse_video_collections(&body).unwrap();
+        assert_eq!(feeds.len(), 2);
+        assert_eq!(feeds[0], VideoFeed { uid: "teamtak-video-1".into(), alias: "Drone 1 · Alpha".into(), url: "rtsp://view:k@h:8554/alpha/drone-1".into() });
+        assert_eq!(feeds[1].url, "", "a collection without feed is listed, so that it can be removed");
+        assert_eq!(parse_video_collections(&json!({"videoConnections": []})).unwrap(), vec![]);
+        assert!(parse_video_collections(&json!({"videoConnections": 3})).is_err());
+
+        let sent = video_collection(&feeds[0]);
+        assert_eq!(sent["uuid"], "teamtak-video-1");
+        assert_eq!(sent["feeds"][0]["url"], "rtsp://view:k@h:8554/alpha/drone-1");
+        assert_eq!(sent["feeds"][0]["rtspReliable"], "1");
+        assert_eq!(parse_video_collections(&json!({"videoConnections": [sent]})).unwrap(), vec![feeds[0].clone()], "read back as written");
     }
 
     #[test]

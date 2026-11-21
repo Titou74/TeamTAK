@@ -9,6 +9,7 @@ use teamtak_core::challenge;
 use teamtak_core::directory::ldap::LdapConfig;
 use teamtak_core::login::LoginPolicy;
 use teamtak_core::package::P12Format;
+use teamtak_core::video::VideoEndpoints;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmtpTls {
@@ -83,9 +84,21 @@ impl TakConfig {
     }
 }
 
+/// The video server (MediaMTX), when it is turned on (`VIDEO=on`).
+#[derive(Debug, Clone)]
+pub struct VideoConfig {
+    /// Its control API, inside the Docker network: live streams, disconnections.
+    pub api_url: String,
+    /// Where devices reach it.
+    pub endpoints: VideoEndpoints,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub listen_addr: SocketAddr,
+    /// Where the platform answers the other services of the stack only (the video server's
+    /// authentication requests). Caddy does not pass anything to it.
+    pub internal_listen_addr: SocketAddr,
     /// Directory of the built web UI; none when the API runs alone.
     pub web_dir: Option<PathBuf>,
     pub database_url: String,
@@ -104,6 +117,8 @@ pub struct Config {
     /// Address of TAK Server's own administration pages, served by Caddy to the platform's
     /// administrators (`TAK_ADMIN_PORT`); `None` when that port is turned off.
     pub tak_admin_url: Option<String>,
+    /// `None` when the video server is turned off.
+    pub video: Option<VideoConfig>,
 }
 
 /// Where the monitoring looks.
@@ -198,6 +213,34 @@ pub fn parse_ports(raw: &str) -> Result<Vec<u16>> {
     Ok(ports)
 }
 
+/// `on` or `off` (also `true`/`false`, `yes`/`no`).
+pub fn parse_switch(raw: &str) -> Result<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "on" | "true" | "yes" => Ok(true),
+        "off" | "false" | "no" | "" => Ok(false),
+        other => bail!("{other:?}: expected on or off"),
+    }
+}
+
+/// The video server's settings, `None` when `VIDEO` is off.
+fn video_from_env(public_host: &str) -> Result<Option<VideoConfig>> {
+    let raw = var_or("VIDEO", "off");
+    if !parse_switch(&raw).with_context(|| format!("VIDEO={raw:?}"))? {
+        return Ok(None);
+    }
+    let port = |name: &str, default: &str| -> Result<u16> {
+        let raw = var_or(name, default);
+        raw.trim().parse().ok().filter(|p| *p != 0).ok_or_else(|| anyhow!("{name}={raw:?} is not a port number"))
+    };
+    let endpoints = VideoEndpoints {
+        host: public_host.to_string(),
+        rtsp_port: port("VIDEO_RTSP_PORT", "8554")?,
+        rtmp_port: port("VIDEO_RTMP_PORT", "1935")?,
+        srt_port: port("VIDEO_SRT_PORT", "8890")?,
+    };
+    Ok(Some(VideoConfig { api_url: var_or("VIDEO_API_URL", "http://mediamtx:9997").trim_end_matches('/').to_string(), endpoints }))
+}
+
 impl Config {
     pub fn from_env() -> Result<Self> {
         let app_secret = var("APP_SECRET")?;
@@ -222,9 +265,12 @@ impl Config {
         let public_url = var("PUBLIC_URL")?.trim_end_matches('/').to_string();
         let admin_port_raw = var_or("TAK_ADMIN_PORT", "off");
         let tak_admin_url = tak_admin_url(&public_url, &admin_port_raw).with_context(|| format!("TAK_ADMIN_PORT={admin_port_raw:?}"))?;
+        let public_host = var("TAK_PUBLIC_HOST")?;
+        let video = video_from_env(&public_host)?;
 
         Ok(Self {
             listen_addr: parsed("LISTEN_ADDR", "0.0.0.0:8080")?,
+            internal_listen_addr: parsed("INTERNAL_LISTEN_ADDR", "0.0.0.0:8081")?,
             web_dir,
             database_url: var("DATABASE_URL")?,
             app_secret,
@@ -253,7 +299,7 @@ impl Config {
                 api_cert_name: var_or("TAK_API_CERT_NAME", "teamtak-api"),
                 admin_ui_cert_name: var_or("TAK_ADMIN_UI_CERT_NAME", "teamtak-admin-ui"),
                 admin_ui_cert_file: Some(var_or("TAK_ADMIN_UI_CERT_FILE", "")).filter(|f| !f.is_empty()).map(PathBuf::from),
-                public_host: var("TAK_PUBLIC_HOST")?,
+                public_host,
                 client_ports,
                 connection_name: var_or("TAK_CONNECTION_NAME", "TeamTAK"),
                 p12_format,
@@ -281,13 +327,25 @@ impl Config {
                 release_repository,
             },
             tak_admin_url,
+            video,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_ports, parse_release_repository, tak_admin_url, TakConfig, DEFAULT_RELEASE_REPOSITORY};
+    use super::{parse_ports, parse_release_repository, parse_switch, tak_admin_url, TakConfig, DEFAULT_RELEASE_REPOSITORY};
+
+    #[test]
+    fn switches() {
+        for on in ["on", "ON", " true ", "yes"] {
+            assert!(parse_switch(on).unwrap(), "{on:?}");
+        }
+        for off in ["off", "false", "no", ""] {
+            assert!(!parse_switch(off).unwrap(), "{off:?}");
+        }
+        assert!(parse_switch("maybe").is_err());
+    }
 
     #[test]
     fn release_repository() {

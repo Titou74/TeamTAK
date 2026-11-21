@@ -37,6 +37,16 @@ e-mail arrives, from the settings page and from the command line, or says why it
 TAK Server's administration pages they prove that nobody without an administrator's session gets
 anything of TAK Server, and that an administrator gets it with TAK Server's administrator role.
 
+With the video server on (`VIDEO=on`, the default), they publish and watch with ffmpeg in
+containers on the video server's network (MediaMTX's own image with ffmpeg, pulled by the script):
+a stream takes its publish key to publish and its view key to watch, over RTSP, RTMP and SRT, and
+nothing else (a wrong key, the view key to publish, a path nobody declared, no credentials); new
+keys cut the device publishing and retire the old ones; only the team's members see the keys; TAK
+Server lists a stream to its channel's devices and to no other team's; an event's stream works and
+is listed from the event's start to its end, its publisher is cut at the end, and the journal
+counts none of that as drift; the platform's answers to the video server cannot be reached through
+the web port.
+
 The tests use random names and can be replayed on the same stack. A word after the command runs
 only the tests whose name contains it. The whole suite takes about ten minutes; it stops and
 restarts the `app` container, stops the reverse proxy for a minute, and stops and restarts the mail

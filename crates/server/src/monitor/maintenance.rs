@@ -257,11 +257,13 @@ mod tests {
         let gap = super::super::SAMPLE_EVERY - super::super::SAMPLE_SLACK;
         let most = METRIC_SAMPLES_DAYS as i64 * 24 * 3600 / gap.whole_seconds();
         assert!(most <= 27_000, "{most}");
-        let services = teamtak_agent::report::CORE_SERVICES.len() + teamtak_agent::report::LOCAL_SERVICES.len();
+        use teamtak_agent::report::{CORE_SERVICES, LOCAL_SERVICES, VIDEO_SERVICES};
+        let services = CORE_SERVICES.len() + LOCAL_SERVICES.len() + VIDEO_SERVICES.len();
         assert!(most * services as i64 <= 250_000);
-        // And one row an hour for ten years, the same way.
+        // And one row an hour for ten years, the same way: under a million rows of a few
+        // numbers each, with the video server.
         let hours = HOUR_SAMPLES_DAYS as i64 * 24;
         assert!(hours <= 90_000, "{hours}");
-        assert!(hours * services as i64 <= 750_000);
+        assert!(hours * services as i64 <= 1_000_000);
     }
 }

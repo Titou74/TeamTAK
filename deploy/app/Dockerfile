@@ -29,9 +29,12 @@ RUN apt-get update \
 COPY --from=build /usr/local/bin/teamtak /usr/local/bin/teamtak
 COPY --from=web /src/web/dist /app/web
 USER 10001:0
+# 8080: the web UI and its API, behind Caddy. 8081: the questions of the other services of
+# the stack (the video server's authentication), never behind Caddy.
 ENV LISTEN_ADDR=0.0.0.0:8080 \
+    INTERNAL_LISTEN_ADDR=0.0.0.0:8081 \
     WEB_DIR=/app/web
-EXPOSE 8080
+EXPOSE 8080 8081
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.source="https://github.com/Titou74/TeamTAK"
 ENTRYPOINT ["/usr/local/bin/teamtak"]

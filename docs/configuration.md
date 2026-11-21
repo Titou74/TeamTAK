@@ -25,6 +25,7 @@ The settings worth knowing:
 | `TAK_CONNECTION_NAME` | Name of the server shown in ATAK and iTAK (`TeamTAK` by default) |
 | `TAK_CLIENT_PORTS` | Ports of the machine TAK clients connect to, separated by commas (`8089` by default). See [Client ports](#client-ports) |
 | `TAK_ADMIN_PORT` | Port of the machine where the platform's administrators open TAK Server's own administration pages (`8444` by default; `off`: not published; never `8443`, which TAK clients need). See [TAK Server's administration](#tak-servers-administration) |
+| `VIDEO`, `VIDEO_RTSP_PORT`, `VIDEO_RTMP_PORT`, `VIDEO_SRT_PORT` | The video server: `on` or `off`, and the ports of the machine devices reach it on (8554/tcp, 1935/tcp, 8890/udp). See [Video server](#video-server) |
 | `SMTP_*`, `MAIL_FROM` | Outgoing e-mail; check it with `docker compose exec app teamtak send-test-mail you@example.org` |
 
 The settings `install.sh` asks for, or reads from its options, are used on the first run only;
@@ -121,6 +122,39 @@ What to know:
 - An installation made before this setting existed, or with these pages on 8443 (1.0.7 and older),
   gets `8444` at the update, or `off` when 8444 is one of its TAK client ports or taken by another
   program; the install says so. Open 8444 in the firewall.
+
+## Video server
+
+The video server (MediaMTX) carries the teams' video streams: drones, cameras and phones publish
+to it, ATAK and other players watch from it ([how it works](architecture.md#video-streams)).
+
+```
+VIDEO=on
+VIDEO_RTSP_PORT=8554
+VIDEO_RTMP_PORT=1935
+VIDEO_SRT_PORT=8890
+```
+
+- A first install asks whether to install it (yes by default, `--video on|off` without a
+  terminal); the answer is no by default when another program of the machine already uses 8554 or
+  1935. An installation made before it existed gets `VIDEO=on` at the update, or `off` when one of
+  these ports is a TAK client port or taken by another program; the install says so.
+- Open the three ports in the firewall: 8554/tcp (RTSP), 1935/tcp (RTMP) and 8890/udp (SRT).
+- Other ports: change the `VIDEO_*_PORT` lines; turned off: `VIDEO=off`. Then run `./install.sh`
+  again. With `VIDEO=off` the service is removed, the team pages no longer show the video section,
+  and TAK Server stops listing the streams; the declared streams stay in the database and come
+  back with `VIDEO=on`.
+- What is refused: a video port that is a TAK client port, 8443, 8446, the administration port or
+  a port of the web interface, the RTSP and RTMP ports being the same, and in production 443 for
+  SRT (the web interface answers HTTP/3 there). A TCP port another program listens on stops the
+  install, which says which.
+- The addresses handed to devices name `PUBLIC_HOST` and these ports. In local mode with
+  `PUBLIC_HOST=localhost`, only this computer reaches them; give the machine's LAN address at
+  install (`--host`) for phones and drones on the local network.
+- Bandwidth: the server receives each stream once and sends it once per viewer. A 2 Mbit/s drone
+  watched by ten devices takes 20 Mbit/s of upload: mind the hosting's traffic quota.
+- The configuration of MediaMTX itself is `deploy/mediamtx/mediamtx.yml`: RTSP over TCP only, no
+  recording, no browser playback (HLS, WebRTC), and every device checked by the platform.
 
 ## Settings fixed at install
 

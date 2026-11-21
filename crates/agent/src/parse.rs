@@ -304,9 +304,20 @@ pub fn env_value(env_text: &str, key: &str) -> Option<String> {
         .next_back()
 }
 
+/// A switch of deploy/.env (`VIDEO=on`): on, true or yes.
+pub fn is_on(value: &str) -> bool {
+    matches!(value.trim().to_ascii_lowercase().as_str(), "on" | "true" | "yes")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn switches_of_the_settings() {
+        assert!(is_on("on") && is_on(" ON ") && is_on("true") && is_on("yes"));
+        assert!(!is_on("off") && !is_on("") && !is_on("no") && !is_on("maybe"));
+    }
     use serde_json::json;
 
     const DEBIAN12: &str = include_str!("../tests/fixtures/apt-simulate-debian12.txt");

@@ -24,7 +24,7 @@ import {
   formatRelative,
 } from "@/lib/format";
 import { useNotifyError } from "@/lib/hooks";
-import type { Alert as AlertData, Certificate, Monitoring, Release, Service, Snapshot } from "@/lib/monitoring-types";
+import type { Alert as AlertData, Certificate, Monitoring, Release, Service, Snapshot, VideoView } from "@/lib/monitoring-types";
 
 import { HistoryCharts } from "./charts";
 import { Command, Field, Meter, ResolvedBadge, SeverityBadge, StateDot, useAlertText } from "./shared";
@@ -472,6 +472,50 @@ function TakCard({ snapshot }: { snapshot: Snapshot }) {
   );
 }
 
+function VideoCard({ video }: { video: VideoView }) {
+  const { t } = useTranslation();
+  const publishing = video.live.filter((s) => s.publishing).length;
+  const readers = video.live.reduce((sum, s) => sum + s.readers, 0);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("monitoring.video.title")}</CardTitle>
+        <CardDescription>
+          {video.reachable ? t("monitoring.video.live", { count: publishing }) : t("monitoring.video.notAnswering")}
+          {video.reachable && <> · {t("monitoring.video.readers", { count: readers })}</>}
+          {" · "}
+          {t("monitoring.video.declared", { count: video.declared })}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">{t("monitoring.video.ports", { rtsp: video.ports.rtsp, rtmp: video.ports.rtmp, srt: video.ports.srt })}</p>
+        {video.live.length > 0 && (
+          <ul className="divide-y rounded-lg border">
+            {video.live.map((stream) => (
+              <li key={stream.path} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                <StateDot state={stream.publishing ? "ok" : "warning"} />
+                <span className="min-w-0 flex-1 truncate">
+                  {stream.label ?? stream.path}
+                  {stream.team && <span className="text-muted-foreground"> · {stream.team}</span>}
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">{stream.path}</span>
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {stream.publishing
+                    ? t("monitoring.video.streamLive", { relative: formatRelative(stream.since), protocol: (stream.protocol ?? "").toUpperCase() })
+                    : t("monitoring.video.streamWaiting")}
+                  {" · "}
+                  {t("monitoring.video.readers", { count: stream.readers })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-muted-foreground">{t("monitoring.video.help")}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ExpiryCell({ daysLeft, level }: { daysLeft: number; level: Certificate["level"] }) {
   const { t } = useTranslation();
   if (level === "expired") return <Badge variant="destructive">{t("monitoring.certs.expired")}</Badge>;
@@ -786,6 +830,7 @@ export function OverviewTab({ data }: { data: Monitoring }) {
       <HostCard snapshot={snapshot} />
       <ServicesCard snapshot={snapshot} reload={reload} />
       <TakCard snapshot={snapshot} />
+      {snapshot.video && <VideoCard video={snapshot.video} />}
       <CertificatesCard snapshot={snapshot} />
       <PlatformCard snapshot={snapshot} reload={reload} />
       {snapshot.agent.status !== "disabled" && <HistoryCharts />}

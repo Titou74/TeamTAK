@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use time::{Duration, OffsetDateTime};
 
-use super::{EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer};
+use super::{EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer, VideoFeed};
 
 #[derive(Default)]
 struct State {
@@ -21,6 +21,8 @@ struct State {
     /// Sessions whose next cut answers an error: its status, and whether the session is
     /// closed anyway.
     faulty_cuts: BTreeMap<String, (u16, bool)>,
+    /// Video feeds and the group each one was registered for.
+    video_feeds: Vec<(VideoFeed, String)>,
 }
 
 #[derive(Default)]
@@ -75,6 +77,16 @@ impl MemoryTakServer {
     /// anyway, as TAK Server 5.8 sometimes does with a 400.
     pub fn fail_next_cut(&self, uid: &str, status: u16, closes: bool) {
         self.state.lock().unwrap().faulty_cuts.insert(uid.into(), (status, closes));
+    }
+
+    /// The video feeds registered, with their group.
+    pub fn video_feeds_by_group(&self) -> Vec<(VideoFeed, String)> {
+        self.state.lock().unwrap().video_feeds.clone()
+    }
+
+    /// Adds a feed, as if someone had registered it in TAK Server's own pages.
+    pub fn add_foreign_video_feed(&self, feed: VideoFeed, group: &str) {
+        self.state.lock().unwrap().video_feeds.push((feed, group.into()));
     }
 
     pub fn certificates(&self) -> Vec<IssuedCertificate> {
@@ -181,5 +193,30 @@ impl TakServer for MemoryTakServer {
             not_before: now,
             not_after: now + Duration::days(365),
         })
+    }
+
+    async fn video_feeds(&self) -> Result<Vec<VideoFeed>, TakError> {
+        Ok(self.enter("video_feeds".into())?.video_feeds.iter().map(|(f, _)| f.clone()).collect())
+    }
+
+    async fn add_video_feed(&self, feed: &VideoFeed, group: &str) -> Result<(), TakError> {
+        self.enter(format!("add_video_feed {} {group}", feed.uid))?.video_feeds.push((feed.clone(), group.into()));
+        Ok(())
+    }
+
+    async fn update_video_feed(&self, feed: &VideoFeed) -> Result<(), TakError> {
+        let mut s = self.enter(format!("update_video_feed {}", feed.uid))?;
+        match s.video_feeds.iter_mut().find(|(f, _)| f.uid == feed.uid) {
+            Some((f, _)) => {
+                *f = feed.clone();
+                Ok(())
+            }
+            None => Err(TakError::Status { call: format!("PUT /Marti/api/video/{}", feed.uid), status: 500 }),
+        }
+    }
+
+    async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError> {
+        self.enter(format!("delete_video_feed {uid}"))?.video_feeds.retain(|(f, _)| f.uid != uid);
+        Ok(())
     }
 }

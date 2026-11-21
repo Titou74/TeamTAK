@@ -35,7 +35,8 @@ mandatory per-device certificates.
 ## 3. Architecture
 
 Docker Compose services: `caddy`, `app` (Rust API + static UI), `postgres` (platform), `openldap`,
-`takserver`, `takserver-db`, `agent` (host agent). Local mode adds `mailpit` (mail catcher).
+`takserver`, `takserver-db`, `agent` (host agent), and `mediamtx` (video server) when `VIDEO=on`.
+Local mode adds `mailpit` (mail catcher).
 
 - **Source of truth**: the platform's PostgreSQL database. An idempotent reconciliation loop compares
   the desired state with the actual state of the directory (and of TAK Server for certificates) and
@@ -356,9 +357,27 @@ Server upgrade.
 
 Host agent, administrator dashboard, alerts, updates, backup and restore, audit log.
 
-### Phase 4 — extensions (not started, to be confirmed)
+### Phase 4 — extensions (one at a time, as the user chooses them)
 CloudTAK wired to the same accounts, MediaMTX video, per-team distribution of maps and plugins,
 federation.
+
+**MediaMTX video — done (2026-11-21), chosen first by the user.** Decisions:
+- the video server is MediaMTX (MIT licence), run unmodified as its own service, on by default
+  (`VIDEO=on|off`), RTSP over TCP 8554, RTMP 1935, SRT 8890/udp, no recording, no browser playback;
+- **declared streams with their own keys**, not the TAK passwords (RTSP/RTMP/SRT carry credentials
+  unencrypted, and a TAK password lets one enroll a certificate): a stream belongs to a team and to
+  one channel, the team's or an event's; its path is `<group>/<name>`; one publish key and one view
+  key, derived from `APP_SECRET`, the stream and a generation;
+- **leaders and members declare streams**; a member manages the ones they declared, a leader all of
+  the team's; an administrator sees that they exist, not their keys;
+- a stream is valid while its channel exists (same rule as the TAK groups); the video server asks
+  the platform about every device (HTTP authentication, internal port 8081, own Docker network);
+- the reconciliation registers each valid stream in TAK Server's video manager for its group only
+  (`POST /Marti/api/video?group=`, checked on 5.8: feeds are filtered by the caller's groups), so
+  ATAK lists it without anything typed, and disconnects devices from streams no longer valid.
+
+Still to check on real devices: ATAK and iTAK listing and playing the feed (`rtsp://view:<key>@…`,
+RTSP over TCP), a DJI controller and Larix publishing over RTMP and SRT.
 
 CloudTAK, checked 2026-11-20 on v13.124.0 (licence, then accounts). Licence: AGPL-3.0-only,
 standard text with no added terms. Its production dependencies (MIT, Apache-2.0, BSD, ISC,

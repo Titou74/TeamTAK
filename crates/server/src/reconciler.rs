@@ -9,6 +9,10 @@
 //! running event its team takes part in. Each pass computes them for the time it runs at,
 //! so an event needs no other mechanism than a pass at the right moment, and a pass run
 //! late (the platform was stopped) still gives the right result.
+//!
+//! Video streams follow the same clock: a pass gives TAK Server the feeds of the streams
+//! valid at its time, and disconnects from the video server whoever still uses a stream
+//! that is not.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,6 +28,8 @@ use teamtak_core::tak::{IssuedCertificate, TakServer};
 use time::OffsetDateTime;
 use tokio::sync::{Mutex, MutexGuard, Notify};
 use uuid::Uuid;
+
+use crate::video::{self, VideoServer};
 
 /// Context of the password column, authenticated with the ciphertext.
 pub const PASSWORD_CONTEXT: &str = "tak_accesses.password";
@@ -80,6 +86,9 @@ pub struct Reconciler {
     last_clock: std::sync::Mutex<Option<OffsetDateTime>>,
     /// Wakes the scheduler when the dates of the events may have changed.
     schedule_changed: Notify,
+    /// The video server; `None` when it is turned off, and TAK Server then lists none of
+    /// the platform's video feeds.
+    video: Option<Arc<VideoServer>>,
 }
 
 impl Reconciler {
@@ -89,6 +98,7 @@ impl Reconciler {
         tak: Arc<dyn TakServer>,
         secrets: SecretBox,
         protected_usernames: BTreeSet<String>,
+        video: Option<Arc<VideoServer>>,
     ) -> Self {
         Self {
             db,
@@ -100,6 +110,7 @@ impl Reconciler {
             unfinished: AtomicBool::new(false),
             last_clock: std::sync::Mutex::new(None),
             schedule_changed: Notify::new(),
+            video,
         }
     }
 
@@ -178,10 +189,19 @@ impl Reconciler {
         )
         .fetch_all(&self.db)
         .await?;
+        // With the video server turned off, TAK Server must list none of its streams.
+        let video_feeds = match &self.video {
+            Some(server) => {
+                let streams = video::valid_streams(&self.db, now).await?;
+                video::desired_feeds(&streams, &server.endpoints, self.secrets.mac_key())
+            }
+            None => Vec::new(),
+        };
         Ok(DesiredState {
             accounts,
             revoke_fingerprints: revoke.into_iter().map(|(f,)| f).collect(),
             protected_usernames: self.protected_usernames.clone(),
+            video_feeds: Some(video_feeds),
         })
     }
 
@@ -231,7 +251,15 @@ impl Reconciler {
         let finishing_a_change = self.unfinished.load(Ordering::SeqCst);
         let automatic = matches!(trigger, Trigger::Periodic | Trigger::Startup | Trigger::Schedule) && !finishing_a_change;
         let options = PassOptions { max_unknown_accounts: automatic.then_some(AUTOMATIC_DELETION_LIMIT) };
-        let report = run_pass_with(&desired, self.directory.as_ref(), self.tak.as_ref(), options).await;
+        let mut report = run_pass_with(&desired, self.directory.as_ref(), self.tak.as_ref(), options).await;
+        if let Some(server) = &self.video {
+            // The video server is not a backend of the reconciliation: it being down is a
+            // service down (monitoring), not a synchronisation failing.
+            match video::valid_streams(&self.db, now).await {
+                Ok(valid) => report.changes.extend(video::stop_invalid(server, &valid).await),
+                Err(e) => tracing::warn!(error = %e, "video: valid streams not read"),
+            }
+        }
 
         // A change found by a pass nobody asked for is drift, unless it is the schedule of
         // an event at work: a membership of a group that was due to appear or disappear.
@@ -346,9 +374,18 @@ pub async fn sync_certificates(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, a
 }
 
 /// True when a change is what the start or the end of an event calls for: an account
-/// entering or leaving a group that was due.
+/// entering or leaving a group that was due, or a video stream of that group appearing in
+/// TAK Server or leaving it.
 fn is_scheduled(change: &Change, due: &BTreeSet<String>) -> bool {
-    matches!(change, Change::MemberAdded { .. } | Change::MemberRemoved { .. }) && change.group().is_some_and(|g| due.contains(g))
+    let follows_the_group = matches!(
+        change,
+        Change::MemberAdded { .. }
+            | Change::MemberRemoved { .. }
+            | Change::VideoFeedAdded { .. }
+            | Change::VideoFeedRemoved { .. }
+            | Change::VideoStopped { .. }
+    );
+    follows_the_group && change.group().is_some_and(|g| due.contains(g))
 }
 
 /// Runs a pass at startup, then every `interval`, and at each instant an event starts or
@@ -413,6 +450,12 @@ mod tests {
         assert!(!is_scheduled(&Change::UserDeleted { username: "alpha-shared".into() }, &due));
         assert!(!is_scheduled(&Change::ForeignMemberRemoved { group: "evt-exercise".into(), member: "x".into() }, &due));
         assert!(!is_scheduled(&added("evt-exercise"), &BTreeSet::new()), "nothing was due");
+        let feed = Change::VideoFeedAdded { path: "evt-exercise/cam".into(), group: "evt-exercise".into() };
+        assert!(is_scheduled(&feed, &due), "an event's stream appears when the event starts");
+        let stopped = Change::VideoStopped { path: "evt-exercise/cam".into(), group: "evt-exercise".into() };
+        assert!(is_scheduled(&stopped, &due), "and is cut when it ends");
+        let updated = Change::VideoFeedUpdated { path: "evt-exercise/cam".into(), group: "evt-exercise".into() };
+        assert!(!is_scheduled(&updated, &due), "an address changed by nobody is drift");
     }
 
     #[test]

@@ -75,6 +75,10 @@ to invited addresses: two switches in the settings.
 
    ![Cross-team events: one under way that another team has joined, one coming later](docs/images/events.png)
 
+6. **Share video.** A member declares a stream (a drone, a camera, a phone) for the team's channel
+   or an event's, and gets the address to give the device. ATAK lists the stream by itself, to the
+   members of that channel and to nobody else. Each stream has its own keys, never a TAK password.
+
 The UI and the e-mails are in English and French; other languages are two files away. The UI is
 light or dark like the device it is opened on, and each user can force one in their profile.
 
@@ -110,9 +114,11 @@ sudo apt update && sudo apt install -y git unzip openssl
 **2. Point the domain and open the ports.** Create a DNS record for the domain (for example
 `tak.example.org`) that points to the server, and open these ports in the firewall: 80/tcp,
 443/tcp and 443/udp (web), 8089/tcp (TAK clients, plus any other client port you choose at step 5),
-8443/tcp (TAK Server's API: TAK clients read their channels there), 8446/tcp (enrollment) and
+8443/tcp (TAK Server's API: TAK clients read their channels there), 8446/tcp (enrollment),
 8444/tcp (TAK Server's administration pages, for the platform's administrators:
-[TAK Server's administration](docs/configuration.md#tak-servers-administration)).
+[TAK Server's administration](docs/configuration.md#tak-servers-administration)), and 8554/tcp,
+1935/tcp and 8890/udp for the video server, unless you leave it out at step 5
+([Video server](docs/configuration.md#video-server)).
 The domain must
 resolve before the install runs, because Caddy asks Let's Encrypt for the certificate as soon as it
 starts.
@@ -152,6 +158,7 @@ It asks its questions one by one, with the default in brackets (Enter keeps it):
 |---|---|
 | Mode | `1`, production |
 | Domain name | `tak.example.org` |
+| Install the video server | `y` by default: drones, cameras and phones stream to the teams' channels ([Video server](docs/configuration.md#video-server)) |
 | Ports for TAK clients | `8089` by default; add others, separated by commas, for networks that block 8089, or replace it if another program uses it ([Client ports](docs/configuration.md#client-ports)) |
 | E-mail address of the first administrator | your address |
 | Contact address given to Let's Encrypt | the administrator's by default |
@@ -202,8 +209,8 @@ With Docker running and the ZIP at the repository root:
 ./install.sh --local
 ```
 
-It asks for the address TAK clients use, their ports, the administrator's address and the
-certificate validity.
+It asks for the address TAK clients use, whether to install the video server, their ports, the
+administrator's address and the certificate validity.
 Keep `localhost` for this computer only; to let phones on the same network reach TAK Server, give
 the machine's LAN address (the script shows it): the server certificate then carries it and the
 ports listen on all interfaces.
@@ -232,6 +239,7 @@ Without questions:
 | `--tak-client-ports <list>` | Ports TAK clients connect to, separated by commas; the first goes into the zips and QR codes ([Client ports](docs/configuration.md#client-ports)) | `8089` |
 | `--tak-admin-port <port\|off>` | Port where the platform's administrators open TAK Server's own administration pages, after signing in; not 8443, which TAK clients need ([TAK Server's administration](docs/configuration.md#tak-servers-administration)) | `8444` |
 | `--tak-enroll-letsencrypt` | Production: Let's Encrypt certificate on port 8446 | off |
+| `--video <on\|off>` | The video server (MediaMTX), on ports 8554/tcp, 1935/tcp and 8890/udp ([Video server](docs/configuration.md#video-server)) | `on` |
 | `--smtp-host`, `--smtp-port`, `--smtp-username`, `--smtp-password`, `--smtp-tls`, `--mail-from` | Outgoing e-mail | mail catcher in local mode |
 | `--acme-email <address>` | Contact given to Let's Encrypt | the administrator's |
 | `--zip <path>` | TAK Server ZIP, of any version | the one at the repository root; the newest if there are several (asked in a terminal) |
@@ -265,7 +273,7 @@ something waiting; nothing is ever updated from the web UI, on purpose.
 | What | How | Said by the monitoring page |
 |---|---|---|
 | TeamTAK itself | `sudo ./install.sh`, which gets the latest release ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
-| Caddy, PostgreSQL, the mail catcher | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
+| Caddy, PostgreSQL, the mail catcher, the video server | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
 | The directory (OpenLDAP) | Pinned by digest in `deploy/docker-compose.yml`: change the digest, test, then `./install.sh` | "Pinned; a newer build exists" |
 | The server's packages | `sudo apt update && sudo apt full-upgrade`, then `sudo reboot` if asked | pending updates, security updates, restart required |
 | TAK Server | [Upgrading TAK Server](#upgrading-tak-server) | "TAK Server … is available", or a ZIP of a newer version at the repository root |
@@ -314,6 +322,11 @@ channels: without it, a device shows no channel at all. The script publishes it 
 Server's administration pages from 8443 to 8444 (it says so). Keep 8443/tcp open in the firewall
 and open 8444/tcp. Devices see their team's channel once they reconnect; a device that still shows
 no Channels tool in ATAK needs its zip again, or its access scanned or entered again.
+
+**From 1.0.8 or older.** The update adds the video server, on (`VIDEO=on` in `deploy/.env`)
+unless one of its ports is already a TAK client port or taken by another program (it says so).
+Open 8554/tcp, 1935/tcp and 8890/udp in the firewall, or set `VIDEO=off` and run the script again
+([Video server](docs/configuration.md#video-server)).
 
 If files of the repository were changed by hand, the script stops and lists them rather than
 overwrite them. Without access to GitHub it says so and installs from the releases the checkout

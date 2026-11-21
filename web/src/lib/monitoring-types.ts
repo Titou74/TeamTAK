@@ -138,6 +138,25 @@ export interface Backups {
   };
 }
 
+/** The video server, as the monitoring last saw it (crates/server/src/monitor/snapshot.rs). */
+export interface VideoView {
+  reachable: boolean;
+  error: string | null;
+  /** Streams the teams declared, valid or not. */
+  declared: number;
+  /** Streams someone publishes to or watches now. */
+  live: {
+    path: string;
+    label: string | null;
+    team: string | null;
+    publishing: boolean;
+    since: string | null;
+    protocol: string | null;
+    readers: number;
+  }[];
+  ports: { rtsp: number; rtmp: number; srt: number };
+}
+
 export interface Snapshot {
   collected_at: string;
   interval_seconds: number;
@@ -195,6 +214,8 @@ export interface Snapshot {
   backups: Backups;
   letsencrypt: { enabled: boolean; certificate_found: boolean; handed_over: boolean } | null;
   devices: { identified: number; unidentified: number };
+  /** Null when the video server is turned off (VIDEO=off). */
+  video: VideoView | null;
 }
 
 /** TeamTAK's own version, and the latest release published on GitHub. */

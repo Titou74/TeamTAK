@@ -223,6 +223,9 @@ impl Agent {
         if mode == "local" {
             expected.extend(LOCAL_SERVICES.iter().map(|s| s.to_string()));
         }
+        if parse::env_value(&env, "VIDEO").is_some_and(|v| parse::is_on(&v)) {
+            expected.extend(VIDEO_SERVICES.iter().map(|s| s.to_string()));
+        }
         let containers = match docker::project_containers(self.docker.as_ref(), &self.config.project).await {
             Ok(described) => {
                 let mut containers = docker::describe(self.docker.as_ref(), &described).await;
@@ -469,6 +472,17 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn the_video_server_is_expected_when_it_is_turned_on() {
+        let docker = Arc::new(FakeDocker { leaky_filter: true, ..Default::default() });
+        let (agent, root) = test_agent(docker.clone(), "video");
+        std::fs::write(root.join("repo/deploy/.env"), "MODE=production\nVIDEO=on\n").unwrap();
+        let report = agent.report().await;
+        assert!(report.containers.expected.contains(&"mediamtx".to_string()));
+        assert!(!report.containers.expected.contains(&"mailpit".to_string()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
     async fn a_restart_acts_on_the_container_of_this_project_only() {
         let docker = Arc::new(FakeDocker { leaky_filter: true, ..Default::default() });
         let (agent, root) = test_agent(docker.clone(), "restart");
@@ -496,6 +510,7 @@ pub mod tests {
         assert_eq!(services, vec!["caddy", "takserver"]);
         assert!(report.containers.containers.iter().all(|c| c.name.starts_with("teamtak-")), "nothing of the other project");
         assert!(report.containers.expected.contains(&"mailpit".to_string()), "local mode expects the mail catcher");
+        assert!(!report.containers.expected.contains(&"mediamtx".to_string()), "no video server unless VIDEO=on");
         assert_eq!(report.tak.installed_version, "5.8-RELEASE-103");
         assert_eq!(report.tak.zip_versions, vec!["5.9-RELEASE-7".to_string()]);
         assert!(report.tak.processes.iter().any(|p| p.name == "api" && p.running));

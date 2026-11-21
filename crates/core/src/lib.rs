@@ -17,6 +17,7 @@ pub mod reconcile;
 pub mod secret;
 pub mod tak;
 pub mod versions;
+pub mod video;
 
 /// Random string drawn from `alphabet` with a uniform distribution.
 pub fn random_string(len: usize, alphabet: &[u8]) -> String {

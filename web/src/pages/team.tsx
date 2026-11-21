@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EventsSection } from "@/components/events-section";
 import { TeamDevicesSection } from "@/components/monitoring/devices";
 import { ModePicker } from "@/components/mode-picker";
+import { VideoSection } from "@/components/video-section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -484,7 +485,7 @@ function StatusNotice({ detail }: { detail: TeamDetail }) {
   );
 }
 
-/** A team: its TAK accesses, its events, its members, its settings. */
+/** A team: its TAK accesses, its video streams, its events, its members, its settings. */
 export function TeamPage({ me }: { me: Me }) {
   const { t } = useTranslation();
   const { id = "" } = useParams();
@@ -535,6 +536,7 @@ export function TeamPage({ me }: { me: Me }) {
         <StatusNotice detail={detail} />
         {team.status === "active" && detail.my_role && <AccessSection detail={detail} me={me} reload={reload} />}
         {team.status === "active" && detail.permissions.view_devices && <TeamDevicesSection teamId={team.id} shared={team.mode === "shared"} />}
+        {team.status === "active" && <VideoSection team={team} />}
         {(team.status === "active" || team.status === "suspended") && <EventsSection team={team} isMember={detail.my_role !== null} />}
         <MembersSection detail={detail} me={me} reload={reload} />
         <SettingsSection detail={detail} reload={reload} />
