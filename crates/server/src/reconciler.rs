@@ -281,6 +281,10 @@ impl Reconciler {
         for error in &report.errors {
             tracing::warn!(trigger = trigger.as_str(), error, "reconciliation error");
         }
+        // Not recorded as errors: the pass applied everything it had to.
+        for warning in &report.warnings {
+            tracing::warn!(trigger = trigger.as_str(), warning, "reconciliation warning");
+        }
         if let Err(e) = self.persist(trigger, now, &drift, &report).await {
             tracing::error!(error = %format!("{e:#}"), "recording the reconciliation outcome");
         }

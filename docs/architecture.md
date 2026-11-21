@@ -79,7 +79,11 @@ reach it over the Docker network.
   the difference: accounts, group memberships, passwords, certificates that should not work,
   sessions left with no group, the video feeds TAK Server lists, and the devices still using a
   video stream that no longer works. What a pass corrects without the platform having asked for
-  it is reported as drift in the administration area.
+  it is reported as drift in the administration area. TAK Server sometimes keeps listing a
+  session whose connection is gone, without any group, and refuses to cut it (when a device
+  disconnects right after connecting, more often just after TAK Server started). Such a leftover
+  sees nothing and nobody sees it: a pass logs it as a warning instead of failing, and it
+  disappears when TAK Server restarts.
 
 ## Channels on the devices
 

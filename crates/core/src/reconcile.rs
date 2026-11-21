@@ -16,11 +16,14 @@
 //!
 //! The video feeds TAK Server lists follow the same way ([`crate::video::plan_feeds`]): one
 //! per valid video stream, for the group of the stream.
+//!
+//! TAK Server can also keep listing a session whose connection is gone, which no cut removes:
+//! see [`settle_failed_cuts`] for how such a leftover is told apart from a real failure.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::directory::{Directory, DirectorySnapshot};
-use crate::tak::{IssuedCertificate, Subscription, TakServer};
+use crate::tak::{IssuedCertificate, Subscription, TakError, TakServer};
 use crate::video::{path_of_url, plan_feeds, split_path, DesiredFeed, FeedAction};
 
 /// A TAK account that must exist, with the groups it must be in.
@@ -218,6 +221,8 @@ pub fn plan_sessions(desired: &DesiredState, subscriptions: &[Subscription], cut
 pub struct FailedCut {
     pub subscription_uid: String,
     pub username: String,
+    /// The HTTP status TAK Server answered with; none when it did not answer.
+    pub status: Option<u16>,
     pub error: String,
 }
 
@@ -225,6 +230,26 @@ impl FailedCut {
     fn message(&self) -> String {
         format!("cutting session {}: {}", self.subscription_uid, self.error)
     }
+
+    fn leftover_message(&self) -> String {
+        format!(
+            "session {} of {}: TAK Server lists it without any group but answered 400 to the cut, as it does \
+             when no connection is behind the entry. It sees nothing and nobody sees it; restarting TAK Server \
+             clears it.",
+            self.subscription_uid, self.username
+        )
+    }
+}
+
+/// What became of the cuts TAK Server did not confirm.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SettledCuts {
+    /// Sessions that are gone after all.
+    pub changes: Vec<Change>,
+    /// Sessions still there that the platform must still deal with.
+    pub errors: Vec<String>,
+    /// Leftover entries: still listed, but with nothing behind them.
+    pub warnings: Vec<String>,
 }
 
 /// What became of the cuts TAK Server did not confirm, given the sessions it lists afterwards.
@@ -233,20 +258,41 @@ impl FailedCut {
 /// connection, the handler of the closed connection removes the session, and when it does so
 /// first, the call finds nothing left to remove (seen in the integration tests). A session can
 /// also close by itself between the listing and the cut. Either way a session that is no longer
-/// listed is gone, which is what the cut was for: it counts as cut. One still listed was not
-/// cut, and that stays an error.
-pub fn settle_failed_cuts(failed: Vec<FailedCut>, listed: &[Subscription]) -> (Vec<Change>, Vec<String>) {
-    let open: BTreeSet<&str> = listed.iter().map(|s| s.subscription_uid.as_str()).collect();
-    let mut changes = Vec::new();
-    let mut errors = Vec::new();
+/// listed is gone, which is what the cut was for: it counts as cut.
+///
+/// TAK Server can also go on listing a session whose connection is gone, until it restarts.
+/// When a client closes its connection right after its first message, the handler of the
+/// closed connection removes the session while another thread is still recording the
+/// client's callsign, and that recording puts the session back in the list: TAK Server's
+/// messaging log shows `Removed Subscription: tls:1` followed by `Set client for
+/// subscription: tls:1` (seen after a restart of TAK Server with the scripted client of an
+/// integration test, which disconnects a tenth of a second after connecting, and with clients
+/// whose certificate was just revoked, which the server disconnects at once). No TCP connection
+/// is open behind such an entry. It is listed without any group, the groups having gone with the
+/// connection, sometimes with its account's username, and every cut answers 400 ("Could not
+/// delete subscription with uid"), as for any identifier TAK Server has no connection for.
+///
+/// So a session still listed after a refused cut is:
+/// - a leftover when it holds no group and the answer was 400. It sees nothing and nobody sees
+///   it, and no cut can remove it. It is a warning, not an error: as an error it would make
+///   every change of the platform look unapplied until TAK Server restarts, and finally raise
+///   the "synchronisation failing" alert, for something that leaks nothing.
+/// - an error otherwise. A session that still holds groups may still see what its account must
+///   no longer see. Any other answer (500, no answer) says nothing about the connection, so the
+///   session may be a device that is really connected and will never get its groups.
+pub fn settle_failed_cuts(failed: Vec<FailedCut>, listed: &[Subscription]) -> SettledCuts {
+    let listed: BTreeMap<&str, &Subscription> = listed.iter().map(|s| (s.subscription_uid.as_str(), s)).collect();
+    let mut settled = SettledCuts::default();
     for cut in failed {
-        if open.contains(cut.subscription_uid.as_str()) {
-            errors.push(cut.message());
-        } else {
-            changes.push(Change::SessionCut { username: cut.username, subscription_uid: cut.subscription_uid });
+        match listed.get(cut.subscription_uid.as_str()) {
+            None => settled.changes.push(Change::SessionCut { username: cut.username, subscription_uid: cut.subscription_uid }),
+            Some(session) if session.groups.is_empty() && cut.status == Some(400) => {
+                settled.warnings.push(cut.leftover_message())
+            }
+            Some(_) => settled.errors.push(cut.message()),
         }
     }
-    (changes, errors)
+    settled
 }
 
 /// Something a pass changed.
@@ -354,6 +400,9 @@ pub struct PassReport {
     pub changes: Vec<Change>,
     /// Steps that failed, in plain English for the logs and the administrator.
     pub errors: Vec<String>,
+    /// Anomalies of TAK Server that leave nothing to apply and nothing exposed, in plain
+    /// English for the logs. They do not make the pass fail.
+    pub warnings: Vec<String>,
     pub directory_reachable: bool,
     pub tak_reachable: bool,
     /// Certificates still active at the end of the pass, when TAK Server could be read.
@@ -534,7 +583,11 @@ pub async fn run_pass_with(
                             Err(e) if best_effort => tracing::debug!(subscription_uid, error = %e, "group-less session not cut"),
                             Err(e) => {
                                 tracing::debug!(subscription_uid, error = %e, "cut not confirmed, checking whether the session is gone");
-                                failed_cuts.push(FailedCut { subscription_uid, username, error: e.to_string() });
+                                let status = match &e {
+                                    TakError::Status { status, .. } => Some(*status),
+                                    _ => None,
+                                };
+                                failed_cuts.push(FailedCut { subscription_uid, username, status, error: e.to_string() });
                             }
                         }
                     }
@@ -547,12 +600,17 @@ pub async fn run_pass_with(
                 }
             }
             if !failed_cuts.is_empty() {
-                // A refused cut may still have closed the session: see [`settle_failed_cuts`].
+                // A refused cut may still have closed the session, or the session may be a
+                // leftover entry with nothing behind it: see [`settle_failed_cuts`]. A leftover
+                // is asked to be cut again at every pass, which costs two calls. Remembering it
+                // from one pass to the next would save them, but TAK Server numbers sessions
+                // from tls:1 again when it restarts, and a real session could then be spared.
                 match tak.subscriptions().await {
                     Ok(listed) => {
-                        let (changes, errors) = settle_failed_cuts(failed_cuts, &listed);
-                        report.changes.extend(changes);
-                        report.errors.extend(errors);
+                        let settled = settle_failed_cuts(failed_cuts, &listed);
+                        report.changes.extend(settled.changes);
+                        report.errors.extend(settled.errors);
+                        report.warnings.extend(settled.warnings);
                     }
                     Err(_) => report.errors.extend(failed_cuts.iter().map(FailedCut::message)),
                 }
@@ -843,11 +901,142 @@ mod tests {
 
     #[test]
     fn a_refused_cut_is_an_error_only_while_the_session_is_listed() {
-        let failed = |uid: &str| FailedCut { subscription_uid: uid.into(), username: "u".into(), error: "boom".into() };
+        let failed =
+            |uid: &str| FailedCut { subscription_uid: uid.into(), username: "u".into(), status: Some(500), error: "boom".into() };
         let listed = [Subscription { subscription_uid: "tls:2".into(), username: "u".into(), ..Default::default() }];
-        let (changes, errors) = settle_failed_cuts(vec![failed("tls:1"), failed("tls:2")], &listed);
-        assert_eq!(changes, vec![Change::SessionCut { username: "u".into(), subscription_uid: "tls:1".into() }]);
-        assert_eq!(errors, vec!["cutting session tls:2: boom".to_string()]);
+        let settled = settle_failed_cuts(vec![failed("tls:1"), failed("tls:2")], &listed);
+        assert_eq!(settled.changes, vec![Change::SessionCut { username: "u".into(), subscription_uid: "tls:1".into() }]);
+        assert_eq!(settled.errors, vec!["cutting session tls:2: boom".to_string()]);
+        assert!(settled.warnings.is_empty());
+    }
+
+    #[test]
+    fn only_a_400_on_a_session_listed_without_groups_is_a_leftover() {
+        let failed = |uid: &str, status: Option<u16>| FailedCut {
+            subscription_uid: uid.into(),
+            username: "alpha-shared".into(),
+            status,
+            error: "refused".into(),
+        };
+        let session = |uid: &str, groups: &[&str]| Subscription {
+            subscription_uid: uid.into(),
+            username: "alpha-shared".into(),
+            groups: groups.iter().map(|g| g.to_string()).collect(),
+            ..Default::default()
+        };
+        let listed = [session("tls:1", &[]), session("tls:2", &["alpha"]), session("tls:3", &[]), session("tls:4", &[])];
+        let settled = settle_failed_cuts(
+            vec![
+                failed("tls:1", Some(400)), // no group, 400: a leftover
+                failed("tls:2", Some(400)), // still holds a group: may still see it
+                failed("tls:3", Some(500)), // the server failed: says nothing about the connection
+                failed("tls:4", None),      // no answer at all
+                failed("tls:5", Some(400)), // no longer listed: cut
+            ],
+            &listed,
+        );
+        assert_eq!(
+            settled.changes,
+            vec![Change::SessionCut { username: "alpha-shared".into(), subscription_uid: "tls:5".into() }]
+        );
+        assert_eq!(settled.warnings.len(), 1, "{:?}", settled.warnings);
+        assert!(settled.warnings[0].starts_with("session tls:1 of alpha-shared: "), "{}", settled.warnings[0]);
+        assert_eq!(
+            settled.errors,
+            ["tls:2", "tls:3", "tls:4"].map(|uid| format!("cutting session {uid}: refused")).to_vec(),
+            "nothing else is let off"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_leftover_session_is_a_warning_and_does_not_hold_changes_back() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        let want = two_teams();
+        run_pass(&want, &dir, &tak).await;
+        tak.add_certificate("alpha-shared", "f1");
+        // As seen after a restart of TAK Server: a device of alpha disconnected right after its
+        // first message, and the server kept its session, with the account but without its group.
+        tak.add_leftover("tls:1", "alpha-shared");
+        tak.add_subscription("tls:2", "bravo-ann", &["bravo"]);
+        tak.clear_calls();
+
+        let report = run_pass(&want, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+        assert!(report.warnings[0].starts_with("session tls:1 of alpha-shared: "), "{}", report.warnings[0]);
+        assert!(report.is_clean(), "nothing was changed and nothing failed: {report:?}");
+        assert!(tak.calls().contains(&"cut_subscription tls:1".to_string()), "the cut was tried: {:?}", tak.calls());
+        assert_eq!(tak.subscription_uids(), vec!["tls:1".to_string(), "tls:2".to_string()]);
+
+        // A change made meanwhile on the platform is applied, and reported so.
+        let mut more = want.clone();
+        more.accounts.push(account("alpha-new", &["alpha"]));
+        tak.clear_calls();
+        let report = run_pass(&more, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(report.changes.contains(&Change::UserCreated { username: "alpha-new".into() }), "{:?}", report.changes);
+        assert_eq!(report.warnings.len(), 1);
+        // Tried again at every pass: after a restart, TAK Server gives tls:1 to a new session.
+        assert!(tak.calls().contains(&"cut_subscription tls:1".to_string()));
+        assert_eq!(tak.subscription_uids(), vec!["tls:1".to_string(), "tls:2".to_string()], "bravo is untouched");
+
+        // Once its account is gone, the entry matches what the database wants (no group): it is
+        // left alone, and the deletion goes through.
+        let without_alpha =
+            desired(vec![account("alpha-new", &["alpha"]), account("bravo-ann", &["bravo"]), account("bravo-bob", &["bravo"])]);
+        tak.clear_calls();
+        let report = run_pass(&without_alpha, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+        assert!(report.changes.contains(&Change::UserDeleted { username: "alpha-shared".into() }), "{:?}", report.changes);
+        assert!(!tak.calls().iter().any(|c| c.starts_with("cut_subscription")), "{:?}", tak.calls());
+        assert!(run_pass(&without_alpha, &dir, &tak).await.is_clean());
+    }
+
+    #[tokio::test]
+    async fn a_400_on_a_session_that_still_holds_groups_stays_an_error() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        run_pass(&two_teams(), &dir, &tak).await;
+        tak.add_subscription("tls:1", "bravo-ann", &["bravo"]);
+        tak.fail_next_cut("tls:1", 400, false);
+
+        // Team bravo is suspended; the cut of its session is answered 400, and the session is
+        // still listed with the team's group: it may still see the team, which is not a leftover.
+        let suspended = desired(vec![account("alpha-shared", &["alpha"]), account("bravo-ann", &[]), account("bravo-bob", &[])]);
+        let report = run_pass(&suspended, &dir, &tak).await;
+        assert_eq!(
+            report.errors,
+            vec!["cutting session tls:1: TAK Server answered 400 to DELETE /Marti/api/subscriptions/delete/tls:1".to_string()]
+        );
+        assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+        assert_eq!(tak.subscription_uids(), vec!["tls:1".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn a_session_without_groups_that_the_server_fails_to_cut_stays_an_error() {
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        let want = two_teams();
+        run_pass(&want, &dir, &tak).await;
+        // A device of alpha connected while its team had no group: it never gets the group
+        // unless it reconnects. TAK Server fails on the cut with something other than a 400.
+        tak.add_subscription("tls:1", "alpha-shared", &[]);
+        tak.fail_next_cut("tls:1", 500, false);
+
+        let report = run_pass(&want, &dir, &tak).await;
+        assert_eq!(
+            report.errors,
+            vec!["cutting session tls:1: TAK Server answered 500 to DELETE /Marti/api/subscriptions/delete/tls:1".to_string()]
+        );
+        assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+
+        // The next pass cuts it.
+        let report = run_pass(&want, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(
+            report.changes,
+            vec![Change::SessionCut { username: "alpha-shared".into(), subscription_uid: "tls:1".into() }]
+        );
+        assert!(tak.subscription_uids().is_empty());
     }
 
     #[tokio::test]
