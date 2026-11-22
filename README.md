@@ -82,8 +82,9 @@ to invited addresses: two switches in the settings.
 7. **Hand out maps.** An administrator keeps a catalogue of map sources (IGN, OpenTopoMap, or any
    ATAK map source file), and a leader can add the team's own; the leader picks the team's maps,
    and an event's organisers the event's. Each source is checked before anyone gets it, and again
-   every few hours. TAK Server hands the maps to the devices of that channel when they connect,
-   and ATAK lists them among its maps. For iTAK, the team page offers them as a data package.
+   every few hours. TAK Server hands the maps to the devices of that channel when ATAK starts and
+   connects, and ATAK lists them among its maps. For iTAK, the team page offers them as a data
+   package.
 
 8. **Share files.** The team page lists the data packages and the Data Sync missions of the
    team's channels, as the team's devices see them in TAK Server: members download them, send a
