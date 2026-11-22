@@ -487,7 +487,7 @@
   },
   "maps": {
     "title": "Cartes",
-    "description": "Sources de cartes pour ATAK. TAK Server remet les cartes de chaque canal à ses appareils quand ils se connectent : elles apparaissent dans les cartes d'ATAK (onglet Mobile), et ATAK télécharge les tuiles dont il a besoin pendant l'affichage.",
+    "description": "Sources de cartes pour ATAK. TAK Server remet les cartes de chaque canal à ses appareils quand ATAK démarre et se connecte : elles apparaissent dans les cartes d'ATAK (onglet Mobile), et ATAK télécharge les tuiles dont il a besoin pendant l'affichage.",
     "none": "Aucune carte.",
     "broken": {
       "label": "Ne fonctionne pas",
@@ -526,7 +526,7 @@
       "action": "Télécharger les cartes"
     },
     "notes": {
-      "atak": "ATAK : rien à importer. Les zips de connexion, ainsi que l'enrôlement par QR code ou par identifiant et mot de passe, activent « Apply TAK Server profile updates ». Un appareil déjà connecté reçoit les nouvelles cartes à sa prochaine connexion ; un appareil configuré avec un zip de TeamTAK 1.1.0 ou antérieur doit avoir ce réglage coché dans ATAK, ou recevoir à nouveau son zip.",
+      "atak": "ATAK : rien à importer. Les zips de connexion, ainsi que l'enrôlement par QR code ou par identifiant et mot de passe, activent « Apply TAK Server profile updates ». ATAK demande les cartes une fois par lancement : un appareil où ATAK tourne déjà reçoit les nouvelles cartes au prochain démarrage d'ATAK (une reconnexion ne suffit pas). Un appareil configuré avec un zip de TeamTAK 1.1.0 ou antérieur doit avoir ce réglage coché dans ATAK, ou recevoir à nouveau son zip.",
       "itak": "iTAK, ou ATAK avec ce réglage désactivé : téléchargez les cartes et ouvrez le data package sur le téléphone.",
       "removal": "Une carte retirée d'un canal reste sur les téléphones qui l'ont : supprimez-la là-bas si elle doit disparaître.",
       "checks": "Chaque source de carte est vérifiée avant d'être remise : une de ses tuiles doit revenir sous forme d'image. TeamTAK les revérifie toutes les six heures, et retient celle qui échoue deux fois de suite jusqu'à ce qu'elle fonctionne à nouveau.",

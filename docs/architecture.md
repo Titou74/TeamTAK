@@ -76,8 +76,8 @@ reach it over the Docker network.
   without anything to type ([Video streams](#video-streams)).
 - **Maps.** The administrators keep a catalogue of map sources; a team's leaders pick the team's
   maps from it, and an event's organisers the event's. TAK Server hands them to the devices of
-  that channel when they connect, as device profiles, and ATAK lists them among its maps
-  ([Maps](#maps)).
+  that channel, as device profiles, when ATAK starts and connects, and ATAK lists them among its
+  maps ([Maps](#maps)).
 - **Team files.** A team's members see the TAK Server files of the team's channels (data
   packages, files of Data Sync missions), download them, and send files to them, from the team
   page ([Team files](#team-files)).
@@ -218,14 +218,20 @@ server or to the phone in advance.
 
   Profiles whose name does not start with `teamtak-` were made by someone else, in TAK Server's
   own pages, and are left alone.
-- **When a device gets them.** ATAK asks for profiles when it connects, giving the seconds since
-  it last did; TAK Server answers with the profiles changed since (every file added or removed
-  counts as a change). A device already connected gets new maps, or those of an event that just
-  started, the next time it connects.
+- **When a device gets them.** ATAK asks a server for its profiles once per launch: the first
+  time it connects to that server after it starts, giving the seconds since it last asked that
+  server (everything, the first time). TAK Server answers with the profiles changed since (every
+  file added or removed counts as a change), and logs `Returning connection profile for <device
+  uid>` only when it sends files. Reconnecting, or removing the server in ATAK and adding it
+  again, asks for nothing: a device already running gets new maps, or those of an event that
+  just started, the next time ATAK starts. ATAK imports the package by itself, without a prompt,
+  copies each map source to `atak/imagery/` and deletes the package, so nothing shows among its
+  data packages. Checked with ATAK 5.6.0 on Android 13, and in ATAK-CIV's source
+  (`CotMapServerListener`, `DeviceProfileOperation`).
 - **Limits.**
   - A profile adds files to a device and never removes any. A map taken off a channel, removed
     from the catalogue, or that of an event that ended, stays on the phones that have it: delete
-    it there if it must go.
+    it there if it must go (its file is in `atak/imagery/`).
   - TAK Server's guide describes device profiles for ATAK only. For iTAK, or for ATAK with the
     setting off (a device set up with a zip from TeamTAK 1.1.0 or older), the team page offers the
     maps its devices get now (the team's and those of the events running) as a data package to

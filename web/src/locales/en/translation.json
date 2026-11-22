@@ -476,7 +476,7 @@
   },
   "maps": {
     "title": "Maps",
-    "description": "Map sources for ATAK. TAK Server hands each channel's maps to its devices when they connect: they show up among the maps of ATAK (Mobile tab), and ATAK fetches the tiles it needs while the map is shown.",
+    "description": "Map sources for ATAK. TAK Server hands each channel's maps to its devices when ATAK starts and connects: they show up among the maps of ATAK (Mobile tab), and ATAK fetches the tiles it needs while the map is shown.",
     "none": "No map.",
     "broken": {
       "label": "Not working",
@@ -514,7 +514,7 @@
       "action": "Download the maps"
     },
     "notes": {
-      "atak": "ATAK: nothing to import. Connection zips, and enrolling by QR code or by username and password, turn on “Apply TAK Server profile updates”. A device already connected gets new maps the next time it connects; one set up with a zip of TeamTAK 1.1.0 or older needs that setting ticked in ATAK, or its zip again.",
+      "atak": "ATAK: nothing to import. Connection zips, and enrolling by QR code or by username and password, turn on “Apply TAK Server profile updates”. ATAK asks for the maps once per launch: a device already running gets new maps the next time ATAK starts (reconnecting is not enough). A device set up with a zip of TeamTAK 1.1.0 or older needs that setting ticked in ATAK, or its zip again.",
       "itak": "iTAK, or ATAK with that setting off: download the maps and open the data package on the phone.",
       "removal": "A map taken off a channel stays on the phones that have it: delete it there if it must go.",
       "checks": "Every map source is checked before it is handed out: one of its tiles must come back as an image. TeamTAK checks them again every six hours, and holds back one that fails twice in a row until it works again.",

@@ -439,16 +439,25 @@ RTSP over TCP), a DJI controller and Larix publishing over RTMP and SRT.
     updated since are sent, and adding or removing a file updates the profile. With
     `x509useGroupCache`, TAK Server adds its own `enable-channels.pref` to every answer;
   - a group a profile names that TAK Server does not know yet is created.
+- **What ATAK does**, read in ATAK-CIV's source (`CotMapServerListener`, `DeviceProfileOperation`,
+  `MissionPackageEventHandler2`) and checked on a phone on 2026-11-22 (ATAK 5.6.0.12, Android 13,
+  with `adb logcat`): ATAK asks a server for its connection profiles once per launch, the first
+  time it connects after starting, with `syncSecago` counted from its last request to that host
+  (everything, the first time). Reconnecting, or removing and adding the server again, asks for
+  nothing, so new maps reach a running device at the next ATAK launch. ATAK imports the package
+  without a prompt and copies each map source to `atak/imagery/` (not `imagery/mobile/mapsources`),
+  where it shows among its maps. TAK Server logs `Returning connection profile for <device uid>`
+  only when it sends files.
 - **Limits**, stated in the docs and on the team page: a profile adds files to a device and never
   removes any; the guide names ATAK only, so the team page offers the maps as a data package for
   iTAK (or ATAK with the setting off); offline maps (MBTiles, SQLite) are not handed out, and an
   area is downloaded for offline use only where the provider allows it, for an event's zone.
 
-Still to check on real devices: ATAK asking for the connection profile and listing the maps under
-Mobile; the enrollment profile turning "Apply TAK Server profile updates" on after a QR code or a
-username and password; a device set up with a zip of TeamTAK 1.1.0 or older (the setting stays
-off until ticked or the zip is imported again); what iTAK does with TAK Server's profiles and with
-the maps' data package.
+Checked on a real device (2026-11-22): a connection zip of TeamTAK 1.2.0 turns "Apply TAK Server
+profile updates" on, and ATAK then asks for the connection profile and lists the maps. Still to
+check: the enrollment profile turning that setting on after a QR code or a username and password;
+a device set up with a zip of TeamTAK 1.1.0 or older (the setting stays off until ticked or the
+zip is imported again); what iTAK does with TAK Server's profiles and with the maps' data package.
 
 **Team files — done (2026-11-22), the user's idea, built after a design checkpoint ("Yes, build
 it").** Decisions:
