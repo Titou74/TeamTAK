@@ -1066,3 +1066,44 @@ async fn suspending_a_team_cuts_its_sessions_and_reactivating_restores_them() {
     let back2 = TakClient::connect(&identity, "b2").await.unwrap();
     assert!(back1.sees(&back2, SEES).await, "after reconnecting, the team sees itself again");
 }
+
+/// OpenLDAP answers a search with at most 500 entries by default. A reconciliation reads every
+/// TAK access and every group in one search each, and TAK Server lists the groups: install.sh
+/// lifts the limit for both service accounts, and for no one else.
+#[test]
+#[ignore = "needs the running stack"]
+fn the_directory_does_not_cap_what_the_platform_and_tak_server_read() {
+    let base = setting("LDAP_BASE_DN").to_lowercase();
+    let (ok, config) = compose_exec(
+        "openldap",
+        &["ldapsearch", "-Q", "-LLL", "-o", "ldif-wrap=no", "-Y", "EXTERNAL", "-H", "ldapi:///"]
+            .into_iter()
+            .chain(["-b", "olcDatabase={1}mdb,cn=config", "-s", "base", "olcLimits"])
+            .collect::<Vec<_>>(),
+        None,
+    );
+    assert!(ok, "{config}");
+    let limits: Vec<String> =
+        config.lines().filter(|l| l.starts_with("olcLimits:")).map(|l| l.to_lowercase()).collect();
+    assert_eq!(limits.len(), 2, "the two service accounts and nobody else: {limits:?}");
+    for account in ["teamtak", "takserver"] {
+        let rule = limits
+            .iter()
+            .find(|l| l.contains(&format!("dn.exact=\"cn={account},ou=services,{base}\"")))
+            .unwrap_or_else(|| panic!("no limit for cn={account}: {limits:?}"));
+        assert!(rule.contains("size=unlimited") || rule.contains("size.hard=unlimited"), "{rule}");
+    }
+
+    // The platform reads all the accounts, however many past test runs left.
+    let manager = format!("cn=teamtak,ou=Services,{}", setting("LDAP_BASE_DN"));
+    let people = format!("ou=People,{}", setting("LDAP_BASE_DN"));
+    let (ok, out) = compose_exec(
+        "openldap",
+        &["ldapsearch", "-LLL", "-x", "-H", "ldap://localhost:389", "-D", &manager, "-w", setting("LDAP_MANAGER_PW")]
+            .into_iter()
+            .chain(["-b", people.as_str(), "-s", "one", "(objectClass=*)", "1.1"])
+            .collect::<Vec<_>>(),
+        None,
+    );
+    assert!(ok, "the search of every account fails: {}", out.lines().rev().take(3).collect::<Vec<_>>().join(" / "));
+}

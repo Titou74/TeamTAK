@@ -127,9 +127,10 @@ impl LdapDirectory {
         let ldap3::SearchResult(entries, res) = result;
         match res.rc {
             0 => Ok(entries.into_iter().map(SearchEntry::construct).collect()),
-            RC_SIZE_LIMIT => {
-                Err(DirectoryError::Rejected(format!("search under {base} hit the directory's size limit; raise olcSizeLimit")))
-            }
+            // install.sh lifts the limit for the platform's account (deploy/ldap/service_limits.ldif).
+            RC_SIZE_LIMIT => Err(DirectoryError::Rejected(format!(
+                "search under {base} hit the directory's size limit; run ./install.sh again, which lifts it for the platform"
+            ))),
             rc => Err(rejected("search", rc, &res.text)),
         }
     }

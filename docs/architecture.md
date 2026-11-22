@@ -86,7 +86,10 @@ reach it over the Docker network.
   the instant an event starts or ends, a pass compares it with OpenLDAP and TAK Server and corrects
   the difference: accounts, group memberships, passwords, certificates that should not work,
   sessions left with no group, the video feeds TAK Server lists, the devices still using a
-  video stream that no longer works, and the device profiles that carry the maps. What a pass corrects without the platform having asked for
+  video stream that no longer works, and the device profiles that carry the maps. A pass reads
+  every TAK access and every group of OpenLDAP in one search each, more than the 500 entries
+  OpenLDAP answers by default: `install.sh` lifts that limit for the platform's and TAK Server's
+  service accounts at every start (`deploy/ldap/service_limits.ldif`). What a pass corrects without the platform having asked for
   it is reported as drift in the administration area. TAK Server sometimes keeps listing a
   session whose connection is gone, without any group, and refuses to cut it (when a device
   disconnects right after connecting, more often just after TAK Server started). Such a leftover

@@ -1044,6 +1044,15 @@ if [ -n "$tak_running" ] && [ "$(svc_container takserver)" = "$tak_running" ]; t
   docker restart --time 30 "$tak_running" > /dev/null
 fi
 
+# At every start, existing installations included: the directory's image applies its own files
+# only when its volumes are first created.
+info "lifting the directory's 500-entry search limit for the platform and TAK Server"
+wait_healthy openldap 120 || { compose logs --tail 40 openldap >&2; die "the directory did not become healthy"; }
+sed "s|\${LDAP_INIT_ORG_DN}|$LDAP_BASE_DN|g" "$DEPLOY_DIR/ldap/service_limits.ldif" \
+  | svc_exec openldap ldapmodify -Q -Y EXTERNAL -H ldapi:/// > "$DATA_DIR/ldap-limits.log" 2>&1 \
+  || { sed 's/^/   /' "$DATA_DIR/ldap-limits.log" >&2; die "could not set the directory's search limits"; }
+rm -f "$DATA_DIR/ldap-limits.log"
+
 info "waiting for TAK Server (about a minute)"
 wait_healthy takserver 420 || { compose logs --tail 40 takserver >&2; die "TAK Server did not become healthy"; }
 log "Declaring the platform's certificates as TAK Server administrators"
