@@ -52,7 +52,8 @@ to invited addresses: two switches in the settings.
 1. **Sign in with an e-mail address.** No password to remember: a six-digit code arrives by e-mail.
    Anyone can sign in (unless sign-ups are by invitation only), but an account gets no TAK access
    until it belongs to a team. An invisible anti-bot check and a countdown between two codes keep
-   scripts from flooding the mail server.
+   scripts from flooding the mail server. Everyone accepts the server's terms of use when signing
+   in: they put on whoever adds a map source, a video or a file the responsibility for it.
 2. **Ask for a team.** A future leader asks for one and an administrator approves it, with a cap on
    its members. It is the only step that needs an administrator, and it can be turned off.
 3. **Bring the team in.** The leader invites the members by e-mail, removes them, and chooses how

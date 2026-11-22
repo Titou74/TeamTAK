@@ -43,7 +43,8 @@ reach it over the Docker network.
   an account without a team can do nothing and has no TAK access. Before a code is sent, the
   sign-in page passes an invisible anti-bot check, and a new code for the same address waits for a
   countdown (see [Login protections](#login-protections)). Who may sign up is a setting (see
-  [Sign-ups and team approval](#sign-ups-and-team-approval)).
+  [Sign-ups and team approval](#sign-ups-and-team-approval)). Every sign-in accepts the
+  [terms of use](#terms-of-use) first.
 - **Teams.** One team is one TAK group (its name is the channel shown in ATAK and iTAK, see
   [Channels on the devices](#channels-on-the-devices)). By default an
   administrator approves team requests and sets the member cap; that is the only approval step,
@@ -333,6 +334,34 @@ Codes made by the rescue command (`teamtak grant-admin`) go through none of thes
 sign-in page offers "I already have a code" only while one of them waits to be used, not consumed,
 not expired and not burnt (`rescue_code_pending` in `GET /api/config`): the first administrator
 sees it right after the install, and once they are in nobody does until the command is run again.
+
+## Terms of use
+
+The sign-in page shows a box to tick, "I have read and accept the terms of use", with a link that
+opens them; no code is asked for until it is ticked. The footer of every page opens them too, and
+the profile page says when the account accepted them.
+
+- **The text** is in `web/src/locales/<language>/terms.json`, next to the UI's translations, one
+  file per language with the same sections (`pnpm check:i18n` checks they match). It sets apart
+  the creator of TeamTAK, the maintainer who hosts the server, its administrators, team leaders
+  and users, and puts on whoever adds a map source, a video, a file or a setting the
+  responsibility for it: a Google Maps source added by an administrator is that administrator's
+  doing, not the creator's nor the maintainer's.
+- **The version** is the day the text last changed: `version` in each `terms.json`, and
+  `TERMS_VERSION` in `crates/server/src/terms.rs`; a unit test fails while they differ.
+- **Acceptance is recorded on the account** (`terms_version`, `terms_accepted_at`).
+  `POST /api/auth/verify` refuses `terms_not_accepted` unless it carries the version in force
+  (`terms_version`), before looking at the code, so no try is spent; each sign-in records it
+  again. `GET /api/me` returns `terms.accepted_at`, `null` while the account has not accepted the
+  version in force.
+- **A new version** is asked for at the next visit: an account signed in before the terms
+  existed, or before they changed, sees them in place of the platform, with "I accept" and
+  "Sign out" (`POST /api/me/terms`), and nothing else until it accepts. TAK accesses and devices
+  are not affected.
+
+To change the text, edit every `terms.json` and set `version` there and `TERMS_VERSION` to the
+day's date. A modified text is a modified version of TeamTAK in the sense of the licence
+([NOTICE](../NOTICE)).
 
 ## QR codes and port 8446
 

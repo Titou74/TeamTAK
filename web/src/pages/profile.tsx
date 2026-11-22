@@ -5,12 +5,14 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { TermsLink } from "@/components/terms";
 import { ThemePicker } from "@/components/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 import { useNotifyError } from "@/lib/hooks";
 import type { Me } from "@/lib/types";
 
@@ -71,6 +73,10 @@ export function ProfilePage({ me }: { me: Me }) {
           </form>
         </CardContent>
       </Card>
+      <p className="mt-4 max-w-lg text-sm text-muted-foreground">
+        {t("termsOfUse.accepted", { date: formatDateTime(me.terms.accepted_at) })}{" "}
+        <TermsLink className="font-medium text-foreground underline">{t("termsOfUse.read")}</TermsLink>
+      </p>
     </>
   );
 }

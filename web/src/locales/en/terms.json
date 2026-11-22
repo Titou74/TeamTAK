@@ -1,0 +1,116 @@
+{
+  "version": "2026-11-22",
+  "intro": "These terms of use (the \"Terms\") govern the use of this service. By ticking the box provided at sign-in, or by accepting them when they are shown to you, you confirm that you have read them and accept them in full. If you do not accept them, do not use the service.",
+  "sections": [
+    {
+      "title": "What the service is",
+      "body": [
+        "This service lets teams share a TAK (Team Awareness Kit) server: accounts, teams, accesses for ATAK and iTAK, shared events, video streams, maps and files. It runs on TeamTAK, free software distributed under the AGPL-3.0 licence."
+      ]
+    },
+    {
+      "title": "Who does what",
+      "body": [
+        "These Terms tell apart several roles:",
+        {
+          "items": [
+            "the creator: the author of the TeamTAK software and the people who contribute to its code. The creator publishes software; they do not run this server, do not manage its content and have no access to its data;",
+            "the maintainer: the person who hosts this server and looks after it technically (installation, updates, backups, monitoring);",
+            "the administrators: the accounts that hold the administrator role on this server. They decide how it works: sign-ups, approval of teams, map catalogue, settings;",
+            "the team leaders: they run their team, its members, its accesses, its events and its maps;",
+            "the users: anyone who signs in to the service or uses an access it provides, team leaders and administrators included."
+          ]
+        },
+        "One person may hold several roles: they then answer for what they do in each of them."
+      ]
+    },
+    {
+      "title": "Access to the service and account",
+      "body": [
+        "You sign in with an e-mail address and a one-time code. You are responsible for the security of your mailbox: whoever can read it can sign in to your account. You give accurate information and do not pass yourself off as someone else.",
+        "An account gives no access to the TAK server until it belongs to a team. Administrators may turn down a request for a team and suspend a team, in particular when these Terms are not complied with.",
+        "TAK accesses (QR codes, data packages, certificates, usernames and passwords) are reserved for the team or the person they are handed to. Do not pass them on outside the team and do not publish them. If they may have been disclosed, tell your team leader at once: they can regenerate them."
+      ]
+    },
+    {
+      "title": "Rules of use",
+      "body": [
+        "You use the service fairly and in accordance with the applicable laws and regulations. In particular, you must not:",
+        {
+          "items": [
+            "spread unlawful content, in particular defamatory, abusive, hateful, violent or pornographic content, or content that infringes privacy, image rights or the rights of others;",
+            "track, locate, film or watch a person without their knowledge or without a legal basis;",
+            "spread maps, videos, files or data without holding the rights to them, or in breach of their provider's terms;",
+            "try to reach the data of another team, an account that is not yours or the parts of the server that are not open to you;",
+            "get around or test the service's protections (one-time code, anti-bot check, limits, certificates) without the maintainer's written consent;",
+            "disrupt the service: deliberate overload, mass sending, bots, automated extraction of data;",
+            "use the service to prepare or commit an offence."
+          ]
+        },
+        "Complying with the regulations of your own activity (flying drones, radio communications, gatherings, etc.) is your responsibility."
+      ]
+    },
+    {
+      "title": "Protection of the service and intellectual property",
+      "body": [
+        "The TeamTAK software is free software: its source code is published under the AGPL-3.0 licence, and these Terms in no way restrict the rights that licence gives you over it. The \"Powered by TeamTAK\" notice and the link to the source code must stay visible, as that licence requires.",
+        "These Terms cover the use of this server: its security, its availability and its teams' data are protected. Any attempt to break in, alter or hinder it may lead to legal action, including criminal prosecution.",
+        "TAK, ATAK, iTAK and TAK Server are products of their respective publishers. TeamTAK is an independent project, neither published nor endorsed by them. The names and trademarks mentioned, such as Google Maps, belong to their owners."
+      ]
+    },
+    {
+      "title": "Maps, videos, files and other content",
+      "body": [
+        "The service provides no content of its own. Map sources are added to the catalogue by an administrator, or for their team by a team leader; video streams are declared by users; files are sent by users and their devices.",
+        "Whoever adds or chooses a map source alone must check that they have the right to use it that way: many providers, such as Google Maps or Bing, only allow their tiles in their own applications. The service flags the providers known for restrictive terms, but does not check the rights attached to a source and does not endorse it.",
+        "A map source, a video, a file or a setting put in place in breach of a third party's rights or a provider's terms is the sole responsibility of the administrator, team leader or user who put it in place. Neither the creator of TeamTAK nor the maintainer of the service is responsible for it.",
+        "The maps, positions and other information shown may be inaccurate, incomplete or out of date."
+      ]
+    },
+    {
+      "title": "Liability",
+      "body": [
+        "The service and the software are provided \"as is\", without any warranty: neither of availability, nor of continuity, nor of accuracy, nor of fitness for a particular purpose. They may be interrupted at any time, in particular for maintenance.",
+        "The service must never be the only means of communicating, of finding your position or of raising the alarm when people's safety is at stake.",
+        "Each user is solely responsible for how they use the service, for the content they put in it and for the settings they make. Any fraudulent, abusive or unlawful use of the service is the sole responsibility of the person who commits it: it cannot be attributed to the creator of TeamTAK or to the maintainer of the service, who take no part in it.",
+        "The creator and the maintainer do not control the content and settings put in place by administrators, team leaders and users. They cannot be held liable for any damage, direct or indirect, resulting from the use of the service, its unavailability, a loss of data or a use contrary to these Terms.",
+        "If a third party makes a claim against the creator or the maintainer because of a use, content or setting of which you are the author, you undertake to indemnify them against any award made against them and the costs of their defence.",
+        "These limitations apply to the fullest extent permitted by law. They do not exclude liability that cannot lawfully be excluded, in particular for gross negligence or wilful misconduct, nor the rights you hold under mandatory provisions."
+      ]
+    },
+    {
+      "title": "Reporting content or abuse",
+      "body": [
+        "If you come across unlawful content, abuse or a security flaw, report it at once to your team leader or to the service's administrators. They can remove the content, regenerate or withdraw accesses and suspend a team."
+      ]
+    },
+    {
+      "title": "Personal data",
+      "body": [
+        "The service processes the data it needs to work: your e-mail address, your display name, your language and theme, your teams and roles, the date of your last sign-in and of your acceptance of these Terms, the IP address of requests for a code (kept for two days, against abuse) and the log of actions that change the service (who, what, when, from which IP address), kept for one year unless the administrators set otherwise.",
+        "The positions, messages, videos and files the devices exchange go through the TAK server and may be kept there depending on its configuration.",
+        "This data stays on this server. The administrators can see it and, for technical needs, the maintainer; it is neither sold nor transferred. The TeamTAK software sends no personal data to its creator.",
+        "The service uses a single cookie, strictly necessary for your session, and keeps your language and theme in your browser. It uses no advertising tracker and no audience measurement tool.",
+        "You may ask the service's administrators for access to your data, for its correction or for its erasure. You may also contact the data protection authority of your country (in France, the CNIL)."
+      ]
+    },
+    {
+      "title": "Suspension and end of use",
+      "body": [
+        "Administrators may suspend a team or withdraw accesses when these Terms are not complied with, without notice or compensation. You may stop using the service at any time, and ask the administrators to delete your account."
+      ]
+    },
+    {
+      "title": "Changes to these Terms",
+      "body": [
+        "These Terms may change. A new version is shown to you at your next visit, and must be accepted to go on using the service. The date of the version in force is shown at the top of the document."
+      ]
+    },
+    {
+      "title": "Governing law",
+      "body": [
+        "These Terms are governed by the law of the country where the maintainer of the service is established. Should one of their clauses be held void, the others would remain in force."
+      ]
+    }
+  ]
+}

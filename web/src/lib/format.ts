@@ -6,6 +6,11 @@ export function formatDate(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat(currentLanguage(), { dateStyle: "medium" }).format(new Date(iso));
 }
 
+/** A calendar day ("2026-11-22"), the same day whatever the browser's time zone. */
+export function formatDay(day: string): string {
+  return new Intl.DateTimeFormat(currentLanguage(), { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
+}
+
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "";
   return new Intl.DateTimeFormat(currentLanguage(), { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));

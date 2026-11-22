@@ -25,7 +25,8 @@ Runs the integration tests against the real stack, which must be up in local mod
 mail catcher, read what was written to OpenLDAP, and connect scripted TAK clients to TAK Server on
 8089, 8443 and 8446.
 
-They prove, among other things, that two members of a team see each other, that another team does
+They prove, among other things, that nobody signs in without accepting the terms of use in force
+and that an account is asked again when they change, that two members of a team see each other, that another team does
 not see them, that a device reads its team's channel, and only it, on TAK Server's API on 8443 as
 ATAK and iTAK do, that regenerating a shared identity cuts every old certificate, and that two teams
 see each other from the scheduled start of an event to its scheduled end and not a moment outside

@@ -1,6 +1,7 @@
 /**
- * Languages of the UI. To add one: create `src/locales/<code>/translation.json` and
- * `email.json` with the same keys as English, then add its entry here. Nothing else.
+ * Languages of the UI. To add one: create `src/locales/<code>/translation.json`, `email.json`
+ * and `terms.json` (the terms of use) with the same keys as English, then add its entry here.
+ * Nothing else.
  */
 export const LANGUAGES = [
   { code: "en", label: "English" },

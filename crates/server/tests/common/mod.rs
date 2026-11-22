@@ -28,6 +28,14 @@ pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
 }
 
+/// The version of the terms of use in force, as the sign-in page sends it once they are
+/// accepted: the one of the text the UI shows.
+pub fn terms_version() -> String {
+    let file = repo_root().join("web/src/locales/en/terms.json");
+    let terms: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    terms["version"].as_str().unwrap_or_else(|| panic!("no version in {}", file.display())).to_string()
+}
+
 /// Settings of the running stack, read from deploy/.env.
 pub fn env() -> &'static BTreeMap<String, String> {
     static ENV: std::sync::OnceLock<BTreeMap<String, String>> = std::sync::OnceLock::new();
@@ -575,7 +583,7 @@ impl Session {
         let mut session = Self::anonymous();
         session.request_code(email, Some(language)).await.ok();
         let code = code_in(&latest_mail(email).await);
-        session.post("/auth/verify", json!({ "email": email, "code": code, "language": language })).await.ok();
+        session.post("/auth/verify", json!({ "email": email, "code": code, "language": language, "terms_version": terms_version() })).await.ok();
         session.email = email.to_string();
         session
     }
@@ -600,7 +608,7 @@ impl Session {
         let mut session = Self::anonymous();
         // While the code waits, the sign-in page offers "I already have a code".
         assert_eq!(session.get("/config").await.ok()["rescue_code_pending"], true);
-        session.post("/auth/verify", json!({ "email": address, "code": code })).await.ok();
+        session.post("/auth/verify", json!({ "email": address, "code": code, "terms_version": terms_version() })).await.ok();
         session.email = address;
         session
     }

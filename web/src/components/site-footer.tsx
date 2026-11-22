@@ -1,10 +1,12 @@
 import { useTranslation } from "react-i18next";
 
+import { TermsLink } from "@/components/terms";
 import { LICENCE_URL, SOURCE_CODE_URL, TEAMTAK_URL } from "@/lib/project";
 
 const linkClass = "underline-offset-4 hover:text-foreground hover:underline";
 
-/** Footer of every page: the attribution and the source code link the licence asks for (NOTICE). */
+/** Footer of every page: the attribution and the source code link the licence asks for
+ *  (NOTICE), and the terms of use. */
 export function SiteFooter() {
   const { t } = useTranslation();
   return (
@@ -20,6 +22,8 @@ export function SiteFooter() {
       <a href={SOURCE_CODE_URL} target="_blank" rel="noopener" className={linkClass}>
         {t("footer.source")}
       </a>
+      <span aria-hidden="true">·</span>
+      <TermsLink className={linkClass}>{t("footer.terms")}</TermsLink>
     </footer>
   );
 }

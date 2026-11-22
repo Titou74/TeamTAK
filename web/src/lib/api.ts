@@ -116,9 +116,12 @@ export const api = {
   loginChallenge: () => json<LoginChallenge>("GET", "/auth/challenge"),
   requestCode: (email: string, language: string, proof: LoginProof) =>
     json<void>("POST", "/auth/request-code", { email, language, proof }),
-  verifyCode: (email: string, code: string, language: string) => json<Me>("POST", "/auth/verify", { email, code, language }),
+  /** `terms_version`: the version of the terms of use the person accepted on the sign-in page. */
+  verifyCode: (email: string, code: string, language: string, termsVersion: string) =>
+    json<Me>("POST", "/auth/verify", { email, code, language, terms_version: termsVersion }),
   logout: () => json<void>("POST", "/auth/logout"),
   updateMe: (changes: { display_name?: string; language?: string; theme?: Theme }) => json<Me>("PATCH", "/me", changes),
+  acceptTerms: (version: string) => json<Me>("POST", "/me/terms", { version }),
 
   requestTeam: (name: string, mode: TeamMode, message: string) => json<Team>("POST", "/teams", { name, mode, message }),
   team: (id: string) => json<TeamDetail>("GET", `/teams/${id}`),

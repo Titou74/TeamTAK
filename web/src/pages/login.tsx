@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Brand } from "@/components/app-shell";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { SiteFooter } from "@/components/site-footer";
+import { TermsLink } from "@/components/terms";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { adoptAccountLanguage, currentLanguage } from "@/i18n";
 import { api, ApiError } from "@/lib/api";
 import { useErrorText, usePublicConfig } from "@/lib/hooks";
 import { useLoginProofs } from "@/lib/login-proof";
+import { TERMS_VERSION } from "@/lib/terms";
 
 /** The address as the server compares it. */
 const normalized = (email: string) => email.trim().toLowerCase();
@@ -23,7 +25,8 @@ const normalized = (email: string) => email.trim().toLowerCase();
 /**
  * Passwordless sign-in: an e-mail address, then the one-time code sent to it. An invisible
  * anti-bot challenge is solved in the background while the address is typed, and another
- * code for the same address can only be asked for once a countdown has run out.
+ * code for the same address can only be asked for once a countdown has run out. The terms of
+ * use must be accepted first, at every sign-in; the server records it on the account.
  */
 export function LoginPage() {
   const { t } = useTranslation();
@@ -36,6 +39,7 @@ export function LoginPage() {
   const proofs = useLoginProofs();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [step, setStep] = useState<"email" | "code">("email");
   // False when the user says they already hold a code (rescue command): nothing was sent.
   const [codeSent, setCodeSent] = useState(false);
@@ -105,7 +109,7 @@ export function LoginPage() {
     setPending(true);
     setError(null);
     try {
-      const me = await api.verifyCode(email, code, currentLanguage());
+      const me = await api.verifyCode(email, code, currentLanguage(), TERMS_VERSION);
       adoptAccountLanguage(me.account.language);
       queryClient.setQueryData(["me"], me);
     } catch (e) {
@@ -164,12 +168,32 @@ export function LoginPage() {
                     placeholder={t("login.emailPlaceholder")}
                   />
                 </div>
+                {/* The link opens the terms; it stays out of the label, which may not hold a button. */}
+                <div className="flex items-start gap-2.5 text-sm leading-snug">
+                  <input
+                    id="login-terms"
+                    type="checkbox"
+                    required
+                    className="mt-0.5 size-4 shrink-0 accent-primary"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    aria-labelledby="login-terms-label login-terms-link"
+                  />
+                  <p>
+                    <label id="login-terms-label" htmlFor="login-terms" className="text-muted-foreground">
+                      {t("termsOfUse.accept")}
+                    </label>{" "}
+                    <TermsLink id="login-terms-link" className="text-left font-medium underline">
+                      {t("termsOfUse.link")}
+                    </TermsLink>
+                  </p>
+                </div>
                 {error && (
                   <Alert variant="destructive">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                <Button type="submit" className="w-full" size="lg" disabled={pending || !email}>
+                <Button type="submit" className="w-full" size="lg" disabled={pending || !email || !termsAccepted}>
                   <MailIcon />
                   {pending ? t("common.working") : t("login.send")}
                 </Button>
@@ -182,7 +206,7 @@ export function LoginPage() {
                       type="button"
                       variant="link"
                       className="px-0"
-                      disabled={!email}
+                      disabled={!email || !termsAccepted}
                       onClick={() => {
                         setCodeSent(false);
                         setStep("code");

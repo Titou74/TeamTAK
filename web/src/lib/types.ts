@@ -43,6 +43,9 @@ export interface Me {
   invitations: MyInvitation[];
   /** TAK Server's own administration pages, behind the platform's sign-in: administrators only, null when turned off. */
   tak_admin_url: string | null;
+  /** The terms of use in force, and when the account accepted them: null until it does,
+   *  and the UI then shows them and nothing else. */
+  terms: { version: string; accepted_at: string | null };
 }
 
 export interface PublicConfig {
