@@ -1,0 +1,16 @@
+version: 1
+
+# Applied by install.sh each time it starts the stack (new and existing installations alike),
+# as cn=config's administrator over ldapi; ${LDAP_INIT_ORG_DN} is replaced by the base DN first.
+#
+# OpenLDAP answers a search with at most 500 entries (olcSizeLimit of the frontend). The
+# platform reads every TAK access under ou=People and every group under ou=Group in one search
+# at each reconciliation, and TAK Server lists the groups: past 500 of either, the search fails
+# and nothing is synchronised any more. The two service accounts get no size limit; any other
+# bind keeps the default.
+
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+replace: olcLimits
+olcLimits: {0}dn.exact="cn=teamtak,ou=Services,${LDAP_INIT_ORG_DN}" size=unlimited
+olcLimits: {1}dn.exact="cn=takserver,ou=Services,${LDAP_INIT_ORG_DN}" size=unlimited
