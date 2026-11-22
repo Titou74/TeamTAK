@@ -116,11 +116,52 @@ fn body_limit(request: &Request, file_limit: u64) -> usize {
 async fn read_whole_body(State(state): State<SharedState>, request: Request, next: Next) -> Response {
     let limit = body_limit(&request, state.file_upload_limit.load(std::sync::atomic::Ordering::Relaxed));
     let (parts, body) = request.into_parts();
-    match axum::body::to_bytes(body, limit).await {
+    let expected = parts.headers.get(header::CONTENT_LENGTH).and_then(|v| v.to_str().ok()?.parse::<usize>().ok());
+    match read_body(body, limit, expected).await {
         Ok(bytes) => next.run(Request::from_parts(parts, axum::body::Body::from(bytes))).await,
-        Err(_) if limit > MAX_BODY_BYTES => ApiError::FileTooLarge.into_response(),
-        Err(_) => ApiError::InvalidInput.into_response(),
+        Err(()) if limit > MAX_BODY_BYTES => ApiError::FileTooLarge.into_response(),
+        Err(()) => ApiError::InvalidInput.into_response(),
     }
+}
+
+/// Once a body is past its limit, what is left of it is still read, and dropped, before the
+/// refusal is sent: a connection closed with data unread is reset, and Caddy, still sending the
+/// rest, then answers 502 instead of the platform's 413. Up to the largest file the settings can
+/// allow, for a minute at most; past either, the connection is dropped.
+const DRAIN_MAX_BYTES: usize = settings::FILE_UPLOAD_MAX_MB as usize * 1_000_000;
+const DRAIN_TIME: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The whole body, or `Err` when it is larger than `limit` (read to its end, within the bounds
+/// above) or broken off.
+async fn read_body(body: axum::body::Body, limit: usize, expected: Option<usize>) -> Result<axum::body::Bytes, ()> {
+    use axum::body::HttpBody;
+    let mut body = std::pin::pin!(body);
+    let mut data = Vec::with_capacity(expected.unwrap_or(0).min(limit));
+    loop {
+        match std::future::poll_fn(|cx| body.as_mut().poll_frame(cx)).await {
+            None => return Ok(data.into()),
+            Some(Err(_)) => return Err(()),
+            Some(Ok(frame)) => {
+                let Ok(chunk) = frame.into_data() else { continue };
+                if data.len() + chunk.len() > limit {
+                    break;
+                }
+                data.extend_from_slice(&chunk);
+            }
+        }
+    }
+    drop(data);
+    let mut drained = 0usize;
+    let _ = tokio::time::timeout(DRAIN_TIME, async {
+        while let Some(Ok(frame)) = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx)).await {
+            drained += frame.data_ref().map_or(0, |chunk| chunk.len());
+            if drained > DRAIN_MAX_BYTES {
+                break;
+            }
+        }
+    })
+    .await;
+    Err(())
 }
 
 async fn no_store(request: Request, next: Next) -> Response {
@@ -430,5 +471,37 @@ async fn main() -> Result<()> {
             }
         }
         Command::Healthcheck => unreachable!("handled above"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn read(data: &'static [u8], limit: usize) -> Result<axum::body::Bytes, ()> {
+        read_body(axum::body::Body::from(data), limit, Some(data.len())).await
+    }
+
+    #[tokio::test]
+    async fn a_body_within_its_limit_is_read_whole() {
+        assert_eq!(read(b"", 4).await.unwrap(), &b""[..]);
+        assert_eq!(read(b"abc", 4).await.unwrap(), &b"abc"[..]);
+        assert_eq!(read(b"abcd", 4).await.unwrap(), &b"abcd"[..]);
+    }
+
+    #[tokio::test]
+    async fn a_body_past_its_limit_is_refused() {
+        assert!(read(b"abcde", 4).await.is_err());
+        // A Content-Length larger than the limit reserves no more than the limit.
+        assert!(read_body(axum::body::Body::from(vec![7u8; 10]), 4, Some(usize::MAX)).await.is_err());
+    }
+
+    #[test]
+    fn uploads_get_their_own_limits() {
+        let request = |method: Method, path: &str| Request::builder().method(method).uri(path).body(axum::body::Body::empty()).unwrap();
+        assert_eq!(body_limit(&request(Method::POST, "/api/teams/x/files"), 5_000_000), 5_000_000);
+        assert_eq!(body_limit(&request(Method::POST, "/api/admin/map-sources"), 5_000_000), MAX_UPLOAD_BODY_BYTES);
+        assert_eq!(body_limit(&request(Method::POST, "/api/auth/request-code"), 5_000_000), MAX_BODY_BYTES);
+        assert_eq!(body_limit(&request(Method::GET, "/api/teams/x/files"), 5_000_000), MAX_BODY_BYTES);
     }
 }

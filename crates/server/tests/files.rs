@@ -126,12 +126,19 @@ async fn data_packages_are_the_teams_and_removed_by_whoever_may() {
     member.delete(&format!("/teams/{}/files/{key}", alpha.id)).await.ok();
     assert!(!listed_to(&alpha_identity).await.contains(&wrapped));
 
-    // The administrators' limit applies.
+    // The administrators' limit applies, and the refusal reaches the sender through Caddy
+    // however far past the limit the file is (not a 502 for a connection cut mid-upload).
     let before = admin.get("/admin/settings").await.ok()["settings"]["file_upload_max_mb"].clone();
     admin.patch("/admin/settings", json!({ "settings": { "file_upload_max_mb": 1 } })).await.ok();
-    let too_large = member.send_file(&format!("/teams/{}/files?name=big.bin", alpha.id), vec![7u8; 1_200_000]).await;
+    let mut answers = Vec::new();
+    for size in [1_200_000, 8_000_000, 8_000_000, 30_000_000] {
+        let answer = member.send_file(&format!("/teams/{}/files?name=big.bin", alpha.id), vec![7u8; size]).await;
+        answers.push((size, answer.status, answer.error().to_string()));
+    }
     admin.patch("/admin/settings", json!({ "settings": { "file_upload_max_mb": before } })).await.ok();
-    too_large.expect_error(413, "file_too_large");
+    for (size, status, error) in answers {
+        assert_eq!((status, error.as_str()), (413, "file_too_large"), "{size} bytes");
+    }
 }
 
 #[tokio::test]
