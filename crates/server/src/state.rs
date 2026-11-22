@@ -11,7 +11,7 @@ use teamtak_core::directory::Directory;
 use teamtak_core::package::build_truststore;
 use teamtak_core::secret::SecretBox;
 use teamtak_core::tak::http::{HttpTakConfig, HttpTakServer};
-use teamtak_core::tak::TakServer;
+use teamtak_core::tak::{TakFiles, TakServer};
 
 use crate::config::Config;
 use crate::mail::Mailer;
@@ -37,6 +37,10 @@ pub struct AppState {
     pub video: Option<Arc<VideoServer>>,
     /// Fetches a tile of a map source to tell whether it works.
     pub map_checker: Arc<teamtak_core::maps::TileChecker>,
+    /// TAK Server's files (Enterprise Sync, missions).
+    pub tak_files: Arc<dyn TakFiles>,
+    /// Largest file a member may send, in bytes: the setting, kept here for the body limit.
+    pub file_upload_limit: std::sync::atomic::AtomicU64,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -63,6 +67,7 @@ fn pem_certificates(pem: &[u8]) -> Result<Vec<Vec<u8>>> {
 pub struct Backends {
     pub directory: Arc<dyn Directory>,
     pub tak: Arc<dyn TakServer>,
+    pub tak_files: Arc<dyn TakFiles>,
     pub ca_ders: Vec<Vec<u8>>,
 }
 
@@ -80,14 +85,16 @@ pub fn build_backends(config: &Config) -> Result<Backends> {
     })
     .context("setting up the TAK Server client")?;
     let directory = LdapDirectory::new(config.ldap.clone());
-    Ok(Backends { directory: Arc::new(directory), tak: Arc::new(tak), ca_ders })
+    let tak = Arc::new(tak);
+    Ok(Backends { directory: Arc::new(directory), tak: tak.clone(), tak_files: tak, ca_ders })
 }
 
 pub async fn build_state(config: Config) -> Result<SharedState> {
     let db = connect_database(&config).await?;
     let secrets = SecretBox::new(config.app_secret.as_bytes());
     let mailer = Arc::new(Mailer::new(&config.smtp, &config.public_url, Some(db.clone()))?);
-    let Backends { directory, tak, ca_ders } = build_backends(&config)?;
+    let Backends { directory, tak, tak_files, ca_ders } = build_backends(&config)?;
+    let max_mb = crate::settings::load(&db).await.map(|s| s.values.file_upload_max_mb).unwrap_or(100);
     let truststore_p12 = build_truststore(&ca_ders, config.tak.p12_format).context("building the client truststore")?;
     // The platform's certificate, and the one Caddy uses for the administrators' pages.
     let protected = BTreeSet::from([config.tak.api_cert_name.clone(), config.tak.admin_ui_cert_name.clone()]);
@@ -110,5 +117,7 @@ pub async fn build_state(config: Config) -> Result<SharedState> {
         tak_admin_visits: Visits::default(),
         video,
         map_checker: crate::maps::checker().context("setting up the map source checker")?,
+        tak_files,
+        file_upload_limit: std::sync::atomic::AtomicU64::new(u64::from(max_mb) * 1_000_000),
     }))
 }

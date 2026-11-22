@@ -85,6 +85,11 @@ to invited addresses: two switches in the settings.
    every few hours. TAK Server hands the maps to the devices of that channel when they connect,
    and ATAK lists them among its maps. For iTAK, the team page offers them as a data package.
 
+8. **Share files.** The team page lists the data packages and the Data Sync missions of the
+   team's channels, as the team's devices see them in TAK Server: members download them, send a
+   file to the team (it shows up in ATAK) or add one to a mission. Nothing of a password-protected
+   mission is shown.
+
 The UI and the e-mails are in English and French; other languages are two files away. The UI is
 light or dark like the device it is opened on, and each user can force one in their profile.
 

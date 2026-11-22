@@ -9,6 +9,7 @@ pub mod certs;
 pub mod challenge;
 pub mod directory;
 pub mod events;
+pub mod files;
 pub mod login;
 pub mod maps;
 pub mod names;

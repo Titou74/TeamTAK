@@ -609,6 +609,23 @@ impl Session {
         self.get("/me").await.ok()["account"]["id"].as_str().unwrap().to_string()
     }
 
+    /// Sends a file as the team page does: its bytes as the body of a POST.
+    pub async fn send_file(&self, path: &str, data: Vec<u8>) -> Answer {
+        let response = self
+            .http
+            .post(format!("{}/api{path}", base_url()))
+            .header("X-Requested-With", "teamtak")
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/octet-stream")
+            .body(data)
+            .send()
+            .await
+            .expect("platform reachable");
+        let status = response.status().as_u16();
+        let bytes = response.bytes().await.unwrap();
+        Answer { status, body: serde_json::from_slice(&bytes).unwrap_or(Value::Null) }
+    }
+
     /// A file the API hands over (`/teams/{id}/maps/package`): its status and its bytes.
     pub async fn download(&self, path: &str) -> (u16, Vec<u8>) {
         let response = self.http.get(format!("{}/api{path}", base_url())).send().await.unwrap();
@@ -991,6 +1008,32 @@ pub async fn device_api_bytes(identity: &Identity, path: &str) -> Result<(u16, V
     let status = answer.status().as_u16();
     let body = answer.bytes().await.map_err(|e| e.to_string())?.to_vec();
     Ok((status, body))
+}
+
+/// A request to TAK Server's API with a device's certificate, as a phone makes it: the HTTP
+/// status and the body. `file` sends a multipart form with that file as `assetfile`, the way
+/// ATAK sends a data package.
+pub async fn device_request(identity: &Identity, method: &str, path: &str, file: Option<(&str, Vec<u8>)>) -> (u16, Vec<u8>) {
+    install_crypto();
+    let chain: Vec<CertificateDer<'static>> = identity.chain.iter().cloned().map(CertificateDer::from).collect();
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key.clone()));
+    let tls = tls_builder().with_root_certificates(root_store(&identity.roots)).with_client_auth_cert(chain, key).unwrap();
+    let address = tak_api_address();
+    let http = reqwest::Client::builder()
+        .tls_backend_preconfigured(tls)
+        .resolve(TAK_SERVER_NAME, address)
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let url = format!("https://{TAK_SERVER_NAME}:{}{path}", address.port());
+    let mut request = http.request(method.parse().unwrap(), &url).header("Accept", "application/json");
+    if let Some((name, data)) = file {
+        let part = reqwest::multipart::Part::bytes(data).file_name(name.to_string()).mime_str("application/zip").unwrap();
+        request = request.multipart(reqwest::multipart::Form::new().part("assetfile", part));
+    }
+    let answer = request.send().await.unwrap_or_else(|e| panic!("{url}: {e:?}"));
+    let status = answer.status().as_u16();
+    (status, answer.bytes().await.unwrap().to_vec())
 }
 
 /// What TAK Server hands a phone that enrolls with a username and a password: the

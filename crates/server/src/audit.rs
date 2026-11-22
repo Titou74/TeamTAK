@@ -133,6 +133,17 @@ audit_actions! {
     /// A map source held back works again.
     MapSourceWorking => "map_source_working",
 
+    /// A member sent a data package to TAK Server for one of the team's channels.
+    FileUploaded => "file_uploaded",
+    /// A member downloaded a data package or a mission's file through the team page.
+    FileDownloaded => "file_downloaded",
+    /// A data package was removed from TAK Server.
+    FileDeleted => "file_deleted",
+    /// A member added a file to a Data Sync mission.
+    MissionFileAdded => "mission_file_added",
+    /// A file was taken out of a Data Sync mission.
+    MissionFileRemoved => "mission_file_removed",
+
     ReconciliationRequested => "reconciliation_requested",
     SettingsChanged => "settings_changed",
 
@@ -181,6 +192,8 @@ pub enum Detail {
     Channel,
     /// Names of the maps a channel has after a change.
     Maps,
+    /// The Data Sync mission a file belongs to.
+    Mission,
 }
 
 impl Detail {
@@ -206,6 +219,7 @@ impl Detail {
         Detail::DeletedFiles,
         Detail::Channel,
         Detail::Maps,
+        Detail::Mission,
     ];
 
     pub fn name(self) -> &'static str {
@@ -230,6 +244,7 @@ impl Detail {
             Detail::DeletedFiles => "deleted_files",
             Detail::Channel => "channel",
             Detail::Maps => "maps",
+            Detail::Mission => "mission",
         }
     }
 }

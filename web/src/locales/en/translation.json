@@ -605,6 +605,55 @@
       "add": "Add"
     }
   },
+  "files": {
+    "title": "Files",
+    "description": "The files TAK Server holds for the team's channels: data packages sent to the server, and the files of Data Sync missions. You see what the team's devices would get, nothing more.",
+    "sending": "Sending…",
+    "download": "Download {{name}}",
+    "tooLarge": "This file is larger than {{size}}, the most this server takes.",
+    "sender": {
+      "teamtak": "sent by {{name}} through TeamTAK",
+      "tak": "sent by {{name}}"
+    },
+    "packages": {
+      "tab_one": "Data packages ({{count}})",
+      "tab_other": "Data packages ({{count}})",
+      "channel": "Channel",
+      "teamChannel": "Team channel",
+      "eventChannel": "Event “{{name}}”",
+      "send": "Send a file",
+      "help": "Up to {{size}}. ATAK lists it among the server's data packages for the channel's devices. A file that is not a data package (a PDF, a KML, a picture) is wrapped in one so that ATAK can import it.",
+      "none": "No data package on the team's channels.",
+      "sent": "{{name}} sent to TAK Server",
+      "sentWrapped": "Sent to TAK Server as the data package {{name}}"
+    },
+    "missions": {
+      "tab_one": "Missions ({{count}})",
+      "tab_other": "Missions ({{count}})",
+      "help": "Data Sync missions of the team's channels, created in ATAK. TeamTAK creates none. A mission protected by a password shows nothing here: open it in ATAK.",
+      "none": "No mission on the team's channels.",
+      "empty": "No file in this mission.",
+      "locked": "Password",
+      "lockedHelp": "Protected by a password: its files are shown in ATAK only, to whoever has the password.",
+      "readOnly": "Read only",
+      "add": "Add a file",
+      "added": "{{name}} added to {{mission}}",
+      "remove": {
+        "action": "Take {{name}} out of the mission",
+        "title": "Take {{name}} out of the mission?",
+        "text": "It leaves the mission {{mission}} for everyone in it. TAK Server keeps the file itself.",
+        "confirm": "Take out",
+        "done": "{{name}} taken out of the mission"
+      }
+    },
+    "delete": {
+      "action": "Remove {{name}} from TAK Server",
+      "title": "Remove {{name}}?",
+      "text": "It leaves TAK Server for every device of its channels. Devices that downloaded it keep it.",
+      "confirm": "Remove",
+      "done": "{{name}} removed"
+    }
+  },
   "profile": {
     "title": "Profile",
     "description": "How you appear to the members of your teams, the language of this site and of the e-mails you receive, and whether this site is light or dark.",
@@ -1310,7 +1359,12 @@
       "team_maps_changed": "Maps of a team changed",
       "event_maps_changed": "Maps of an event changed",
       "map_source_broken": "Map source held back: it no longer works",
-      "map_source_working": "Map source works again"
+      "map_source_working": "Map source works again",
+      "file_uploaded": "File sent to TAK Server",
+      "file_downloaded": "File downloaded from TAK Server",
+      "file_deleted": "File removed from TAK Server",
+      "mission_file_added": "File added to a mission",
+      "mission_file_removed": "File taken out of a mission"
     },
     "details": {
       "mode": "Mode:",
@@ -1332,7 +1386,8 @@
       "settings": "Settings changed:",
       "deleted_files": "Files cleaned:",
       "channel": "Channel:",
-      "maps": "Maps"
+      "maps": "Maps",
+      "mission": "Mission"
     },
     "values": {
       "mode_shared": "shared identity",
@@ -1422,7 +1477,9 @@
       "auditDays": "Keep the audit log (days)",
       "logDays": "Keep TAK Server's rolled logs (days)",
       "takVersion": "Latest TAK Server version seen on tak.gov",
-      "takVersionHint": "tak.gov cannot be asked automatically. Record here the version you saw there, as it is written (5.8-RELEASE-103): the monitoring page says when it is newer than the installed one. Leave empty for none."
+      "takVersionHint": "tak.gov cannot be asked automatically. Record here the version you saw there, as it is written (5.8-RELEASE-103): the monitoring page says when it is newer than the installed one. Leave empty for none.",
+      "fileMaxMb": "Largest file sent from a team page (MB)",
+      "fileMaxMbHint": "Default {{value}}. TAK Server takes up to 400 MB (enterpriseSyncSizeLimitMB)."
     }
   },
   "errors": {
@@ -1474,6 +1531,9 @@
     "stream_name_taken": "A stream of this channel already has this name: choose another one.",
     "too_many_video_streams": "The team already has the maximum number of streams on this channel: delete one first.",
     "too_many_map_sources": "The map catalogue is full.",
-    "too_many_maps": "Too many maps for one channel."
+    "too_many_maps": "Too many maps for one channel.",
+    "file_too_large": "This file is larger than this server takes.",
+    "mission_locked": "This mission is protected: nothing of it can be shown or changed here.",
+    "mission_read_only": "This mission is read only."
   }
 }

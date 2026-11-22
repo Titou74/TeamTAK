@@ -342,6 +342,8 @@ export interface Settings {
   audit_retention_days: number;
   log_keep_days: number;
   tak_latest_known_version: string;
+  /** Largest file a member sends to TAK Server from the team page, in megabytes. */
+  file_upload_max_mb: number;
 }
 
 export interface SettingsView {

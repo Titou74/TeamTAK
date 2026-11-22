@@ -116,6 +116,12 @@ api_errors! {
     TooManyMapSources => ("too_many_map_sources", CONFLICT),
     /// More maps than one channel may have.
     TooManyMaps => ("too_many_maps", BAD_REQUEST),
+    /// A file larger than the setting allows.
+    FileTooLarge => ("file_too_large", PAYLOAD_TOO_LARGE),
+    /// The mission is protected by a password or open on invitation: nothing of it is shown.
+    MissionLocked => ("mission_locked", FORBIDDEN),
+    /// The mission's default role only reads: no file can be added or taken out.
+    MissionReadOnly => ("mission_read_only", CONFLICT),
     Internal => ("internal", INTERNAL_SERVER_ERROR),
 }
 

@@ -218,7 +218,9 @@ is not retried; the next event is sent normally.
 
 **Monitoring, Audit log** lists who did what, when, on which team or object, and from which
 address: every state-changing action (requests and approvals, invitations, roles, modes, accesses
-created, regenerated or removed, credentials shown and zips downloaded, events), administrator
+created, regenerated or removed, credentials shown and zips downloaded, events, video streams,
+map sources and the maps of each channel, team files sent, downloaded and removed), map sources
+that stop or start working, administrator
 sign-ins, visits to [TAK Server's administration](configuration.md#tak-servers-administration) (at
 most one entry an hour per administrator), uses of the rescue command, and what the host agent
 did. It can be filtered by period,

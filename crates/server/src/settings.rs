@@ -53,6 +53,9 @@ pub struct Settings {
     /// Latest TAK Server version the administrator saw on tak.gov, which has no public API
     /// to ask. Empty when none was recorded.
     pub tak_latest_known_version: String,
+    /// Largest file a member sends to TAK Server through the team page, in megabytes (TAK
+    /// Server itself takes up to `enterpriseSyncSizeLimitMB`, 400 by default).
+    pub file_upload_max_mb: u32,
 }
 
 impl Default for Settings {
@@ -72,9 +75,13 @@ impl Default for Settings {
             audit_retention_days: 365,
             log_keep_days: 30,
             tak_latest_known_version: String::new(),
+            file_upload_max_mb: 100,
         }
     }
 }
+
+/// Largest value of `file_upload_max_mb`: TAK Server's default limit.
+pub const FILE_UPLOAD_MAX_MB: u32 = 400;
 
 /// Longest server name accepted, in characters.
 const SERVER_NAME_MAX: usize = 60;
@@ -107,6 +114,7 @@ impl Settings {
         self.backup_keep = self.backup_keep.clamp(1, 365);
         self.audit_retention_days = self.audit_retention_days.clamp(30, 3650);
         self.log_keep_days = self.log_keep_days.clamp(1, 365);
+        self.file_upload_max_mb = self.file_upload_max_mb.clamp(1, FILE_UPLOAD_MAX_MB);
         Ok(self)
     }
 }
@@ -228,6 +236,7 @@ pub async fn update(State(state): State<SharedState>, AdminAccount(admin): Admin
         .bind(&admin.email)
         .execute(&state.db)
         .await?;
+    state.file_upload_limit.store(u64::from(values.file_upload_max_mb) * 1_000_000, std::sync::atomic::Ordering::Relaxed);
     if !changed.is_empty() {
         tracing::info!(by = %admin.email, changed = %changed.join(", "), "settings changed");
         let details = Details::new().text(Detail::Settings, &changed.join(", "));

@@ -619,6 +619,57 @@
       "add": "Ajouter"
     }
   },
+  "files": {
+    "title": "Fichiers",
+    "description": "Les fichiers que TAK Server garde pour les canaux de l'équipe : les data packages envoyés au serveur et les fichiers des missions Data Sync. Vous voyez ce que recevraient les appareils de l'équipe, rien de plus.",
+    "sending": "Envoi…",
+    "download": "Télécharger {{name}}",
+    "tooLarge": "Ce fichier dépasse {{size}}, le maximum accepté par ce serveur.",
+    "sender": {
+      "teamtak": "envoyé par {{name}} via TeamTAK",
+      "tak": "envoyé par {{name}}"
+    },
+    "packages": {
+      "tab_one": "Data packages ({{count}})",
+      "tab_many": "Data packages ({{count}})",
+      "tab_other": "Data packages ({{count}})",
+      "channel": "Canal",
+      "teamChannel": "Canal de l'équipe",
+      "eventChannel": "Événement « {{name}} »",
+      "send": "Envoyer un fichier",
+      "help": "Jusqu'à {{size}}. ATAK le liste parmi les data packages du serveur pour les appareils du canal. Un fichier qui n'est pas un data package (PDF, KML, image) est emballé dans un data package pour qu'ATAK puisse l'importer.",
+      "none": "Aucun data package sur les canaux de l'équipe.",
+      "sent": "{{name}} envoyé à TAK Server",
+      "sentWrapped": "Envoyé à TAK Server dans le data package {{name}}"
+    },
+    "missions": {
+      "tab_one": "Missions ({{count}})",
+      "tab_many": "Missions ({{count}})",
+      "tab_other": "Missions ({{count}})",
+      "help": "Les missions Data Sync des canaux de l'équipe, créées dans ATAK. TeamTAK n'en crée aucune. Une mission protégée par mot de passe n'affiche rien ici : ouvrez-la dans ATAK.",
+      "none": "Aucune mission sur les canaux de l'équipe.",
+      "empty": "Aucun fichier dans cette mission.",
+      "locked": "Mot de passe",
+      "lockedHelp": "Protégée par un mot de passe : ses fichiers ne s'affichent que dans ATAK, pour qui a le mot de passe.",
+      "readOnly": "Lecture seule",
+      "add": "Ajouter un fichier",
+      "added": "{{name}} ajouté à {{mission}}",
+      "remove": {
+        "action": "Retirer {{name}} de la mission",
+        "title": "Retirer {{name}} de la mission ?",
+        "text": "Il quitte la mission {{mission}} pour tous ceux qui y sont. TAK Server garde le fichier lui-même.",
+        "confirm": "Retirer",
+        "done": "{{name}} retiré de la mission"
+      }
+    },
+    "delete": {
+      "action": "Supprimer {{name}} de TAK Server",
+      "title": "Supprimer {{name}} ?",
+      "text": "Il quitte TAK Server pour tous les appareils de ses canaux. Les appareils qui l'ont téléchargé le gardent.",
+      "confirm": "Supprimer",
+      "done": "{{name}} supprimé"
+    }
+  },
   "profile": {
     "title": "Profil",
     "description": "La façon dont vous apparaissez aux membres de vos équipes, la langue de ce site et des e-mails que vous recevez, et l'affichage clair ou sombre de ce site.",
@@ -1357,7 +1408,12 @@
       "team_maps_changed": "Cartes d'une équipe modifiées",
       "event_maps_changed": "Cartes d'un événement modifiées",
       "map_source_broken": "Source de carte retenue : elle ne fonctionne plus",
-      "map_source_working": "Source de carte de nouveau fonctionnelle"
+      "map_source_working": "Source de carte de nouveau fonctionnelle",
+      "file_uploaded": "Fichier envoyé à TAK Server",
+      "file_downloaded": "Fichier téléchargé depuis TAK Server",
+      "file_deleted": "Fichier supprimé de TAK Server",
+      "mission_file_added": "Fichier ajouté à une mission",
+      "mission_file_removed": "Fichier retiré d'une mission"
     },
     "details": {
       "mode": "Mode :",
@@ -1379,7 +1435,8 @@
       "settings": "Réglages modifiés :",
       "deleted_files": "Fichiers nettoyés :",
       "channel": "Canal :",
-      "maps": "Cartes"
+      "maps": "Cartes",
+      "mission": "Mission"
     },
     "values": {
       "mode_shared": "identité partagée",
@@ -1469,7 +1526,9 @@
       "auditDays": "Conserver le journal d'audit (jours)",
       "logDays": "Conserver les journaux archivés de TAK Server (jours)",
       "takVersion": "Dernière version de TAK Server vue sur tak.gov",
-      "takVersionHint": "tak.gov ne peut pas être interrogé automatiquement. Renseignez ici la version que vous y avez vue, telle qu'elle est écrite (5.8-RELEASE-103) : la page de supervision dit quand elle est plus récente que celle installée. Laissez vide pour aucune."
+      "takVersionHint": "tak.gov ne peut pas être interrogé automatiquement. Renseignez ici la version que vous y avez vue, telle qu'elle est écrite (5.8-RELEASE-103) : la page de supervision dit quand elle est plus récente que celle installée. Laissez vide pour aucune.",
+      "fileMaxMb": "Plus gros fichier envoyé depuis une page d'équipe (Mo)",
+      "fileMaxMbHint": "Par défaut {{value}}. TAK Server accepte jusqu'à 400 Mo (enterpriseSyncSizeLimitMB)."
     }
   },
   "errors": {
@@ -1521,6 +1580,9 @@
     "stream_name_taken": "Un flux de ce canal porte déjà ce nom : choisissez-en un autre.",
     "too_many_video_streams": "L'équipe a déjà le nombre maximal de flux sur ce canal : supprimez-en un d'abord.",
     "too_many_map_sources": "Le catalogue de cartes est plein.",
-    "too_many_maps": "Trop de cartes pour un seul canal."
+    "too_many_maps": "Trop de cartes pour un seul canal.",
+    "file_too_large": "Ce fichier dépasse la taille acceptée par ce serveur.",
+    "mission_locked": "Cette mission est protégée : rien d'elle ne peut être affiché ni modifié ici.",
+    "mission_read_only": "Cette mission est en lecture seule."
   }
 }

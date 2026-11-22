@@ -182,6 +182,43 @@ pub trait TakServer: Send + Sync {
     async fn delete_device_profile(&self, id: i64) -> Result<(), TakError>;
 }
 
+/// A file to store in Enterprise Sync.
+#[derive(Debug, Clone)]
+pub struct FileUpload<'a> {
+    pub name: &'a str,
+    pub mime_type: &'a str,
+    /// `missionpackage` for a data package ATAK lists among the server's.
+    pub keyword: &'a str,
+    /// Shown by TAK Server as the device that sent it.
+    pub creator_uid: &'a str,
+    /// The groups it is stored for. Never empty: without groups, a file sent with the
+    /// administrator's certificate would be stored for every group.
+    pub groups: &'a [String],
+    pub data: Vec<u8>,
+}
+
+/// TAK Server's files: Enterprise Sync and the files of Data Sync missions (`crate::files`
+/// says what a team may see and do with them).
+#[async_trait]
+pub trait TakFiles: Send + Sync {
+    /// Every file of Enterprise Sync, with its groups. The platform's certificate sees them all.
+    async fn enterprise_files(&self) -> Result<Vec<crate::files::EnterpriseFile>, TakError>;
+    /// Every mission listed to anyone, password-protected ones included (without their files).
+    async fn missions(&self) -> Result<Vec<crate::files::Mission>, TakError>;
+    /// The files of a mission. The platform's certificate gets them even for a protected
+    /// mission: never show them for one.
+    async fn mission_files(&self, mission: &str) -> Result<Vec<crate::files::MissionFile>, TakError>;
+    /// Stores a file for its groups; returns its hash.
+    async fn upload_file(&self, upload: FileUpload<'_>) -> Result<String, TakError>;
+    /// The content of a file, to stream.
+    async fn file_content(&self, hash: &str) -> Result<reqwest::Response, TakError>;
+    /// Removes one upload from Enterprise Sync (others of the same content stay).
+    async fn delete_file(&self, primary_key: i64) -> Result<(), TakError>;
+    async fn add_to_mission(&self, mission: &str, hash: &str, creator_uid: &str) -> Result<(), TakError>;
+    /// Unlinks a file from a mission; Enterprise Sync keeps it.
+    async fn remove_from_mission(&self, mission: &str, hash: &str, creator_uid: &str) -> Result<(), TakError>;
+}
+
 /// SHA-256 fingerprint in the form used across the platform.
 pub fn fingerprint(der: &[u8]) -> String {
     use sha2::{Digest, Sha256};

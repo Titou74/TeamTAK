@@ -59,6 +59,13 @@ that an event's map reaches the devices of its teams from its start to its end, 
 without the journal counting it as drift. These tests fetch tiles from IGN's Géoplateforme and
 OpenTopoMap: they need the Internet.
 
+For the team files they prove that a data package a device sends is seen by its team and not by
+another, nor by an administrator outside the team; that a plain file a member sends is wrapped
+in a data package that the team's devices list and another team's do not, and comes back as it
+was through the platform; that a member removes only what they sent and a leader what the team
+sent; that the size setting applies; that a mission's files are listed and can be added to and
+taken out, but nothing of a password-protected mission, and nothing goes into a read-only one.
+
 The tests use random names and can be replayed on the same stack. A word after the command runs
 only the tests whose name contains it. The whole suite takes about ten minutes; it stops and
 restarts the `app` container, stops the reverse proxy for a minute, and stops and restarts the mail

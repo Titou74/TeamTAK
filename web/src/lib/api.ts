@@ -28,6 +28,7 @@ import type {
   MapSource,
   MapUploadResult,
   Me,
+  TeamFiles,
   PublicConfig,
   Reconciliation,
   Team,
@@ -57,6 +58,8 @@ export class ApiError extends Error {
 
 async function request(method: string, path: string, body?: unknown): Promise<Response> {
   let response: Response;
+  // A file goes as it is; anything else as JSON.
+  const raw = body instanceof Blob;
   try {
     response = await fetch(`/api${path}`, {
       method,
@@ -65,9 +68,9 @@ async function request(method: string, path: string, body?: unknown): Promise<Re
         Accept: "application/json",
         // Required by the API on every state-changing request (CSRF protection).
         "X-Requested-With": "teamtak",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(body === undefined ? {} : { "Content-Type": raw ? "application/octet-stream" : "application/json" }),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError("network", 0);
@@ -101,7 +104,9 @@ export interface Synced {
 async function download(path: string, fallback: string): Promise<{ name: string; blob: Blob }> {
   const response = await request("GET", path);
   const disposition = response.headers.get("Content-Disposition") ?? "";
-  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallback;
+  // The UTF-8 name when the server gives one, else the plain one.
+  const encoded = /filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1];
+  const name = encoded ? decodeURIComponent(encoded) : (/filename="([^"]+)"/.exec(disposition)?.[1] ?? fallback);
   return { name, blob: await response.blob() };
 }
 
@@ -166,6 +171,28 @@ export const api = {
   videoStream: (id: string) => json<VideoStreamDetail>("GET", `/video-streams/${id}`),
   regenerateVideoStream: (id: string) => json<Synced>("POST", `/video-streams/${id}/regenerate`),
   deleteVideoStream: (id: string) => json<Synced>("DELETE", `/video-streams/${id}`),
+
+  // TAK Server files of a team's channels: data packages and Data Sync missions.
+  teamFiles: (teamId: string) => json<TeamFiles>("GET", `/teams/${teamId}/files`),
+  /** Sends a file to a channel of the team (a group); a file that is not a data package is wrapped in one. */
+  uploadTeamFile: (teamId: string, channel: string, file: File) =>
+    json<{ key: number | null; name: string; hash: string; wrapped: boolean }>(
+      "POST",
+      `/teams/${teamId}/files?${new URLSearchParams({ name: file.name, channel }).toString()}`,
+      file,
+    ),
+  deleteTeamFile: (teamId: string, key: number) => json<{ deleted: boolean }>("DELETE", `/teams/${teamId}/files/${key}`),
+  teamFileContent: (teamId: string, key: number) => download(`/teams/${teamId}/files/${key}/content`, "file"),
+  uploadMissionFile: (teamId: string, mission: string, file: File) =>
+    json<{ hash: string; name: string }>(
+      "POST",
+      `/teams/${teamId}/missions/${encodeURIComponent(mission)}/files?${new URLSearchParams({ name: file.name }).toString()}`,
+      file,
+    ),
+  removeMissionFile: (teamId: string, mission: string, hash: string) =>
+    json<{ removed: boolean }>("DELETE", `/teams/${teamId}/missions/${encodeURIComponent(mission)}/files/${hash}`),
+  missionFileContent: (teamId: string, mission: string, hash: string) =>
+    download(`/teams/${teamId}/missions/${encodeURIComponent(mission)}/files/${hash}/content`, "file"),
 
   // Maps of a team's channel and of the events it takes part in.
   teamMaps: (teamId: string) => json<TeamMaps>("GET", `/teams/${teamId}/maps`),

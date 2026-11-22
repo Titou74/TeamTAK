@@ -445,3 +445,58 @@ export interface ChannelMaps {
   catalogue: MapSource[];
   per_channel: number;
 }
+
+// TAK Server files of a team (crates/server/src/files.rs).
+
+/** Who sent a file: through TeamTAK (a member), with a TAK access of the team, or another device. */
+export interface FileSender {
+  kind: "teamtak" | "access" | "device";
+  /** A member's name, a TAK username, or a device's. */
+  name: string | null;
+  /** Sent by this team. */
+  team: boolean;
+}
+
+export interface TeamDataPackage {
+  /** TAK Server's key of this upload. */
+  key: number;
+  name: string;
+  size: number;
+  submitted_at: string | null;
+  /** The team's channels it is stored for. */
+  channels: string[];
+  sender: FileSender;
+  can_delete: boolean;
+}
+
+export interface TeamMissionFile {
+  hash: string;
+  name: string;
+  size: number;
+  added_at: string | null;
+  sender: FileSender;
+  can_remove: boolean;
+}
+
+export interface TeamMission {
+  name: string;
+  description: string;
+  channels: string[];
+  /** Protected by a password (or on invitation): nothing of it is shown. */
+  locked: boolean;
+  /** Files can be added and taken out. */
+  writable: boolean;
+  created_at: string | null;
+  /** Null for a locked mission. */
+  files: TeamMissionFile[] | null;
+}
+
+export interface TeamFiles {
+  /** Where a file can be sent: the team's channel and those of the events running. */
+  channels: { group: string; kind: "team" | "event"; name: string }[];
+  data_packages: TeamDataPackage[];
+  missions: TeamMission[];
+  max_bytes: number;
+  /** The same limit, as the setting gives it. */
+  max_mb: number;
+}

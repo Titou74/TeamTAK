@@ -91,6 +91,11 @@ export function formatBytes(bytes: number): string {
   }).format(value);
 }
 
+/** "100 MB", a size in megabytes as a setting gives it (decimal, unlike `formatBytes`). */
+export function formatMegabytes(megabytes: number): string {
+  return new Intl.NumberFormat(currentLanguage(), { style: "unit", unit: "megabyte", unitDisplay: "short" }).format(megabytes);
+}
+
 /** "93 %" or "93%", as the current language writes a share given from 0 to 100. */
 export function formatPercent(value: number, fractionDigits = 0): string {
   return new Intl.NumberFormat(currentLanguage(), { style: "percent", maximumFractionDigits: fractionDigits }).format(value / 100);

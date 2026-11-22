@@ -134,6 +134,9 @@ pub enum Action {
     /// See the maps of the team's channel and of its events, and download them as a data
     /// package (for a device that does not take TAK Server's profiles).
     ViewTeamMaps,
+    /// See, download and send the TAK Server files of the team's channels: data packages and
+    /// the files of Data Sync missions. Removing one takes more ([`crate::files::may_remove`]).
+    UseTeamFiles,
 }
 
 /// How the video stream looked at relates to the caller.
@@ -170,6 +173,10 @@ pub struct VideoStreamRef {
 /// are a matter for whoever runs the platform); a team's leaders pick the team's maps from it,
 /// and the organisers of an event its maps (`ManageEvent` on the host team, or
 /// `OrganizeEvent`). Every member sees the maps of the team and can download them.
+///
+/// The TAK Server files of a team (data packages, mission files) are the team's, like its
+/// credentials: its leaders and members see, download and send them; an administrator does not
+/// by that role alone.
 ///
 /// Monitoring belongs to the administrators: the machine, the services, the alerts, the
 /// audit log and the actions on the stack. One part of it is shared with team leaders, for
@@ -210,6 +217,7 @@ pub fn can(actor: Actor, action: Action) -> bool {
         Action::ManageMapCatalogue => actor.is_admin,
         Action::ChooseTeamMaps => actor.team_role == Some(Leader),
         Action::ViewTeamMaps => actor.is_admin || actor.team_role.is_some(),
+        Action::UseTeamFiles => actor.team_role.is_some(),
     }
 }
 
@@ -275,6 +283,7 @@ mod tests {
             Action::ManageMapCatalogue,
             Action::ChooseTeamMaps,
             Action::ViewTeamMaps,
+            Action::UseTeamFiles,
         ] {
             assert!(!can(OUTSIDER, action), "{action:?}");
         }
@@ -293,6 +302,13 @@ mod tests {
         for actor in [ADMIN, LEADER, MEMBER] {
             assert!(can(actor, Action::ViewTeamMaps), "{actor:?}");
         }
+    }
+
+    #[test]
+    fn team_files_are_the_teams() {
+        assert!(can(LEADER, Action::UseTeamFiles) && can(MEMBER, Action::UseTeamFiles));
+        assert!(!can(ADMIN, Action::UseTeamFiles), "an administrator outside the team does not see them");
+        assert!(!can(OUTSIDER, Action::UseTeamFiles));
     }
 
     #[test]

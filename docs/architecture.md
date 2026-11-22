@@ -78,6 +78,9 @@ reach it over the Docker network.
   maps from it, and an event's organisers the event's. TAK Server hands them to the devices of
   that channel when they connect, as device profiles, and ATAK lists them among its maps
   ([Maps](#maps)).
+- **Team files.** A team's members see the TAK Server files of the team's channels (data
+  packages, files of Data Sync missions), download them, and send files to them, from the team
+  page ([Team files](#team-files)).
 - **Reconciliation.** PostgreSQL is the source of truth. After every change, every minute, and at
   the instant an event starts or ends, a pass compares it with OpenLDAP and TAK Server and corrects
   the difference: accounts, group memberships, passwords, certificates that should not work,
@@ -230,6 +233,45 @@ server or to the phone in advance.
   - Offline maps (MBTiles, SQLite) are not handed out: they are large. Downloading an area for
     offline use from a map source is up to the user, only where its provider allows it, and only
     for an event's zone.
+
+## Team files
+
+TAK Server keeps two kinds of files a team cares about: **data packages** in Enterprise Sync,
+sent to the server by a device (ATAK lists them among the server's data packages), and the
+**files of Data Sync missions**, created in ATAK. The team page shows both to the team's leaders
+and members (not to an administrator outside the team: they are the team's, like its
+credentials).
+
+- **What a team sees is what its devices would get now.** A file or a mission is listed when its
+  groups meet the team's: the team's own group, and the group of each event it takes part in
+  while the event runs. The platform reads TAK Server with an administrator's certificate, which
+  sees every file and every mission, so it applies that rule itself, at every request, on what
+  TAK Server answers: `GET /Marti/sync/search` (keys, sizes, senders) joined with
+  `GET /Marti/api/files/metadata` (the groups of each upload) by content, name and time, and
+  `GET /Marti/api/missions?passwordProtected=true&defaultRole=true`.
+- **Never anything of a protected mission.** A mission with a password, or open on invitation
+  only, is listed locked, without its files; its files are left out of the data packages too, and
+  so are the archives TAK Server keeps of deleted missions (`ARCHIVED_MISSION`). This is needed:
+  the administrator's certificate gets a protected mission's files without its password (checked
+  on 5.8). Downloads go through the platform, which checks again each time.
+- **Sending.** Any member of an active team sends a file to the team's channel or to that of an
+  event running: it is stored for that group only (`Groups=` on `POST /Marti/sync/missionupload`:
+  without it, an upload with the administrator's certificate would be stored for every group).
+  A file that is not a data package (a PDF, a KML, a picture) is wrapped in one, a manifest and
+  the file, so that ATAK imports it. A member also adds a file to a mission the team sees, unless
+  it is protected or read-only (its default role does not write): the file is stored for the
+  mission's groups and linked to it. The platform never creates a mission.
+- **Removing.** TAK Server lets anyone who shares a group delete a file, without any notion of an
+  owner; the platform is stricter. A member removes what they sent through TeamTAK, a leader what
+  the team sent (through TeamTAK, or with one of its TAK accesses), and never another team's
+  file. A data package is removed by its key, never by its content: several uploads can share one.
+  Taking a file out of a mission only unlinks it. The table `team_files` records who of which team
+  sent what through the platform, since TAK Server records the platform's own account.
+- **Size.** A file sent from a team page is limited by a setting (**Monitoring, Settings**,
+  100 MB by default, at most TAK Server's own 400 MB, `enterpriseSyncSizeLimitMB`). The platform
+  reads the request whole before sending it on: a large file uses that much memory for a moment.
+- **Audit.** Every file sent, downloaded, removed, added to or taken out of a mission is in the
+  audit log, with its name, its size and its channel or mission.
 
 ## Sign-ups and team approval
 

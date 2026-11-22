@@ -450,6 +450,40 @@ username and password; a device set up with a zip of TeamTAK 1.1.0 or older (the
 off until ticked or the zip is imported again); what iTAK does with TAK Server's profiles and with
 the maps' data package.
 
+**Team files — done (2026-11-22), the user's idea, built after a design checkpoint ("Yes, build
+it").** Decisions:
+- **What a team sees is what its devices would get now**: the data packages of Enterprise Sync
+  and the Data Sync missions whose groups meet the team's group or a running event's. The
+  platform's administrator certificate sees everything, so the platform filters each answer of
+  TAK Server itself.
+- **Nothing of a protected mission**: a mission with a password or on invitation is listed locked,
+  without files, and its files and the archives of deleted missions are left out of the data
+  packages. TeamTAK asks for no mission password.
+- **Leaders and members** see, download and send; an administrator outside the team does not. A
+  member removes what they sent through TeamTAK, a leader what the team sent (through TeamTAK or
+  with its accesses), never another team's file.
+- **Sending**: to the team's channel or a running event's, always for that group only; a plain
+  file is wrapped in a data package so that ATAK imports it; into a mission when it is neither
+  protected nor read-only. **No mission is created by TeamTAK** (the dropped automatic mission
+  stays dropped).
+- **Limits**: a setting, 100 MB per file by default, at most 400 MB (TAK Server's default
+  `enterpriseSyncSizeLimitMB`); the body limit of the upload routes follows it.
+- **Audit**: sent, downloaded, removed, added to and taken out of a mission.
+- Established on TAK Server 5.8-RELEASE-103 (bytecode, then the local stack): an upload with the
+  administrator's certificate and no `Groups` (capital G) is stored for every group; only
+  `GET /Marti/api/files/metadata` gives the groups of an upload, and only `GET /Marti/sync/search`
+  its key; several uploads can share a hash (`/Marti/sync/delete?Hash=` would remove them all;
+  `PrimaryKey=` removes one, and the `DELETE` method is refused there); the administrator's
+  certificate reads a protected mission's files without its password, and so does
+  `files/metadata?mission=`; deleting a mission leaves an `ARCHIVED_MISSION` resource; a mission's
+  default role is listed only when it is not the usual one (`MISSION_WRITE` decides whether files
+  can be added); a mission shows a file under the name of the first upload of the same content,
+  whichever mission or channel that upload was for.
+
+Still to check on real devices: ATAK listing a data package sent from TeamTAK among the server's
+and importing a wrapped PDF or KML; a file added to a mission from TeamTAK reaching ATAK's Data
+Sync.
+
 CloudTAK, checked 2026-11-20 on v13.124.0 (licence, then accounts). Licence: AGPL-3.0-only,
 standard text with no added terms. Its production dependencies (MIT, Apache-2.0, BSD, ISC,
 LGPL-3.0, MPL-2.0, AGPL) and its side services (media-infra and Garage under AGPL-3.0, PostGIS under
