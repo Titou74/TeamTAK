@@ -243,6 +243,8 @@ export interface AdminAccount {
   created_at: string;
   last_login_at: string | null;
   teams: number;
+  /** Active or suspended teams it is the only leader of: it cannot be deleted while there is one. */
+  sole_leader_of: string[];
 }
 
 export interface ReconcileEvent {

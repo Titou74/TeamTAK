@@ -204,7 +204,7 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/map-sources/suggestions", post(maps::add_suggestions))
         .route("/admin/map-sources/{id}", delete(maps::remove_source))
         .route("/admin/accounts", get(admin::list_accounts).post(admin::invite_account))
-        .route("/admin/accounts/{id}", patch(admin::update_account))
+        .route("/admin/accounts/{id}", patch(admin::update_account).delete(admin::delete_account))
         .route("/admin/reconciliation", get(admin::reconciliation))
         .route("/admin/reconciliation/run", post(admin::run_reconciliation))
         .route("/admin/monitoring", get(monitor::api::monitoring))

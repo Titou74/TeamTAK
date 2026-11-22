@@ -464,8 +464,8 @@ pub async fn me_payload(state: &SharedState, account: &Account) -> ApiResult<Val
     .await?;
     let invitations: Vec<MyInvitation> = sqlx::query_as(
         "SELECT i.id, i.team_id, t.name AS team_name,
-                CASE WHEN a.display_name <> '' THEN a.display_name ELSE a.email END AS invited_by, i.created_at
-           FROM invitations i JOIN teams t ON t.id = i.team_id JOIN accounts a ON a.id = i.invited_by
+                COALESCE(NULLIF(a.display_name, ''), a.email, '') AS invited_by, i.created_at
+           FROM invitations i JOIN teams t ON t.id = i.team_id LEFT JOIN accounts a ON a.id = i.invited_by
           WHERE i.email = $1 AND i.status = 'pending' AND t.status = 'active'
           ORDER BY i.created_at",
     )

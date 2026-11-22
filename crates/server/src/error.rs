@@ -72,6 +72,8 @@ api_errors! {
     InvitationNotPending => ("invitation_not_pending", CONFLICT),
     /// A team must keep at least one leader.
     LastLeader => ("last_leader", CONFLICT),
+    /// The platform must keep at least one administrator.
+    LastAdmin => ("last_admin", CONFLICT),
     AccessExists => ("access_exists", CONFLICT),
     /// This kind of access does not fit the team's connection mode.
     AccessKindNotAllowed => ("access_kind_not_allowed", CONFLICT),

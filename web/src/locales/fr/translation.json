@@ -777,7 +777,20 @@
       "lastLogin": "Dernière connexion",
       "never": "jamais",
       "makeAdmin": "Nommer administrateur",
-      "revokeAdmin": "Retirer le rôle d'administrateur"
+      "revokeAdmin": "Retirer le rôle d'administrateur",
+    "delete": {
+      "button": "Supprimer le compte {{email}}",
+      "title": "Supprimer le compte {{email}} ?",
+      "what": "Ses sessions, sa place dans ses équipes, ses invitations, ses accès TAK personnels et les flux vidéo qu'il a déclarés sont supprimés : les certificats de ces accès sont révoqués, et les appareils qui les utilisent ou regardent ces flux sont déconnectés. Ses demandes d'équipe en attente d'approbation sont retirées.",
+      "kept": "Les sources de cartes et les fichiers qu'il a ajoutés restent à ses équipes, sans être liés à personne. Le journal d'audit garde les entrées qui citent cette adresse jusqu'à leur purge.",
+      "mail": "L'adresse reçoit un e-mail qui dit ce qui a été supprimé. Cette action est définitive.",
+      "blocked_one": "Ce compte est le seul chef de {{teams}}. Nommez un autre chef dans cette équipe, ou supprimez l'équipe, avant de supprimer le compte.",
+      "blocked_many": "Ce compte est le seul chef de {{count}} équipes : {{teams}}. Nommez un autre chef dans chacune, ou supprimez-les, avant de supprimer le compte.",
+      "blocked_other": "Ce compte est le seul chef de {{count}} équipes : {{teams}}. Nommez un autre chef dans chacune, ou supprimez-les, avant de supprimer le compte.",
+      "confirm": "Supprimer le compte",
+      "done": "Le compte {{email}} est supprimé.",
+      "mailNotSent": "Le compte {{email}} est supprimé, mais l'e-mail qui le lui dit n'a pas pu partir."
+    }
     },
     "sync": {
       "title": "Synchronisation avec le serveur TAK",
@@ -1372,6 +1385,7 @@
       "admin_granted": "Rôle d'administrateur accordé",
       "admin_revoked": "Rôle d'administrateur retiré",
       "account_invited": "Compte créé et invité par un administrateur",
+      "account_deleted": "Compte supprimé par un administrateur",
       "team_requested": "Équipe demandée",
       "team_created": "Équipe créée (sans validation)",
       "team_approved": "Demande d'équipe approuvée",
@@ -1434,6 +1448,7 @@
       "port": "Port :",
       "member_cap": "Plafond de membres :",
       "removed_accesses": "Accès supprimés :",
+      "removed_streams": "Flux vidéo supprimés :",
       "other_team": "Équipe :",
       "starts_at": "Début :",
       "ends_at": "Fin :",
@@ -1568,6 +1583,7 @@
     "already_invited": "Cette personne a déjà été invitée.",
     "invitation_not_pending": "Cette invitation n'attend plus de réponse.",
     "last_leader": "Une équipe doit garder au moins un chef. Nommez d'abord un autre chef.",
+    "last_admin": "La plateforme doit garder au moins un administrateur.",
     "access_exists": "Cet accès existe déjà.",
     "access_kind_not_allowed": "Ce type d'accès ne correspond pas au mode de connexion de l'équipe.",
     "tak_unavailable": "Le serveur TAK est injoignable pour le moment. Rien n'est perdu : réessayez dans un instant.",

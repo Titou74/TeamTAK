@@ -822,6 +822,105 @@ async fn removing_an_access_revokes_then_deletes() {
     assert!(is_rejected(&leader_identity).await);
 }
 
+/// An account as the administration's list shows it.
+async fn listed_account(admin: &Session, email: &str) -> Option<Value> {
+    let list = admin.get("/admin/accounts").await.ok();
+    list["accounts"].as_array().unwrap().iter().find(|a| a["email"] == email).cloned()
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn an_administrator_deletes_an_account_and_what_is_tied_to_it() {
+    let admin = Session::admin().await;
+    let team = approved_team(&admin, "individual", 5).await;
+    let member = add_member(&team).await;
+    let member_id = member.account_id().await;
+    let leader_id = team.leader.account_id().await;
+    let leader_access = create_access(&team.leader, &team.id, json!({ "kind": "individual" })).await;
+    let member_access = create_access(&member, &team.id, json!({ "kind": "individual" })).await;
+    let member_username = member.get(&format!("/accesses/{member_access}")).await.ok()["username"].as_str().unwrap().to_string();
+    let leader_identity = Package::open(&team.leader.package(&leader_access, "certificate").await).identity();
+    let member_identity = Package::open(&member.package(&member_access, "certificate").await).identity();
+    let leader_phone = TakClient::connect(&leader_identity, "leader").await.unwrap();
+    let member_phone = TakClient::connect(&member_identity, "member").await.unwrap();
+    assert!(leader_phone.sees(&member_phone, SEES).await);
+
+    // Who may not be deleted: the caller, a team's only leader, an account that does not
+    // exist; and only an administrator deletes.
+    let admin_id = admin.account_id().await;
+    admin.delete(&format!("/admin/accounts/{admin_id}")).await.expect_error(403, "forbidden");
+    assert_eq!(listed_account(&admin, &team.leader.email).await.unwrap()["sole_leader_of"], json!([team.name]));
+    admin.delete(&format!("/admin/accounts/{leader_id}")).await.expect_error(409, "last_leader");
+    admin.delete("/admin/accounts/00000000-0000-4000-8000-000000000000").await.expect_error(404, "not_found");
+    member.delete(&format!("/admin/accounts/{leader_id}")).await.expect_error(403, "forbidden");
+
+    // The member becomes a second leader and invites someone; it asks for a team of its own,
+    // which waits for approval; another team invites it; with the video server on, it
+    // declares a stream.
+    team.leader.patch(&format!("/teams/{}/members/{member_id}", team.id), json!({ "role": "leader" })).await.ok();
+    assert_eq!(listed_account(&admin, &member.email).await.unwrap()["sole_leader_of"], json!([]));
+    let invitee = email("invitee");
+    member.post(&format!("/teams/{}/invitations", team.id), json!({ "email": invitee })).await.ok();
+    let request = member.post("/teams", json!({ "name": unique("E2E request "), "mode": "individual" })).await.ok();
+    assert_eq!(request["status"], "pending", "team approval is on");
+    let request_id = request["id"].as_str().unwrap().to_string();
+    let other = approved_team(&admin, "shared", 5).await;
+    other.leader.post(&format!("/teams/{}/invitations", other.id), json!({ "email": member.email })).await.ok();
+    let video_on = env().get("VIDEO").is_some_and(|v| v == "on");
+    let stream = if video_on {
+        let created = member.post(&format!("/teams/{}/video", team.id), json!({ "label": "Drone" })).await.ok();
+        Some(created["id"].as_str().unwrap().to_string())
+    } else {
+        None
+    };
+
+    let deleted = admin.delete(&format!("/admin/accounts/{member_id}")).await.ok();
+    assert_eq!(deleted["removed_accesses"], 1, "{deleted}");
+    assert_eq!(deleted["removed_streams"], if video_on { 1 } else { 0 });
+    assert_eq!(deleted["withdrawn_teams"], 1);
+    assert_eq!((deleted["synced"].as_bool(), deleted["email_sent"].as_bool()), (Some(true), Some(true)));
+
+    // Its sessions are gone, and its access with it, as when a member is removed.
+    member.get("/me").await.expect_error(401, "unauthenticated");
+    assert!(member_phone.closed_within(Duration::from_secs(10)).await.is_some(), "its device is disconnected");
+    assert!(is_rejected(&member_identity).await, "and cannot reconnect");
+    assert!(!ldap_user_exists(&member_username), "its account is gone from the directory");
+    assert!(!ldap_group_members(&team.slug).contains(&member_username));
+    assert!(!leader_phone.is_closed(), "the rest of the team is untouched");
+
+    // Nothing of it is left in its teams, its invitations or its request.
+    assert!(listed_account(&admin, &member.email).await.is_none());
+    let detail = team.leader.get(&format!("/teams/{}", team.id)).await.ok();
+    assert_eq!(ids(&detail["members"], "email"), vec![team.leader.email.clone()]);
+    assert!(!ids(&detail["invitations"], "email").contains(&invitee), "the invitation it sent is withdrawn");
+    let other_detail = other.leader.get(&format!("/teams/{}", other.id)).await.ok();
+    assert!(ids(&other_detail["invitations"], "email").is_empty(), "the invitation it got is gone");
+    let teams = admin.get("/admin/teams").await.ok();
+    assert!(!ids(&teams["teams"], "id").contains(&request_id), "its pending request is withdrawn");
+    if let Some(stream) = stream {
+        team.leader.get(&format!("/video-streams/{stream}")).await.expect_error(404, "not_found");
+    }
+
+    // The address is told, and the audit log says who did it.
+    let mail = mail_about(&member.email, "deleted").await;
+    assert!(mail.text.contains(&member.email), "{}", mail.text);
+    let log = admin.get("/admin/audit?action=account_deleted&page_size=200").await.ok();
+    let entry = log["entries"].as_array().unwrap().iter().find(|e| e["object"] == member.email).expect("an entry for the deletion").clone();
+    assert_eq!(entry["actor_email"], admin.email);
+    assert_eq!(entry["details"]["removed_accesses"], 1);
+    let withdrawn = admin.get(&format!("/admin/audit?action=team_deleted&team_id={request_id}")).await.ok();
+    assert_eq!(withdrawn["total"], 1);
+    let left = admin.get(&format!("/admin/audit?action=member_removed&team_id={}", team.id)).await.ok();
+    let left = left["entries"].as_array().unwrap().iter().find(|e| e["object"] == member.email).expect("its team's history says it left").clone();
+    assert_eq!(left["details"]["removed_accesses"], 1);
+
+    // Another administrator can be deleted while one is left.
+    let second = Session::admin().await;
+    let second_id = second.account_id().await;
+    admin.delete(&format!("/admin/accounts/{second_id}")).await.ok();
+    second.get("/me").await.expect_error(401, "unauthenticated");
+}
+
 #[tokio::test]
 #[ignore = "needs the running stack"]
 async fn changing_the_mode_removes_the_accesses_that_do_not_fit() {

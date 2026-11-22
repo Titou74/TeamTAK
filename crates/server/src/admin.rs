@@ -10,13 +10,14 @@ use teamtak_core::names::normalize_email;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::accesses::{retire_accesses, RetireScope};
 use crate::audit::{self, Actor, AuditAction, Detail, Details, Target};
 use crate::auth::AdminAccount;
 use crate::error::{ApiError, ApiResult};
 use crate::locale::{self, Template};
 use crate::reconciler::Trigger;
 use crate::state::SharedState;
-use crate::teams::{apply_change, team_columns, Team};
+use crate::teams::{apply_change, leader_count, team_columns, Team};
 
 /// Highest member cap an administrator can give a team. The server is sized for a dozen
 /// teams of about ten people.
@@ -34,6 +35,7 @@ struct AdminTeam {
     decision_note: String,
     #[serde(with = "time::serde::rfc3339")]
     created_at: OffsetDateTime,
+    /// Empty once the account that asked for the team is deleted.
     requester_email: String,
     requester_name: String,
     members: i64,
@@ -45,11 +47,11 @@ struct AdminTeam {
 pub async fn list_teams(State(state): State<SharedState>, AdminAccount(_): AdminAccount) -> ApiResult<Json<Value>> {
     let teams: Vec<AdminTeam> = sqlx::query_as(
         "SELECT t.id, t.name, t.slug, t.status, t.mode, t.member_cap, t.request_message, t.decision_note, t.created_at,
-                a.email AS requester_email, a.display_name AS requester_name,
+                COALESCE(a.email, '') AS requester_email, COALESCE(a.display_name, '') AS requester_name,
                 (SELECT count(*) FROM team_members m WHERE m.team_id = t.id) AS members,
                 (SELECT count(*) FROM invitations i WHERE i.team_id = t.id AND i.status = 'pending') AS pending_invitations,
                 (SELECT count(*) FROM tak_accesses x WHERE x.team_id = t.id) AS accesses
-           FROM teams t JOIN accounts a ON a.id = t.requested_by
+           FROM teams t LEFT JOIN accounts a ON a.id = t.requested_by
           ORDER BY t.created_at DESC",
     )
     .fetch_all(&state.db)
@@ -65,9 +67,9 @@ fn check_cap(cap: i32) -> ApiResult<i32> {
     }
 }
 
-/// E-mail and language of the account that requested a team.
-async fn requester(state: &SharedState, team: &Team) -> ApiResult<(String, String)> {
-    Ok(sqlx::query_as("SELECT email, language FROM accounts WHERE id = $1").bind(team.requested_by).fetch_one(&state.db).await?)
+/// E-mail and language of the account that requested a team, unless it was deleted.
+async fn requester(state: &SharedState, team: &Team) -> ApiResult<Option<(String, String)>> {
+    Ok(sqlx::query_as("SELECT email, language FROM accounts WHERE id = $1").bind(team.requested_by).fetch_optional(&state.db).await?)
 }
 
 #[derive(Deserialize)]
@@ -115,12 +117,13 @@ pub async fn decide_team(
     };
     audit::record(&state.db, Actor::Account(&admin), action, Target::team(&team), details).await;
 
-    let (email, language) = requester(&state, &team).await?;
-    let url = format!("{}/teams/{}", state.config.public_url, team.id);
-    let shown_note = if note.is_empty() { "—" } else { &note };
-    let template = if body.approve { Template::TeamApproved } else { Template::TeamRejected };
-    let vars = [("team", team.name.as_str()), ("url", url.as_str()), ("note", shown_note)];
-    state.mailer.send_best_effort(&email, &language, template, &vars).await;
+    if let Some((email, language)) = requester(&state, &team).await? {
+        let url = format!("{}/teams/{}", state.config.public_url, team.id);
+        let shown_note = if note.is_empty() { "—" } else { &note };
+        let template = if body.approve { Template::TeamApproved } else { Template::TeamRejected };
+        let vars = [("team", team.name.as_str()), ("url", url.as_str()), ("note", shown_note)];
+        state.mailer.send_best_effort(&email, &language, template, &vars).await;
+    }
     Ok(Json(team))
 }
 
@@ -195,6 +198,9 @@ struct AdminAccountRow {
     #[serde(with = "time::serde::rfc3339::option")]
     last_login_at: Option<OffsetDateTime>,
     teams: i64,
+    /// Active or suspended teams it is the only leader of: while there is one, the account
+    /// cannot be deleted.
+    sole_leader_of: Vec<String>,
 }
 
 /// `GET /api/admin/accounts`
@@ -202,7 +208,12 @@ pub async fn list_accounts(State(state): State<SharedState>, AdminAccount(_): Ad
     let accounts: Vec<AdminAccountRow> = sqlx::query_as(
         "SELECT a.id, a.email, a.display_name, a.language, a.is_admin, a.created_at, a.last_login_at,
                 (SELECT count(*) FROM team_members m JOIN teams t ON t.id = m.team_id
-                  WHERE m.account_id = a.id AND t.status IN ('active', 'suspended')) AS teams
+                  WHERE m.account_id = a.id AND t.status IN ('active', 'suspended')) AS teams,
+                ARRAY(SELECT t.name FROM team_members m JOIN teams t ON t.id = m.team_id
+                       WHERE m.account_id = a.id AND m.role = 'leader' AND t.status IN ('active', 'suspended')
+                         AND NOT EXISTS (SELECT 1 FROM team_members o
+                                          WHERE o.team_id = m.team_id AND o.role = 'leader' AND o.account_id <> a.id)
+                       ORDER BY t.name) AS sole_leader_of
            FROM accounts a ORDER BY a.created_at",
     )
     .fetch_all(&state.db)
@@ -279,6 +290,150 @@ pub async fn update_account(
         audit::record(&state.db, Actor::Account(&admin), action, Target::object(&email), Details::new()).await;
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `DELETE /api/admin/accounts/{id}`: deletes an account and what is tied to it, so that the
+/// right to erasure the terms of use promise can be honoured.
+///
+/// Go with it: its sessions, its place in its teams, the invitations it sent that wait for an
+/// answer and every invitation addressed to it, its login codes, its individual TAK accesses
+/// (the reconciliation revokes their certificates and deletes their directory accounts, as
+/// when a member is removed), the video streams it declared, and the team requests it alone
+/// leads that are pending or rejected. What else it added to its teams stays with them, tied
+/// to nobody: map sources, files, events, accesses it created for others. The audit log keeps
+/// the entries that name it until they are purged; the address is e-mailed what was deleted.
+///
+/// Refused for the caller's own account, for the last administrator, and while the account
+/// is the only leader of an active or suspended team: name another leader, or delete the
+/// team, first.
+pub async fn delete_account(
+    State(state): State<SharedState>,
+    AdminAccount(admin): AdminAccount,
+    Path(account_id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    // Another administrator does it, as for the administrator role.
+    if account_id == admin.id {
+        return Err(ApiError::Forbidden);
+    }
+    let mut tx = state.db.begin().await?;
+    // The account and the administrators, locked in one order: two administrators cannot
+    // delete each other at the same time, nor the last one be deleted.
+    let locked: Vec<(Uuid, String, String, bool)> = sqlx::query_as(
+        "SELECT id, email, language, is_admin FROM accounts WHERE id = $1 OR is_admin ORDER BY id FOR UPDATE",
+    )
+    .bind(account_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let (_, email, language, is_admin) = locked.iter().find(|(id, ..)| *id == account_id).cloned().ok_or(ApiError::NotFound)?;
+    if is_admin && locked.iter().filter(|(.., admin)| *admin).count() <= 1 {
+        return Err(ApiError::LastAdmin);
+    }
+
+    // Its teams, locked as an invitation or an acceptance locks them. A team it is the only
+    // leader of keeps it, unless the team never was active: its request is withdrawn.
+    let memberships: Vec<(Uuid, String, String, String)> = sqlx::query_as(
+        "SELECT t.id, t.name, t.status, m.role FROM team_members m JOIN teams t ON t.id = m.team_id
+          WHERE m.account_id = $1 ORDER BY t.id FOR UPDATE OF t",
+    )
+    .bind(account_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut withdrawn = Vec::new();
+    for (team_id, _, status, role) in &memberships {
+        if role == "leader" && leader_count(&mut tx, *team_id).await? <= 1 {
+            if matches!(status.as_str(), "active" | "suspended") {
+                return Err(ApiError::LastLeader);
+            }
+            withdrawn.push(*team_id);
+        }
+    }
+    let withdrawn: Vec<Team> = sqlx::query_as(concat!("SELECT ", team_columns!(), " FROM teams WHERE id = ANY($1) ORDER BY created_at"))
+        .bind(&withdrawn)
+        .fetch_all(&mut *tx)
+        .await?;
+    let mut deletions = Vec::new();
+    let mut removed_accesses = 0;
+    for team in &withdrawn {
+        deletions.push(crate::events::before_team_deletion(&mut tx, team.id, &team.name).await?);
+        removed_accesses += retire_accesses(&mut tx, team.id, RetireScope::WholeTeam).await?;
+        sqlx::query("DELETE FROM teams WHERE id = $1").bind(team.id).execute(&mut *tx).await?;
+    }
+
+    // Its individual accesses, in every team that has one.
+    let access_teams: Vec<(Uuid,)> = sqlx::query_as("SELECT DISTINCT team_id FROM tak_accesses WHERE account_id = $1")
+        .bind(account_id)
+        .fetch_all(&mut *tx)
+        .await?;
+    let mut removed_in = std::collections::BTreeMap::new();
+    for (team_id,) in access_teams {
+        let removed = retire_accesses(&mut tx, team_id, RetireScope::IndividualOf(account_id)).await?;
+        removed_in.insert(team_id, removed);
+        removed_accesses += removed;
+    }
+    let streams: Vec<(Uuid, String, String, String)> = sqlx::query_as(
+        "DELETE FROM video_streams s USING teams t WHERE s.created_by = $1 AND t.id = s.team_id
+         RETURNING s.team_id, t.name, s.group_name, s.group_name || '/' || s.name",
+    )
+    .bind(account_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM invitations WHERE (invited_by = $1 AND status = 'pending') OR email = $2")
+        .bind(account_id)
+        .bind(&email)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM login_codes WHERE email = $1").bind(&email).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM login_failures WHERE email = $1").bind(&email).execute(&mut *tx).await?;
+    // Its sessions and memberships go with the row; what else refers to it no longer does.
+    sqlx::query("DELETE FROM accounts WHERE id = $1").bind(account_id).execute(&mut *tx).await?;
+    tx.commit().await?;
+
+    tracing::info!(account = %email, removed_accesses, streams = streams.len(), withdrawn = withdrawn.len(), by = %admin.email, "account deleted");
+    // Each team's history says what it lost, as if each step had been taken on its own.
+    let by = Actor::Account(&admin);
+    for team in &withdrawn {
+        audit::record(&state.db, by, AuditAction::TeamDeleted, Target::team(team), Details::new()).await;
+    }
+    for (team_id, team_name, _, _) in memberships.iter().filter(|(id, ..)| !withdrawn.iter().any(|t| t.id == *id)) {
+        let removed = removed_in.get(team_id).copied().unwrap_or(0);
+        let details = Details::new().number(Detail::RemovedAccesses, removed as i64);
+        audit::record(&state.db, by, AuditAction::MemberRemoved, Target::in_team_named(*team_id, team_name, &email), details).await;
+    }
+    for (team_id, team_name, group, path) in &streams {
+        let details = Details::new().text(Detail::Channel, group);
+        audit::record(&state.db, by, AuditAction::VideoStreamRemoved, Target::in_team_named(*team_id, team_name, path), details).await;
+    }
+    let details = Details::new()
+        .number(Detail::RemovedAccesses, removed_accesses as i64)
+        .number(Detail::RemovedStreams, streams.len() as i64);
+    audit::record(&state.db, by, AuditAction::AccountDeleted, Target::object(&email), details).await;
+    // The reconciliation revokes the certificates, deletes the directory accounts, takes the
+    // streams off TAK Server and cuts the devices still on them.
+    let synced = if removed_accesses > 0 || !streams.is_empty() {
+        apply_change(&state).await
+    } else {
+        if !withdrawn.is_empty() {
+            state.reconciler.schedule_changed();
+        }
+        true
+    };
+    for deletion in deletions {
+        crate::events::after_team_deletion(&state, deletion, &admin).await?;
+    }
+
+    let days = crate::settings::load(&state.db).await?.values.audit_retention_days.to_string();
+    let vars = [("email", email.as_str()), ("days", days.as_str())];
+    let email_sent = state.mailer.send(&email, &language, Template::AccountDeleted, &vars).await.is_ok();
+    if !email_sent {
+        tracing::warn!(account = %email, "account deleted, but the e-mail telling it was not sent");
+    }
+    Ok(Json(json!({
+        "removed_accesses": removed_accesses,
+        "removed_streams": streams.len(),
+        "withdrawn_teams": withdrawn.len(),
+        "synced": synced,
+        "email_sent": email_sent,
+    })))
 }
 
 #[derive(Serialize, sqlx::FromRow)]

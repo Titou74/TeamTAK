@@ -32,7 +32,8 @@ pub struct Team {
     pub member_cap: i32,
     pub request_message: String,
     pub decision_note: String,
-    pub requested_by: Uuid,
+    /// `None` once the account that asked for the team is deleted.
+    pub requested_by: Option<Uuid>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }
@@ -483,7 +484,7 @@ pub async fn answer_invitation(
     Ok(Json(json!({ "team_id": team_id, "accepted": true })))
 }
 
-async fn leader_count(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, team_id: Uuid) -> ApiResult<i64> {
+pub(crate) async fn leader_count(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, team_id: Uuid) -> ApiResult<i64> {
     // Locks the team's members so two leaders cannot both step down at once.
     sqlx::query("SELECT 1 FROM team_members WHERE team_id = $1 FOR UPDATE").bind(team_id).execute(&mut **tx).await?;
     let (n,): (i64,) = sqlx::query_as("SELECT count(*) FROM team_members WHERE team_id = $1 AND role = 'leader'")

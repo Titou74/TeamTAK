@@ -757,7 +757,19 @@
       "lastLogin": "Last sign-in",
       "never": "never",
       "makeAdmin": "Make administrator",
-      "revokeAdmin": "Remove administrator role"
+      "revokeAdmin": "Remove administrator role",
+    "delete": {
+      "button": "Delete the account {{email}}",
+      "title": "Delete the account {{email}}?",
+      "what": "Its sessions, its place in its teams, its invitations, its own TAK accesses and the video streams it declared are deleted: the certificates of those accesses are revoked, and the devices using them or the streams are disconnected. Its team requests still waiting for approval are withdrawn.",
+      "kept": "The map sources and files it added stay with its teams, tied to nobody. The audit log keeps the entries that name this address until they are purged.",
+      "mail": "The address gets an e-mail saying what was deleted. This cannot be undone.",
+      "blocked_one": "This account is the only leader of {{teams}}. Name another leader in that team, or delete the team, before deleting the account.",
+      "blocked_other": "This account is the only leader of {{count}} teams: {{teams}}. Name another leader in each, or delete them, before deleting the account.",
+      "confirm": "Delete the account",
+      "done": "The account {{email}} is deleted.",
+      "mailNotSent": "The account {{email}} is deleted, but the e-mail telling it could not be sent."
+    }
     },
     "sync": {
       "title": "TAK server sync",
@@ -1323,6 +1335,7 @@
       "admin_granted": "Administrator role granted",
       "admin_revoked": "Administrator role withdrawn",
       "account_invited": "Account created and invited by an administrator",
+      "account_deleted": "Account deleted by an administrator",
       "team_requested": "Team requested",
       "team_created": "Team created (no approval needed)",
       "team_approved": "Team request approved",
@@ -1385,6 +1398,7 @@
       "port": "Port:",
       "member_cap": "Member cap:",
       "removed_accesses": "Accesses removed:",
+      "removed_streams": "Video streams removed:",
       "other_team": "Team:",
       "starts_at": "Start:",
       "ends_at": "End:",
@@ -1519,6 +1533,7 @@
     "already_invited": "This person has already been invited.",
     "invitation_not_pending": "This invitation is no longer waiting for an answer.",
     "last_leader": "A team needs at least one leader. Name another leader first.",
+    "last_admin": "The platform must keep at least one administrator.",
     "access_exists": "This access already exists.",
     "access_kind_not_allowed": "This kind of access does not fit the team's connection mode.",
     "tak_unavailable": "The TAK server cannot be reached right now. Nothing is lost: try again in a moment.",

@@ -95,6 +95,8 @@ pub enum Template {
     Invitation,
     /// From an administrator who created an account for the address.
     PlatformInvitation,
+    /// To the address of an account an administrator deleted: what went with it.
+    AccountDeleted,
     TeamRequest,
     TeamApproved,
     TeamRejected,
@@ -130,6 +132,7 @@ impl Template {
         Template::SignupsClosed,
         Template::Invitation,
         Template::PlatformInvitation,
+        Template::AccountDeleted,
         Template::TeamRequest,
         Template::TeamApproved,
         Template::TeamRejected,
@@ -153,6 +156,7 @@ impl Template {
             Template::SignupsClosed => "signups_closed",
             Template::Invitation => "invitation",
             Template::PlatformInvitation => "platform_invitation",
+            Template::AccountDeleted => "account_deleted",
             Template::TeamRequest => "team_request",
             Template::TeamApproved => "team_approved",
             Template::TeamRejected => "team_rejected",

@@ -18,6 +18,10 @@
     "subject": "{{inviter}} invites you to TeamTAK",
     "body": "Hello,\n\n{{inviter}}, an administrator, invites you to TeamTAK, where teams get their access to the TAK server. An account is ready for this e-mail address ({{email}}).\n\nSign in with it; there is no password, a code arrives by e-mail:\n\n    {{url}}\n\nOnce signed in, you can ask for your own team, or join the one whose leader invites you. If you were not expecting this invitation, ignore this message."
   },
+  "account_deleted": {
+    "subject": "Your TeamTAK account was deleted",
+    "body": "Hello,\n\nAn administrator deleted your TeamTAK account ({{email}}) and what was tied to it: your sessions, your place in your teams, your invitations, your own TAK accesses, whose certificates are revoked, and the video streams you declared.\n\nThe map sources and files you added to a team stay with that team, without your name. The log of the actions done on the service keeps the entries that name this address until they are {{days}} days old, then erases them.\n\nIf you did not ask for this, contact the administrators of the service."
+  },
   "team_request": {
     "subject": "New team request: {{team}}",
     "body": "Hello,\n\n{{requester}} asks to create the team \"{{team}}\".\n\nMessage: {{message}}\n\nApprove or reject the request in the administration area:\n\n    {{url}}"
