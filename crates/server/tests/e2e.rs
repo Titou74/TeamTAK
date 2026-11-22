@@ -1107,3 +1107,17 @@ fn the_directory_does_not_cap_what_the_platform_and_tak_server_read() {
     );
     assert!(ok, "the search of every account fails: {}", out.lines().rev().take(3).collect::<Vec<_>>().join(" / "));
 }
+
+/// A request body past its limit gets the platform's refusal through Caddy, not a 502 for a
+/// connection cut while the rest was still being sent.
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn an_oversized_request_is_refused_not_cut() {
+    let browser = Session::anonymous();
+    for size in [100_000, 5_000_000] {
+        browser
+            .post("/auth/request-code", json!({ "email": "x".repeat(size) }))
+            .await
+            .expect_error(400, "invalid_input");
+    }
+}
