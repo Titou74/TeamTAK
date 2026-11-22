@@ -47,6 +47,25 @@ is listed from the event's start to its end, its publisher is cut at the end, an
 counts none of that as drift; the platform's answers to the video server cannot be reached through
 the web port.
 
+For the maps they prove that the catalogue takes an ATAK data package of map sources as it is and
+refuses what is not a map source, a source whose tiles do not come back (with the provider's
+answer) and a source that points inside the stack; that only administrators keep it and only
+leaders pick a team's maps; that a leader's own source reaches the team's devices and no other
+team can see or pick it; that a device of the team, asking for its profiles as ATAK does when it
+connects, gets the team's map and a device of another team does not; that a phone enrolling with
+a username and password gets the preference that turns those profiles on, and every zip carries
+it; that a map replaced in the catalogue reaches the device and one taken off no longer does; and
+that an event's map reaches the devices of its teams from its start to its end, and no other team,
+without the journal counting it as drift. These tests fetch tiles from IGN's Géoplateforme and
+OpenTopoMap: they need the Internet.
+
+For the team files they prove that a data package a device sends is seen by its team and not by
+another, nor by an administrator outside the team; that a plain file a member sends is wrapped
+in a data package that the team's devices list and another team's do not, and comes back as it
+was through the platform; that a member removes only what they sent and a leader what the team
+sent; that the size setting applies; that a mission's files are listed and can be added to and
+taken out, but nothing of a password-protected mission, and nothing goes into a read-only one.
+
 The tests use random names and can be replayed on the same stack. A word after the command runs
 only the tests whose name contains it. The whole suite takes about ten minutes; it stops and
 restarts the `app` container, stops the reverse proxy for a minute, and stops and restarts the mail

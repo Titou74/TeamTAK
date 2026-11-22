@@ -256,6 +256,15 @@ function SettingsForm({ view }: { view: SettingsView }) {
             onChange={(v) => set("audit_retention_days", v)}
           />
           <NumberField id="set-logs" label={t("settings.other.logDays")} hint={t("settings.default", { value: defaults.log_keep_days })} value={draft.log_keep_days} min={1} max={365} onChange={(v) => set("log_keep_days", v)} />
+          <NumberField
+            id="set-files"
+            label={t("settings.other.fileMaxMb")}
+            hint={t("settings.other.fileMaxMbHint", { value: defaults.file_upload_max_mb })}
+            value={draft.file_upload_max_mb}
+            min={1}
+            max={400}
+            onChange={(v) => set("file_upload_max_mb", v)}
+          />
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="set-tak">{t("settings.other.takVersion")}</Label>
             <Input id="set-tak" value={draft.tak_latest_known_version} placeholder={TAK_VERSION_EXAMPLE} onChange={(e) => set("tak_latest_known_version", e.target.value)} className="max-w-xs" translate="no" />

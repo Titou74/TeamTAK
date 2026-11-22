@@ -1,7 +1,7 @@
 //! TAK Server 5.8 over HTTPS, with the calls validated in phase 0:
 //!
 //! - port 8443, client certificate declared administrator: groups, sessions, certificates,
-//!   video feeds;
+//!   video feeds, device profiles, Enterprise Sync files and missions;
 //! - port 8446, HTTP Basic with the directory account: certificate enrollment.
 
 use std::sync::Arc;
@@ -15,7 +15,11 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use super::enroll;
-use super::{normalize_fingerprint, EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer, VideoFeed};
+use super::{
+    normalize_fingerprint, DeviceProfile, EnrolledCertificate, FileUpload, IssuedCertificate, ProfileFile, ProfileKind, Subscription,
+    TakError, TakFiles, TakServer, VideoFeed,
+};
+use crate::files::{join_listings, EnterpriseFile, MetadataRow, Mission, MissionFile, SearchRow};
 
 #[derive(Clone)]
 pub struct HttpTakConfig {
@@ -38,6 +42,8 @@ pub struct HttpTakServer {
     config: HttpTakConfig,
     api: reqwest::Client,
     enroll: reqwest::Client,
+    /// Same as `api`, with room for large files on slow links.
+    transfers: reqwest::Client,
 }
 
 fn crypto(e: impl std::fmt::Display) -> TakError {
@@ -112,15 +118,20 @@ impl HttpTakServer {
             .with_root_certificates(roots)
             .with_no_client_auth();
 
-        let build = |tls: rustls::ClientConfig| {
+        let build = |tls: rustls::ClientConfig, timeout: u64| {
             reqwest::Client::builder()
                 .tls_backend_preconfigured(tls)
                 .connect_timeout(Duration::from_secs(5))
-                .timeout(Duration::from_secs(30))
+                .timeout(Duration::from_secs(timeout))
                 .build()
                 .map_err(crypto)
         };
-        Ok(Self { api: build(api_tls)?, enroll: build(enroll_tls)?, config })
+        Ok(Self {
+            api: build(api_tls.clone(), 30)?,
+            transfers: build(api_tls, 30 * 60)?,
+            enroll: build(enroll_tls, 30)?,
+            config,
+        })
     }
 
     async fn api_call(&self, method: reqwest::Method, path: &str) -> Result<reqwest::Response, TakError> {
@@ -137,6 +148,23 @@ impl HttpTakServer {
     async fn api_send(&self, method: reqwest::Method, path: &str, body: &Value) -> Result<(), TakError> {
         let url = format!("{}{}", self.config.api_url, path);
         let response = self.api.request(method.clone(), &url).json(body).send().await.map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: format!("{method} {path}"), status: response.status().as_u16() });
+        }
+        Ok(())
+    }
+
+    /// A call with a raw body.
+    async fn api_send_bytes(&self, method: reqwest::Method, path: &str, body: Vec<u8>) -> Result<(), TakError> {
+        let url = format!("{}{}", self.config.api_url, path);
+        let response = self
+            .api
+            .request(method.clone(), &url)
+            .header("Content-Type", "application/octet-stream")
+            .body(body)
+            .send()
+            .await
+            .map_err(unavailable)?;
         if !response.status().is_success() {
             return Err(TakError::Status { call: format!("{method} {path}"), status: response.status().as_u16() });
         }
@@ -220,6 +248,129 @@ pub fn video_collection(feed: &VideoFeed) -> Value {
             "rtspReliable": "1",
         }],
     })
+}
+
+/// Reads one element of `GET /Marti/api/device/profile`.
+pub fn parse_device_profile(v: &Value) -> Option<DeviceProfile> {
+    let groups = v.get("groups").and_then(|g| g.as_array()).map(|items| items.iter().filter_map(|g| g.as_str()).map(str::to_string).collect());
+    Some(DeviceProfile {
+        id: v.get("id")?.as_i64()?,
+        name: text(v, "name")?,
+        kind: text(v, "type").as_deref().and_then(ProfileKind::from_tak_type),
+        active: v.get("active").and_then(|a| a.as_bool()).unwrap_or(false),
+        groups: groups.unwrap_or_default(),
+    })
+}
+
+/// The body of `PUT /Marti/api/device/profile/{name}`. TAK Server sets the profile's groups
+/// from `groups`, and when it is applied from `type`: a profile is applied at enrollment or
+/// at connection, not both.
+pub fn device_profile_body(id: i64, name: &str, kind: ProfileKind, groups: &[String]) -> Value {
+    serde_json::json!({ "id": id, "name": name, "active": true, "type": kind.as_tak_type(), "tool": null, "groups": groups })
+}
+
+/// The files of the data package TAK Server makes of a profile
+/// (`GET /Marti/api/device/profile/{name}/missionpackage`): file `i` of the profile, in the
+/// order of `GET …/files`, is at `file<i>/<name>`.
+pub fn read_profile_package(zip_bytes: &[u8]) -> Result<std::collections::BTreeMap<usize, (String, Vec<u8>)>, TakError> {
+    use std::io::Read;
+    let bad = |e: &dyn std::fmt::Display| TakError::Protocol(format!("profile package: {e}"));
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).map_err(|e| bad(&e))?;
+    let mut files = std::collections::BTreeMap::new();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| bad(&e))?;
+        let path = entry.name().map_err(|e| bad(&e))?.to_string();
+        let Some((dir, name)) = path.split_once('/') else { continue };
+        let Some(index) = dir.strip_prefix("file").and_then(|n| n.parse::<usize>().ok()) else { continue };
+        if entry.is_dir() || name.is_empty() {
+            continue;
+        }
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).map_err(|e| bad(&e))?;
+        files.insert(index, (name.to_string(), data));
+    }
+    Ok(files)
+}
+
+fn number(v: &Value, key: &str) -> Option<i64> {
+    match v.get(key)? {
+        Value::Number(n) => n.as_i64(),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+fn strings(v: &Value, key: &str) -> Vec<String> {
+    match v.get(key) {
+        Some(Value::Array(items)) => items.iter().filter_map(|i| i.as_str()).map(str::to_string).collect(),
+        Some(Value::String(s)) => s.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Reads one result of `GET /Marti/sync/search`.
+pub fn parse_search_row(v: &Value) -> Option<SearchRow> {
+    Some(SearchRow {
+        primary_key: number(v, "PrimaryKey")?,
+        hash: text(v, "Hash")?,
+        name: text(v, "Name").unwrap_or_default(),
+        size: number(v, "Size").unwrap_or_default(),
+        submitter: text(v, "SubmissionUser").unwrap_or_default(),
+        creator_uid: text(v, "CreatorUid").unwrap_or_default(),
+        submitted_at: date(v, "SubmissionDateTime"),
+        keywords: strings(v, "Keywords"),
+        mime_type: text(v, "MIMEType").unwrap_or_default(),
+    })
+}
+
+/// Reads one element of `GET /Marti/api/files/metadata`, whose groups are names separated by
+/// commas.
+pub fn parse_metadata_row(v: &Value) -> Option<MetadataRow> {
+    Some(MetadataRow {
+        hash: text(v, "Hash")?,
+        name: text(v, "Name").unwrap_or_default(),
+        time: text(v, "Time").unwrap_or_default(),
+        groups: strings(v, "Groups").into_iter().collect(),
+    })
+}
+
+/// Reads one mission of `GET /Marti/api/missions`. A mission whose default role is the
+/// standard one (subscriber: read and write) has no `defaultRole`.
+pub fn parse_mission(v: &Value) -> Option<Mission> {
+    let writable = match v.get("defaultRole") {
+        None | Some(Value::Null) => true,
+        Some(role) => strings(role, "permissions").iter().any(|p| p == "MISSION_WRITE"),
+    };
+    Some(Mission {
+        name: text(v, "name")?,
+        description: text(v, "description").unwrap_or_default(),
+        groups: strings(v, "groups").into_iter().collect(),
+        password_protected: v.get("passwordProtected").and_then(Value::as_bool).unwrap_or(false),
+        invite_only: v.get("inviteOnly").and_then(Value::as_bool).unwrap_or(false),
+        writable,
+        creator_uid: text(v, "creatorUid").unwrap_or_default(),
+        created_at: date(v, "createTime"),
+    })
+}
+
+/// Reads one element of a mission's `contents`.
+pub fn parse_mission_file(v: &Value) -> Option<MissionFile> {
+    let data = v.get("data")?;
+    Some(MissionFile {
+        hash: text(data, "hash")?,
+        name: text(data, "name").unwrap_or_default(),
+        size: number(data, "size").unwrap_or_default(),
+        submitter: text(data, "submitter").unwrap_or_default(),
+        creator_uid: text(v, "creatorUid").or_else(|| text(data, "creatorUid")).unwrap_or_default(),
+        added_at: date(v, "timestamp").or_else(|| date(data, "submissionTime")),
+        mime_type: text(data, "mimeType").unwrap_or_default(),
+    })
+}
+
+/// The hash in the answer of `POST /Marti/sync/missionupload`: the address of the content.
+pub fn hash_of_upload_answer(answer: &str) -> Option<String> {
+    let hash = answer.trim().split("hash=").nth(1)?.split(['&', '"', ' ']).next()?;
+    (hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())).then(|| hash.to_ascii_lowercase())
 }
 
 /// Reads one element of `subscriptions/all`.
@@ -345,6 +496,150 @@ impl TakServer for HttpTakServer {
     async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError> {
         self.api_call(reqwest::Method::DELETE, &format!("/Marti/api/video/{}", encode_segment(uid))).await.map(|_| ())
     }
+
+    async fn device_profiles(&self) -> Result<Vec<DeviceProfile>, TakError> {
+        let items = self.api_data("/Marti/api/device/profile").await?;
+        Ok(items.iter().filter_map(parse_device_profile).collect())
+    }
+
+    async fn profile_files(&self, profile: &str) -> Result<Vec<ProfileFile>, TakError> {
+        // The list gives identifiers and names, the profile's data package the contents: two
+        // calls, whatever the number of files.
+        let base = format!("/Marti/api/device/profile/{}", encode_segment(profile));
+        let listed = self.api_data(&format!("{base}/files")).await?;
+        let listed: Vec<(i64, String)> =
+            listed.iter().filter_map(|f| Some((f.get("id")?.as_i64()?, text(f, "name")?))).collect();
+        if listed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let package = self.api_call(reqwest::Method::GET, &format!("{base}/missionpackage")).await?;
+        let package = read_profile_package(&package.bytes().await.map_err(unavailable)?)?;
+        let mut files = Vec::with_capacity(listed.len());
+        for (index, (id, name)) in listed.into_iter().enumerate() {
+            let data = match package.get(&index) {
+                Some((packed, data)) if *packed == name => data.clone(),
+                // Not where expected (a file added meanwhile): asked for alone.
+                _ => {
+                    let path = format!("{base}/file/{id}");
+                    self.api_call(reqwest::Method::GET, &path).await?.bytes().await.map_err(unavailable)?.to_vec()
+                }
+            };
+            files.push(ProfileFile { id, name, data });
+        }
+        Ok(files)
+    }
+
+    async fn create_device_profile(&self, name: &str, groups: &[String]) -> Result<(), TakError> {
+        let query: Vec<String> = groups.iter().map(|g| format!("group={}", encode_segment(g))).collect();
+        let path = format!("/Marti/api/device/profile/{}?{}", encode_segment(name), query.join("&"));
+        self.api_call(reqwest::Method::POST, &path).await.map(|_| ())
+    }
+
+    async fn set_device_profile(&self, id: i64, name: &str, kind: ProfileKind, groups: &[String]) -> Result<(), TakError> {
+        let path = format!("/Marti/api/device/profile/{}", encode_segment(name));
+        self.api_send(reqwest::Method::PUT, &path, &device_profile_body(id, name, kind, groups)).await
+    }
+
+    async fn add_profile_file(&self, profile: &str, file_name: &str, data: &[u8]) -> Result<(), TakError> {
+        let path = format!("/Marti/api/device/profile/{}/file?filename={}", encode_segment(profile), encode_segment(file_name));
+        self.api_send_bytes(reqwest::Method::PUT, &path, data.to_vec()).await
+    }
+
+    async fn delete_profile_file(&self, profile: &str, file_id: i64) -> Result<(), TakError> {
+        let path = format!("/Marti/api/device/profile/{}/file/{file_id}", encode_segment(profile));
+        self.api_call(reqwest::Method::DELETE, &path).await.map(|_| ())
+    }
+
+    async fn delete_device_profile(&self, id: i64) -> Result<(), TakError> {
+        self.api_call(reqwest::Method::DELETE, &format!("/Marti/api/device/profile/{id}")).await.map(|_| ())
+    }
+}
+
+#[async_trait]
+impl TakFiles for HttpTakServer {
+    async fn enterprise_files(&self) -> Result<Vec<EnterpriseFile>, TakError> {
+        // The search has the primary keys and sizes, the metadata listing the groups.
+        let search: Value = self.api_call(reqwest::Method::GET, "/Marti/sync/search").await?.json().await.map_err(unavailable)?;
+        let rows = match search.get("results") {
+            Some(Value::Array(items)) => items.iter().filter_map(parse_search_row).collect(),
+            _ => Vec::new(),
+        };
+        let metadata = self.api_data("/Marti/api/files/metadata?page=0&limit=100000").await?;
+        let metadata: Vec<MetadataRow> = metadata.iter().filter_map(parse_metadata_row).collect();
+        Ok(join_listings(rows, &metadata))
+    }
+
+    async fn missions(&self) -> Result<Vec<Mission>, TakError> {
+        // Without these, TAK Server leaves out protected missions and those whose default role
+        // is not the usual one.
+        let items = self.api_data("/Marti/api/missions?passwordProtected=true&defaultRole=true").await?;
+        Ok(items.iter().filter_map(parse_mission).collect())
+    }
+
+    async fn mission_files(&self, mission: &str) -> Result<Vec<MissionFile>, TakError> {
+        let items = self.api_data(&format!("/Marti/api/missions/{}", encode_segment(mission))).await?;
+        let contents = items.first().and_then(|m| m.get("contents")).and_then(Value::as_array).cloned().unwrap_or_default();
+        Ok(contents.iter().filter_map(parse_mission_file).collect())
+    }
+
+    async fn upload_file(&self, upload: FileUpload<'_>) -> Result<String, TakError> {
+        if upload.groups.is_empty() {
+            return Err(TakError::Protocol("a file must be stored for at least one group".into()));
+        }
+        // `Groups`, capital G: the lowercase parameter is read but does not restrict anything.
+        let mut query = format!(
+            "filename={}&creatorUid={}&keyword={}&mimetype={}",
+            encode_segment(upload.name),
+            encode_segment(upload.creator_uid),
+            encode_segment(upload.keyword),
+            encode_segment(upload.mime_type)
+        );
+        for group in upload.groups {
+            query.push_str(&format!("&Groups={}", encode_segment(group)));
+        }
+        let path = format!("/Marti/sync/missionupload?{query}");
+        let part = reqwest::multipart::Part::bytes(upload.data)
+            .file_name(upload.name.to_string())
+            .mime_str(upload.mime_type)
+            .map_err(|e| TakError::Protocol(e.to_string()))?;
+        let form = reqwest::multipart::Form::new().part("assetfile", part);
+        let url = format!("{}{}", self.config.api_url, path);
+        let response = self.transfers.post(&url).multipart(form).send().await.map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: "POST /Marti/sync/missionupload".into(), status: response.status().as_u16() });
+        }
+        let answer = response.text().await.map_err(unavailable)?;
+        hash_of_upload_answer(&answer).ok_or_else(|| TakError::Protocol(format!("no hash in the upload's answer: {answer}")))
+    }
+
+    async fn file_content(&self, hash: &str) -> Result<reqwest::Response, TakError> {
+        let url = format!("{}/Marti/sync/content?hash={}", self.config.api_url, encode_segment(hash));
+        let response = self.transfers.get(&url).send().await.map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: "GET /Marti/sync/content".into(), status: response.status().as_u16() });
+        }
+        Ok(response)
+    }
+
+    async fn delete_file(&self, primary_key: i64) -> Result<(), TakError> {
+        // GET: TAK Server refuses the DELETE method on /Marti/sync/delete.
+        self.api_call(reqwest::Method::GET, &format!("/Marti/sync/delete?PrimaryKey={primary_key}")).await.map(|_| ())
+    }
+
+    async fn add_to_mission(&self, mission: &str, hash: &str, creator_uid: &str) -> Result<(), TakError> {
+        let path = format!("/Marti/api/missions/{}/contents?creatorUid={}", encode_segment(mission), encode_segment(creator_uid));
+        self.api_send(reqwest::Method::PUT, &path, &serde_json::json!({ "hashes": [hash] })).await
+    }
+
+    async fn remove_from_mission(&self, mission: &str, hash: &str, creator_uid: &str) -> Result<(), TakError> {
+        let path = format!(
+            "/Marti/api/missions/{}/contents?hash={}&creatorUid={}",
+            encode_segment(mission),
+            encode_segment(hash),
+            encode_segment(creator_uid)
+        );
+        self.api_call(reqwest::Method::DELETE, &path).await.map(|_| ())
+    }
 }
 
 #[cfg(test)]
@@ -428,6 +723,80 @@ mod tests {
         assert_eq!(sent["feeds"][0]["url"], "rtsp://view:k@h:8554/alpha/drone-1");
         assert_eq!(sent["feeds"][0]["rtspReliable"], "1");
         assert_eq!(parse_video_collections(&json!({"videoConnections": [sent]})).unwrap(), vec![feeds[0].clone()], "read back as written");
+    }
+
+    #[test]
+    fn device_profiles_are_read_as_the_server_lists_them() {
+        // Shape observed on TAK Server 5.8-RELEASE-103.
+        let v = json!({"id": 1, "name": "teamtak-maps-alpha", "active": true, "applyOnEnrollment": false, "applyOnConnect": true,
+            "type": "Connection", "updated": 1795287469274i64, "tool": null, "groups": ["evt-exercise", "alpha"]});
+        let p = parse_device_profile(&v).unwrap();
+        assert_eq!((p.id, p.name.as_str(), p.kind, p.active), (1, "teamtak-maps-alpha", Some(ProfileKind::Connection), true));
+        assert_eq!(p.groups.iter().map(String::as_str).collect::<Vec<_>>(), ["alpha", "evt-exercise"]);
+        let tool = parse_device_profile(&json!({"id": 2, "name": "t", "active": false, "type": "Tool", "groups": []})).unwrap();
+        assert_eq!((tool.kind, tool.active), (None, false));
+        let body = device_profile_body(1, "teamtak-enrollment", ProfileKind::Enrollment, &["alpha".into()]);
+        assert_eq!(body["type"], "Enrollment");
+        assert_eq!(body["groups"], json!(["alpha"]));
+        assert_eq!(body["active"], true);
+    }
+
+    #[test]
+    fn a_profile_package_is_read_by_file_index() {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        // The layout of TAK Server 5.8's profile packages.
+        for (path, data) in [("file0/", ""), ("file0/a.xml", "A"), ("file1/", ""), ("file1/b.xml", "B"), ("MANIFEST/manifest.xml", "<m/>")] {
+            if path.ends_with('/') {
+                zip.add_directory(path, options).unwrap();
+            } else {
+                zip.start_file(path, options).unwrap();
+                zip.write_all(data.as_bytes()).unwrap();
+            }
+        }
+        let files = read_profile_package(&zip.finish().unwrap().into_inner()).unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[&0], ("a.xml".to_string(), b"A".to_vec()));
+        assert_eq!(files[&1], ("b.xml".to_string(), b"B".to_vec()));
+        assert!(read_profile_package(b"not a zip").is_err());
+    }
+
+    #[test]
+    fn files_and_missions_are_read_as_the_server_lists_them() {
+        // Shapes observed on TAK Server 5.8-RELEASE-103.
+        let row = json!({"EXPIRATION":"-1","UID":"9aaa","SubmissionDateTime":"2026-11-22T10:00:51.568Z","Keywords":["missionpackage"],
+            "MIMEType":"application/x-zip-compressed","Size":"480","SubmissionUser":"teamtak-api","PrimaryKey":"6","Hash":"9aaa",
+            "CreatorUid":"teamtak-probe","Name":"probe-a.zip","Tool":"public"});
+        let row = parse_search_row(&row).unwrap();
+        assert_eq!((row.primary_key, row.size, row.keywords.as_slice()), (6, 480, ["missionpackage".to_string()].as_slice()));
+        let meta = json!({"User":"teamtak-api","Keywords":"missionpackage,missionpackage","Size":"480B","Groups":"equipe-cartes,evt-x",
+            "Expiration":"none","Time":"2026-11-22 10:00:51.568","Creator":"","Hash":"9aaa","Name":"probe-a.zip","Tool":"public"});
+        let meta = parse_metadata_row(&meta).unwrap();
+        assert_eq!(meta.groups.iter().map(String::as_str).collect::<Vec<_>>(), ["equipe-cartes", "evt-x"]);
+        let joined = join_listings(vec![row], &[meta]);
+        assert_eq!(joined[0].groups.len(), 2, "the two listings meet on the submission time");
+
+        let mission = json!({"name":"probe-ro","description":"","tool":"public","creatorUid":"teamtak-probe","createTime":"2026-11-22T09:17:36.697Z",
+            "groups":["equipe-cartes"],"passwordProtected":false,"inviteOnly":false,
+            "defaultRole":{"permissions":["MISSION_READ"],"type":"MISSION_READONLY_SUBSCRIBER"}});
+        let mission = parse_mission(&mission).unwrap();
+        assert!(!mission.writable && !mission.locked());
+        let open = parse_mission(&json!({"name":"open","groups":["a"],"passwordProtected":false,"inviteOnly":false})).unwrap();
+        assert!(open.writable, "the standard default role is not listed and can write");
+        let locked = parse_mission(&json!({"name":"l","groups":["a"],"passwordProtected":true,"inviteOnly":false})).unwrap();
+        assert!(locked.locked());
+
+        let content = json!({"creatorUid":"teamtak-probe","timestamp":"2026-11-22T09:18:00.000Z","data":{"creatorUid":"teamtak-probe",
+            "expiration":-1,"hash":"9aaa","keywords":["missionpackage"],"mimeType":"application/x-zip-compressed","name":"probe-grouped.zip",
+            "size":480,"submissionTime":"2026-11-22T09:17:24.054Z","submitter":"teamtak-api","tool":"public","uid":"9aaa"}});
+        let file = parse_mission_file(&content).unwrap();
+        assert_eq!((file.name.as_str(), file.size, file.submitter.as_str()), ("probe-grouped.zip", 480, "teamtak-api"));
+        assert_eq!(file.added_at.unwrap().unix_timestamp(), 1795339080);
+
+        let hash = "9aaa5159f44725c30068e43e2307223379df09a90816040b78bdc64b299761b9";
+        assert_eq!(hash_of_upload_answer(&format!("https://takserver:8443/Marti/sync/content?hash={hash}\n")).as_deref(), Some(hash));
+        assert_eq!(hash_of_upload_answer("<html>error</html>"), None);
     }
 
     #[test]

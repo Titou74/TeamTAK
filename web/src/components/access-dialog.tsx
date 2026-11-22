@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import { saveBlob } from "@/lib/download";
 import { formatDate, formatRelative } from "@/lib/format";
 import { useErrorText, useNotifyError } from "@/lib/hooks";
 import type { AccessDetail } from "@/lib/types";
@@ -92,16 +93,6 @@ function PortPicker({ ports, main, value, onChange, help }: PortPickerProps) {
   );
 }
 
-function saveBlob(name: string, blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 interface AccessBodyProps {
   access: AccessDetail;

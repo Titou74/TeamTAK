@@ -386,6 +386,9 @@
       "textAdmin": "Vos membres cessent immédiatement de voir les autres équipes et d'être vus par elles. Les administrateurs sont prévenus par e-mail et pourront ajouter votre équipe de nouveau.",
       "confirm": "Quitter l'événement",
       "done": "Votre équipe a quitté l'événement."
+    },
+    "maps": {
+      "action": "Cartes"
     }
   },
   "video": {
@@ -482,6 +485,191 @@
       "pending": "Flux supprimé. TAK Server n'a pas encore pu être prévenu : il quitte ATAK d'ici une minute."
     }
   },
+  "maps": {
+    "title": "Cartes",
+    "description": "Sources de cartes pour ATAK. TAK Server remet les cartes de chaque canal à ses appareils quand ils se connectent : elles apparaissent dans les cartes d'ATAK (onglet Mobile), et ATAK télécharge les tuiles dont il a besoin pendant l'affichage.",
+    "none": "Aucune carte.",
+    "broken": {
+      "label": "Ne fonctionne pas",
+      "help": "Ses tuiles ont échoué à deux vérifications de suite : TeamTAK ne la remet plus aux appareils jusqu'à ce qu'elle fonctionne à nouveau. Les téléphones qui l'ont la gardent.",
+      "text": "Pas remise aux appareils : {{reason}}.",
+      "lastCheckFailed": "Dernière vérification en échec ({{reason}}) ; encore un échec et elle sera retenue."
+    },
+    "owner": "Équipe {{team}}",
+    "ownSource": "Propre à l'équipe",
+    "check": {
+      "action": "Vérifier à nouveau {{name}}",
+      "works": "{{name}} fonctionne",
+      "stillFailing": "{{name}} ne fonctionne toujours pas"
+    },
+    "addSource": {
+      "action": "Ajouter des sources",
+      "checking": "Vérification…",
+      "help": "Fichiers de sources de cartes (.xml, customMapSource) ou un zip de ces fichiers, jusqu'à {{max}} fichiers : ils rejoignent le canal de l'équipe une fois vérifiés. Seule votre équipe les voit.",
+      "done_one": "{{count}} source de carte ajoutée au canal de l'équipe",
+      "done_many": "{{count}} sources de cartes ajoutées au canal de l'équipe",
+      "done_other": "{{count}} sources de cartes ajoutées au canal de l'équipe"
+    },
+    "removeSource": {
+      "action": "Retirer {{name}} de TeamTAK",
+      "title": "Retirer {{name}} ?",
+      "text": "Elle quitte les sources de l'équipe et tous les canaux qui l'ont. Les téléphones qui l'ont la gardent.",
+      "confirm": "Retirer",
+      "done": "{{name}} retirée"
+    },
+    "channel": {
+      "team": "Canal de l'équipe",
+      "event": "Événement « {{name}} »",
+      "scheduledHelp": "Ces cartes parviennent aux appareils des équipes participantes du début de l'événement à sa fin."
+    },
+    "download": {
+      "action": "Télécharger les cartes"
+    },
+    "notes": {
+      "atak": "ATAK : rien à importer. Les zips de connexion, ainsi que l'enrôlement par QR code ou par identifiant et mot de passe, activent « Apply TAK Server profile updates ». Un appareil déjà connecté reçoit les nouvelles cartes à sa prochaine connexion ; un appareil configuré avec un zip de TeamTAK 1.1.0 ou antérieur doit avoir ce réglage coché dans ATAK, ou recevoir à nouveau son zip.",
+      "itak": "iTAK, ou ATAK avec ce réglage désactivé : téléchargez les cartes et ouvrez le data package sur le téléphone.",
+      "removal": "Une carte retirée d'un canal reste sur les téléphones qui l'ont : supprimez-la là-bas si elle doit disparaître.",
+      "checks": "Chaque source de carte est vérifiée avant d'être remise : une de ses tuiles doit revenir sous forme d'image. TeamTAK les revérifie toutes les six heures, et retient celle qui échoue deux fois de suite jusqu'à ce qu'elle fonctionne à nouveau.",
+      "offline": "Ne téléchargez de zones hors ligne que si le fournisseur de la carte l'autorise, et seulement pour la zone d'un événement."
+    },
+    "choose": {
+      "action": "Choisir",
+      "teamTitle": "Cartes du canal de l'équipe",
+      "teamDescription": "Les appareils de l'équipe reçoivent ces cartes de TAK Server.",
+      "eventTitle": "Cartes de « {{name}} »",
+      "eventDescription": "Les appareils de toutes les équipes participantes reçoivent ces cartes pendant l'événement.",
+      "done": "Cartes enregistrées",
+      "pendingSync": "Enregistré, mais TAK Server n'a pas encore pu être prévenu : il le sera d'ici une minute.",
+      "emptyCatalogue": "Le catalogue est vide : un administrateur ajoute des sources de cartes depuis l'administration.",
+      "restrictedWarning": "Une carte cochée vient d'un fournisseur qui n'autorise ses tuiles que dans ses propres applications (Google, Bing…) : la remettre aux appareils engage la responsabilité de qui la choisit.",
+      "tooMany": "Un canal peut avoir au plus {{max}} cartes.",
+      "removalNote": "Décocher une carte la retire de TAK Server ; les téléphones qui l'ont la gardent."
+    },
+    "terms": {
+      "open": {
+        "label": "Données ouvertes",
+        "help": "Données ouvertes sur un service public prévu pour cela (Géoplateforme de l'IGN)."
+      },
+      "light_use": {
+        "label": "Usage modéré",
+        "help": "Utilisable depuis une application, sans téléchargement massif : un serveur de bénévoles. Ne téléchargez hors ligne que de petites zones."
+      },
+      "no_offline": {
+        "label": "Pas de hors-ligne",
+        "help": "Usage interactif seulement : le fournisseur interdit de télécharger des zones hors ligne et demande une attribution sur la carte, qu'ATAK n'affiche pas."
+      },
+      "restricted": {
+        "label": "Conditions restrictives",
+        "help": "Le fournisseur n'autorise ses tuiles que dans ses propres applications et conditions (Google, Bing…). TeamTAK ne le propose jamais."
+      },
+      "unknown": {
+        "label": "Vérifier les conditions",
+        "help": "TeamTAK ne connaît pas ce fournisseur : vérifiez que ses conditions permettent cet usage."
+      }
+    },
+    "problem": {
+      "too_large": "trop volumineux",
+      "not_xml": "XML mal formé, ou qui déclare une DTD",
+      "not_map_source": "pas une source de carte (customMapSource)",
+      "bad_name": "pas de nom, ou un nom de plus de 60 caractères",
+      "bad_url": "pas d'adresse de tuiles avec {$z}, {$x} et {$y}",
+      "bad_zoom": "niveaux de zoom incorrects",
+      "not_an_upload": "ni une source de carte (.xml), ni un zip de sources",
+      "bad_zip": "zip endommagé, ou plus de fichiers qu'autorisé",
+      "unreachable": "le serveur de tuiles ne répond pas",
+      "http_status": "le serveur de tuiles a répondu {{status}} au lieu d'une tuile",
+      "not_an_image": "le serveur de tuiles a répondu autre chose qu'une image",
+      "private_address": "l'adresse des tuiles mène à un réseau privé ou local",
+      "unsupported_url": "l'adresse des tuiles contient un paramètre qu'ATAK ne connaît pas"
+    },
+    "outcome": {
+      "added": "Ajoutée",
+      "updated": "Remplacée",
+      "unchanged": "Inchangée",
+      "rejected": "Refusée"
+    },
+    "suggestion": {
+      "ign-plan": "Le plan de la France de l'IGN, sur la Géoplateforme (données ouvertes, sans clé).",
+      "ign-ortho": "Les photographies aériennes de la France de l'IGN, sur la Géoplateforme (données ouvertes, sans clé).",
+      "opentopomap": "Carte topographique du monde à partir des données OpenStreetMap, sur un serveur de bénévoles : pas de téléchargement massif."
+    },
+    "catalogue": {
+      "title_one": "Catalogue de cartes ({{count}} source)",
+      "title_many": "Catalogue de cartes ({{count}} sources)",
+      "title_other": "Catalogue de cartes ({{count}} sources)",
+      "description": "Les sources dans lesquelles les équipes et les événements choisissent leurs cartes, et celles que les équipes ont ajoutées pour elles-mêmes. Le choix des fournisseurs, et le respect de leurs conditions, relèvent de qui exploite ce serveur.",
+      "upload": "Ajouter des sources",
+      "uploadHelp": "Fichiers de sources de cartes (.xml, customMapSource) ou un zip de ces fichiers, comme un data package exporté d'ATAK, jusqu'à {{max}} fichiers. Chacun est d'abord vérifié : une de ses tuiles doit revenir sous forme d'image. Un fichier qui porte le nom d'un fichier déjà présent le remplace, sur les téléphones aussi.",
+      "uploaded_one": "{{count}} source de carte enregistrée",
+      "uploaded_many": "{{count}} sources de cartes enregistrées",
+      "uploaded_other": "{{count}} sources de cartes enregistrées",
+      "removed": "{{name}} retirée du catalogue",
+      "none": "Aucune source de carte pour l'instant.",
+      "uses": "Équipes : {{teams}} · événements : {{events}}",
+      "remove": "Retirer {{name}}",
+      "removeTitle": "Retirer {{name}} ?",
+      "removeText": "Elle quitte le catalogue et les canaux qui l'ont ({{teams}} équipes, {{events}} événements). Les téléphones qui l'ont la gardent.",
+      "removeConfirm": "Retirer",
+      "restrictedTitle": "Sources aux conditions restrictives",
+      "restrictedText": "Certaines sources viennent de fournisseurs qui n'autorisent leurs tuiles que dans leurs propres applications (Google, Bing…). Elles sont signalées partout où on les choisit ; TeamTAK ne les propose jamais."
+    },
+    "suggestions": {
+      "title": "Sources suggérées",
+      "description": "Des fournisseurs dont les conditions permettent à un serveur comme celui-ci de remettre leur adresse à quelques dizaines de téléphones. Les serveurs de tuiles d'OpenStreetMap n'en font pas partie : ils interdisent l'usage hors ligne et demandent une attribution qu'ATAK n'affiche pas.",
+      "add": "Ajouter"
+    }
+  },
+  "files": {
+    "title": "Fichiers",
+    "description": "Les fichiers que TAK Server garde pour les canaux de l'équipe : les data packages envoyés au serveur et les fichiers des missions Data Sync. Vous voyez ce que recevraient les appareils de l'équipe, rien de plus.",
+    "sending": "Envoi…",
+    "download": "Télécharger {{name}}",
+    "tooLarge": "Ce fichier dépasse {{size}}, le maximum accepté par ce serveur.",
+    "sender": {
+      "teamtak": "envoyé par {{name}} via TeamTAK",
+      "tak": "envoyé par {{name}}"
+    },
+    "packages": {
+      "tab_one": "Data packages ({{count}})",
+      "tab_many": "Data packages ({{count}})",
+      "tab_other": "Data packages ({{count}})",
+      "channel": "Canal",
+      "teamChannel": "Canal de l'équipe",
+      "eventChannel": "Événement « {{name}} »",
+      "send": "Envoyer un fichier",
+      "help": "Jusqu'à {{size}}. ATAK le liste parmi les data packages du serveur pour les appareils du canal. Un fichier qui n'est pas un data package (PDF, KML, image) est emballé dans un data package pour qu'ATAK puisse l'importer.",
+      "none": "Aucun data package sur les canaux de l'équipe.",
+      "sent": "{{name}} envoyé à TAK Server",
+      "sentWrapped": "Envoyé à TAK Server dans le data package {{name}}"
+    },
+    "missions": {
+      "tab_one": "Missions ({{count}})",
+      "tab_many": "Missions ({{count}})",
+      "tab_other": "Missions ({{count}})",
+      "help": "Les missions Data Sync des canaux de l'équipe, créées dans ATAK. TeamTAK n'en crée aucune. Une mission protégée par mot de passe n'affiche rien ici : ouvrez-la dans ATAK.",
+      "none": "Aucune mission sur les canaux de l'équipe.",
+      "empty": "Aucun fichier dans cette mission.",
+      "locked": "Mot de passe",
+      "lockedHelp": "Protégée par un mot de passe : ses fichiers ne s'affichent que dans ATAK, pour qui a le mot de passe.",
+      "readOnly": "Lecture seule",
+      "add": "Ajouter un fichier",
+      "added": "{{name}} ajouté à {{mission}}",
+      "remove": {
+        "action": "Retirer {{name}} de la mission",
+        "title": "Retirer {{name}} de la mission ?",
+        "text": "Il quitte la mission {{mission}} pour tous ceux qui y sont. TAK Server garde le fichier lui-même.",
+        "confirm": "Retirer",
+        "done": "{{name}} retiré de la mission"
+      }
+    },
+    "delete": {
+      "action": "Supprimer {{name}} de TAK Server",
+      "title": "Supprimer {{name}} ?",
+      "text": "Il quitte TAK Server pour tous les appareils de ses canaux. Les appareils qui l'ont téléchargé le gardent.",
+      "confirm": "Supprimer",
+      "done": "{{name}} supprimé"
+    }
+  },
   "profile": {
     "title": "Profil",
     "description": "La façon dont vous apparaissez aux membres de vos équipes, la langue de ce site et des e-mails que vous recevez, et l'affichage clair ou sombre de ce site.",
@@ -507,7 +695,8 @@
       "teams": "Équipes",
       "events": "Événements",
       "accounts": "Comptes",
-      "sync": "Synchronisation TAK"
+      "sync": "Synchronisation TAK",
+      "maps": "Cartes"
     },
     "requests": {
       "title_one": "{{count}} demande à examiner",
@@ -620,7 +809,10 @@
       "video_feed_added": "Flux vidéo listé dans TAK Server",
       "video_feed_updated": "Adresse d'un flux vidéo mise à jour dans TAK Server",
       "video_feed_removed": "Flux vidéo retiré de TAK Server",
-      "video_stopped": "Appareils déconnectés d'un flux vidéo"
+      "video_stopped": "Appareils déconnectés d'un flux vidéo",
+      "device_profile_added": "Profil d'appareil créé dans TAK Server",
+      "device_profile_updated": "Profil d'appareil mis à jour dans TAK Server",
+      "device_profile_removed": "Profil d'appareil retiré de TAK Server"
     },
     "triggers": {
       "change": "Modification sur la plateforme",
@@ -1209,7 +1401,19 @@
       "service_restarted": "Service redémarré",
       "backup_run": "Sauvegarde lancée",
       "letsencrypt_synced": "Certificat Let's Encrypt remis à TAK Server",
-      "logs_rotated": "Journaux de TAK Server nettoyés"
+      "logs_rotated": "Journaux de TAK Server nettoyés",
+      "map_source_added": "Source de carte ajoutée au catalogue",
+      "map_source_updated": "Source de carte remplacée dans le catalogue",
+      "map_source_removed": "Source de carte retirée du catalogue",
+      "team_maps_changed": "Cartes d'une équipe modifiées",
+      "event_maps_changed": "Cartes d'un événement modifiées",
+      "map_source_broken": "Source de carte retenue : elle ne fonctionne plus",
+      "map_source_working": "Source de carte de nouveau fonctionnelle",
+      "file_uploaded": "Fichier envoyé à TAK Server",
+      "file_downloaded": "Fichier téléchargé depuis TAK Server",
+      "file_deleted": "Fichier supprimé de TAK Server",
+      "mission_file_added": "Fichier ajouté à une mission",
+      "mission_file_removed": "Fichier retiré d'une mission"
     },
     "details": {
       "mode": "Mode :",
@@ -1230,7 +1434,9 @@
       "encrypted": "Chiffrée :",
       "settings": "Réglages modifiés :",
       "deleted_files": "Fichiers nettoyés :",
-      "channel": "Canal :"
+      "channel": "Canal :",
+      "maps": "Cartes",
+      "mission": "Mission"
     },
     "values": {
       "mode_shared": "identité partagée",
@@ -1320,7 +1526,9 @@
       "auditDays": "Conserver le journal d'audit (jours)",
       "logDays": "Conserver les journaux archivés de TAK Server (jours)",
       "takVersion": "Dernière version de TAK Server vue sur tak.gov",
-      "takVersionHint": "tak.gov ne peut pas être interrogé automatiquement. Renseignez ici la version que vous y avez vue, telle qu'elle est écrite (5.8-RELEASE-103) : la page de supervision dit quand elle est plus récente que celle installée. Laissez vide pour aucune."
+      "takVersionHint": "tak.gov ne peut pas être interrogé automatiquement. Renseignez ici la version que vous y avez vue, telle qu'elle est écrite (5.8-RELEASE-103) : la page de supervision dit quand elle est plus récente que celle installée. Laissez vide pour aucune.",
+      "fileMaxMb": "Plus gros fichier envoyé depuis une page d'équipe (Mo)",
+      "fileMaxMbHint": "Par défaut {{value}}. TAK Server accepte jusqu'à 400 Mo (enterpriseSyncSizeLimitMB)."
     }
   },
   "errors": {
@@ -1370,6 +1578,11 @@
     "video_off": "Le serveur vidéo est désactivé sur cette installation (VIDEO=off dans deploy/.env).",
     "invalid_stream_name": "Ce nom ne donne aucune adresse utilisable : utilisez des lettres ou des chiffres.",
     "stream_name_taken": "Un flux de ce canal porte déjà ce nom : choisissez-en un autre.",
-    "too_many_video_streams": "L'équipe a déjà le nombre maximal de flux sur ce canal : supprimez-en un d'abord."
+    "too_many_video_streams": "L'équipe a déjà le nombre maximal de flux sur ce canal : supprimez-en un d'abord.",
+    "too_many_map_sources": "Le catalogue de cartes est plein.",
+    "too_many_maps": "Trop de cartes pour un seul canal.",
+    "file_too_large": "Ce fichier dépasse la taille acceptée par ce serveur.",
+    "mission_locked": "Cette mission est protégée : rien d'elle ne peut être affiché ni modifié ici.",
+    "mission_read_only": "Cette mission est en lecture seule."
   }
 }

@@ -31,7 +31,7 @@ for service in $services; do
 done
 
 # One test at a time: several of them watch what the reconciliation reports.
-tests="--test e2e --test events --test monitoring --test tak_admin"
+tests="--test e2e --test events --test files --test maps --test monitoring --test tak_admin"
 if grep -q '^VIDEO=on$' deploy/.env; then
   tests="$tests --test video"
   # The scripted video devices: ffmpeg in MediaMTX's own image.

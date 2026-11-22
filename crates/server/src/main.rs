@@ -7,8 +7,10 @@ mod auth;
 mod config;
 mod error;
 mod events;
+mod files;
 mod locale;
 mod mail;
+mod maps;
 mod monitor;
 mod reconciler;
 mod settings;
@@ -20,7 +22,7 @@ mod video;
 use std::net::SocketAddr;
 
 use anyhow::{bail, Context, Result};
-use axum::extract::Request;
+use axum::extract::{DefaultBodyLimit, Request, State};
 use axum::http::{header, HeaderValue, Method, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -86,14 +88,36 @@ async fn require_csrf_header(request: Request, next: Next) -> Response {
 
 /// Largest request body the API accepts. Its requests are small JSON documents.
 const MAX_BODY_BYTES: usize = 64 * 1024;
+/// Largest body of an upload of map sources: one file, base64 in JSON.
+const MAX_UPLOAD_BODY_BYTES: usize = teamtak_core::maps::MAX_UPLOAD_BYTES * 4 / 3 + 4096;
+
+/// How large a request's body may be: the map sources and the team files take more than the
+/// API's small JSON documents; a team file, what the settings allow.
+fn body_limit(request: &Request, file_limit: u64) -> usize {
+    // Inside `/api`, the path no longer carries it.
+    let path = request.uri().path();
+    let path = path.strip_prefix("/api").unwrap_or(path);
+    let post = request.method() == Method::POST;
+    let map_upload = path == "/admin/map-sources" || (path.starts_with("/teams/") && path.ends_with("/map-sources"));
+    let file_upload = path.starts_with("/teams/") && path.ends_with("/files");
+    if post && map_upload {
+        MAX_UPLOAD_BODY_BYTES
+    } else if post && file_upload {
+        usize::try_from(file_limit).unwrap_or(usize::MAX)
+    } else {
+        MAX_BODY_BYTES
+    }
+}
 
 /// Reads the whole request body before the handler runs. A handler that takes no body would
 /// otherwise leave it unread; the connection is then closed with data pending and the proxy
 /// sees a reset instead of the answer.
-async fn read_whole_body(request: Request, next: Next) -> Response {
+async fn read_whole_body(State(state): State<SharedState>, request: Request, next: Next) -> Response {
+    let limit = body_limit(&request, state.file_upload_limit.load(std::sync::atomic::Ordering::Relaxed));
     let (parts, body) = request.into_parts();
-    match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
+    match axum::body::to_bytes(body, limit).await {
         Ok(bytes) => next.run(Request::from_parts(parts, axum::body::Body::from(bytes))).await,
+        Err(_) if limit > MAX_BODY_BYTES => ApiError::FileTooLarge.into_response(),
         Err(_) => ApiError::InvalidInput.into_response(),
     }
 }
@@ -148,6 +172,18 @@ fn api_router(state: SharedState) -> Router {
         .route("/teams/{id}/video", get(video::team_video).post(video::create_stream))
         .route("/video-streams/{id}", get(video::stream_detail).delete(video::delete_stream))
         .route("/video-streams/{id}/regenerate", post(video::regenerate_stream))
+        .route("/teams/{id}/maps", get(maps::team_maps).put(maps::set_team_maps))
+        .route("/teams/{id}/maps/package", get(maps::team_maps_package))
+        .route("/teams/{id}/map-sources", post(maps::team_upload))
+        .route("/teams/{id}/map-sources/{source_id}", delete(maps::team_remove_source))
+        .route("/map-sources/{id}/check", post(maps::check_now))
+        .route("/teams/{id}/files", get(files::team_files).post(files::upload))
+        .route("/teams/{id}/files/{key}", delete(files::delete))
+        .route("/teams/{id}/files/{key}/content", get(files::download))
+        .route("/teams/{id}/missions/{mission}/files", post(files::upload_to_mission))
+        .route("/teams/{id}/missions/{mission}/files/{hash}", delete(files::remove_from_mission))
+        .route("/teams/{id}/missions/{mission}/files/{hash}/content", get(files::download_mission_file))
+        .route("/teams/{id}/events/{event_id}/maps", get(events::event_maps).put(events::set_event_maps))
         .route("/invitations/{id}/answer", post(teams::answer_invitation))
         .route("/accesses/{id}", get(accesses::access_detail).delete(accesses::delete_access))
         .route("/accesses/{id}/package/{form}", get(accesses::access_package))
@@ -161,6 +197,10 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/events/{id}/cancel", post(events::admin_cancel_event))
         .route("/admin/events/{id}/teams", post(events::admin_assign_team))
         .route("/admin/events/{id}/teams/{team_id}", delete(events::admin_remove_team))
+        .route("/admin/events/{id}/maps", get(events::admin_event_maps).put(events::admin_set_event_maps))
+        .route("/admin/map-sources", get(maps::admin_catalogue).post(maps::upload))
+        .route("/admin/map-sources/suggestions", post(maps::add_suggestions))
+        .route("/admin/map-sources/{id}", delete(maps::remove_source))
         .route("/admin/accounts", get(admin::list_accounts).post(admin::invite_account))
         .route("/admin/accounts/{id}", patch(admin::update_account))
         .route("/admin/reconciliation", get(admin::reconciliation))
@@ -182,7 +222,9 @@ fn api_router(state: SharedState) -> Router {
         .fallback(|| async { ApiError::NotFound })
         // The client's address, for the audit log.
         .layer(middleware::from_fn(audit::with_request_ip))
-        .layer(middleware::from_fn(read_whole_body))
+        // The bodies are read whole and limited just below; extractors need no limit of their own.
+        .layer(DefaultBodyLimit::disable())
+        .layer(middleware::from_fn_with_state(state.clone(), read_whole_body))
         .layer(middleware::from_fn(require_csrf_header))
         .layer(middleware::from_fn(no_store))
         .with_state(state)
@@ -195,7 +237,7 @@ fn internal_router(state: SharedState) -> Router {
     Router::new()
         .route("/internal/video/auth", post(video::authorize))
         .fallback(|| async { StatusCode::NOT_FOUND })
-        .layer(middleware::from_fn(read_whole_body))
+        .layer(middleware::from_fn_with_state(state.clone(), read_whole_body))
         .with_state(state)
 }
 
@@ -217,6 +259,7 @@ async fn serve(config: Config) -> Result<()> {
     let state = state::build_state(config).await?;
     tokio::spawn(reconciler::run_periodically(state.reconciler.clone(), interval));
     tokio::spawn(monitor::run_periodically(state.monitor.clone()));
+    tokio::spawn(maps::run_checks_periodically(state.clone()));
 
     let internal = tokio::net::TcpListener::bind(internal_addr).await.with_context(|| format!("listening on {internal_addr}"))?;
     let internal_app = internal_router(state.clone());

@@ -6,7 +6,8 @@ repository. The rest is here.
 ## Running a server
 
 - [Architecture](architecture.md): the services, the ports, how teams, accesses, certificates,
-  events, video streams and reconciliation work, the login protections, and the host agent.
+  events, video streams, maps, team files and reconciliation work, the login protections, and the
+  host agent.
 - [Configuration](configuration.md): the settings in `deploy/.env`.
 - [Day-to-day commands](operations.md): the stack, the platform's own commands, starting again
   from nothing.

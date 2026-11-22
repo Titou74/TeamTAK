@@ -1,5 +1,5 @@
 //! What the platform asks of TAK Server: issue and revoke certificates, push group changes
-//! to connected clients, list and cut sessions, register video feeds.
+//! to connected clients, list and cut sessions, register video feeds, keep device profiles.
 //!
 //! [`TakServer`] is the only way the rest of the code reaches it. The production backend
 //! talks to the TAK Server 5.8 HTTPS API ([`http::HttpTakServer`]);
@@ -69,6 +69,54 @@ pub struct VideoFeed {
     pub url: String,
 }
 
+/// When TAK Server hands a device profile to a device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ProfileKind {
+    /// When the device enrolls for its certificate (port 8446).
+    Enrollment,
+    /// When the device connects and asks for profiles (ATAK's "Apply TAK Server profile
+    /// updates").
+    Connection,
+}
+
+impl ProfileKind {
+    /// The `type` of a profile in TAK Server's API.
+    pub fn as_tak_type(self) -> &'static str {
+        match self {
+            ProfileKind::Enrollment => "Enrollment",
+            ProfileKind::Connection => "Connection",
+        }
+    }
+
+    pub fn from_tak_type(raw: &str) -> Option<Self> {
+        match raw {
+            "Enrollment" => Some(ProfileKind::Enrollment),
+            "Connection" => Some(ProfileKind::Connection),
+            _ => None,
+        }
+    }
+}
+
+/// A device profile of TAK Server: a set of files handed to the devices of its groups, as a
+/// data package.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceProfile {
+    pub id: i64,
+    pub name: String,
+    /// `None` for another kind (a profile for a tool).
+    pub kind: Option<ProfileKind>,
+    pub active: bool,
+    pub groups: std::collections::BTreeSet<String>,
+}
+
+/// A file of a device profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileFile {
+    pub id: i64,
+    pub name: String,
+    pub data: Vec<u8>,
+}
+
 /// A certificate the platform obtained on behalf of an account.
 #[derive(Clone)]
 pub struct EnrolledCertificate {
@@ -120,6 +168,55 @@ pub trait TakServer: Send + Sync {
     /// Changes the name and address of a feed; its group stays.
     async fn update_video_feed(&self, feed: &VideoFeed) -> Result<(), TakError>;
     async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError>;
+    /// Every device profile, whatever its groups.
+    async fn device_profiles(&self) -> Result<Vec<DeviceProfile>, TakError>;
+    /// The files of a profile, with their contents.
+    async fn profile_files(&self, profile: &str) -> Result<Vec<ProfileFile>, TakError>;
+    /// Creates a profile for `groups`. TAK Server makes it an active enrollment profile.
+    async fn create_device_profile(&self, name: &str, groups: &[String]) -> Result<(), TakError>;
+    /// Sets the kind and the groups of a profile, and makes it active.
+    async fn set_device_profile(&self, id: i64, name: &str, kind: ProfileKind, groups: &[String]) -> Result<(), TakError>;
+    async fn add_profile_file(&self, profile: &str, file_name: &str, data: &[u8]) -> Result<(), TakError>;
+    async fn delete_profile_file(&self, profile: &str, file_id: i64) -> Result<(), TakError>;
+    /// Removes a profile and its files.
+    async fn delete_device_profile(&self, id: i64) -> Result<(), TakError>;
+}
+
+/// A file to store in Enterprise Sync.
+#[derive(Debug, Clone)]
+pub struct FileUpload<'a> {
+    pub name: &'a str,
+    pub mime_type: &'a str,
+    /// `missionpackage` for a data package ATAK lists among the server's.
+    pub keyword: &'a str,
+    /// Shown by TAK Server as the device that sent it.
+    pub creator_uid: &'a str,
+    /// The groups it is stored for. Never empty: without groups, a file sent with the
+    /// administrator's certificate would be stored for every group.
+    pub groups: &'a [String],
+    pub data: Vec<u8>,
+}
+
+/// TAK Server's files: Enterprise Sync and the files of Data Sync missions (`crate::files`
+/// says what a team may see and do with them).
+#[async_trait]
+pub trait TakFiles: Send + Sync {
+    /// Every file of Enterprise Sync, with its groups. The platform's certificate sees them all.
+    async fn enterprise_files(&self) -> Result<Vec<crate::files::EnterpriseFile>, TakError>;
+    /// Every mission listed to anyone, password-protected ones included (without their files).
+    async fn missions(&self) -> Result<Vec<crate::files::Mission>, TakError>;
+    /// The files of a mission. The platform's certificate gets them even for a protected
+    /// mission: never show them for one.
+    async fn mission_files(&self, mission: &str) -> Result<Vec<crate::files::MissionFile>, TakError>;
+    /// Stores a file for its groups; returns its hash.
+    async fn upload_file(&self, upload: FileUpload<'_>) -> Result<String, TakError>;
+    /// The content of a file, to stream.
+    async fn file_content(&self, hash: &str) -> Result<reqwest::Response, TakError>;
+    /// Removes one upload from Enterprise Sync (others of the same content stay).
+    async fn delete_file(&self, primary_key: i64) -> Result<(), TakError>;
+    async fn add_to_mission(&self, mission: &str, hash: &str, creator_uid: &str) -> Result<(), TakError>;
+    /// Unlinks a file from a mission; Enterprise Sync keeps it.
+    async fn remove_from_mission(&self, mission: &str, hash: &str, creator_uid: &str) -> Result<(), TakError>;
 }
 
 /// SHA-256 fingerprint in the form used across the platform.

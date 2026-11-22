@@ -79,6 +79,17 @@ to invited addresses: two switches in the settings.
    or an event's, and gets the address to give the device. ATAK lists the stream by itself, to the
    members of that channel and to nobody else. Each stream has its own keys, never a TAK password.
 
+7. **Hand out maps.** An administrator keeps a catalogue of map sources (IGN, OpenTopoMap, or any
+   ATAK map source file), and a leader can add the team's own; the leader picks the team's maps,
+   and an event's organisers the event's. Each source is checked before anyone gets it, and again
+   every few hours. TAK Server hands the maps to the devices of that channel when they connect,
+   and ATAK lists them among its maps. For iTAK, the team page offers them as a data package.
+
+8. **Share files.** The team page lists the data packages and the Data Sync missions of the
+   team's channels, as the team's devices see them in TAK Server: members download them, send a
+   file to the team (it shows up in ATAK) or add one to a mission. Nothing of a password-protected
+   mission is shown.
+
 The UI and the e-mails are in English and French; other languages are two files away. The UI is
 light or dark like the device it is opened on, and each user can force one in their profile.
 
@@ -327,6 +338,10 @@ no Channels tool in ATAK needs its zip again, or its access scanned or entered a
 unless one of its ports is already a TAK client port or taken by another program (it says so).
 Open 8554/tcp, 1935/tcp and 8890/udp in the firewall, or set `VIDEO=off` and run the script again
 ([Video server](docs/configuration.md#video-server)).
+
+**From 1.1.0 or older.** Maps come with the update: nothing to set. Devices set up with a zip of
+1.1.0 or older do not ask TAK Server for the maps: tick "Apply TAK Server profile updates" in
+ATAK's network settings, or import the access's zip again ([Maps](docs/architecture.md#maps)).
 
 If files of the repository were changed by hand, the script stops and lists them rather than
 overwrite them. Without access to GitHub it says so and installs from the releases the checkout

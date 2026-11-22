@@ -127,6 +127,16 @@ pub enum Action {
     UseVideoStream,
     /// Regenerate the keys of a video stream of the team, or delete it.
     ManageVideoStream(VideoStreamRef),
+    /// Add, replace and remove the map sources of the catalogue.
+    ManageMapCatalogue,
+    /// Pick the maps of the team's channel from the catalogue.
+    ChooseTeamMaps,
+    /// See the maps of the team's channel and of its events, and download them as a data
+    /// package (for a device that does not take TAK Server's profiles).
+    ViewTeamMaps,
+    /// See, download and send the TAK Server files of the team's channels: data packages and
+    /// the files of Data Sync missions. Removing one takes more ([`crate::files::may_remove`]).
+    UseTeamFiles,
 }
 
 /// How the video stream looked at relates to the caller.
@@ -158,6 +168,15 @@ pub struct VideoStreamRef {
 /// streams (a phone, a drone) and sees the keys of the team's streams; a member manages the
 /// streams they declared, a leader every stream of the team. An administrator sees that they
 /// exist, not their keys.
+///
+/// Maps: the administrators keep the catalogue of map sources (the providers and their terms
+/// are a matter for whoever runs the platform); a team's leaders pick the team's maps from it,
+/// and the organisers of an event its maps (`ManageEvent` on the host team, or
+/// `OrganizeEvent`). Every member sees the maps of the team and can download them.
+///
+/// The TAK Server files of a team (data packages, mission files) are the team's, like its
+/// credentials: its leaders and members see, download and send them; an administrator does not
+/// by that role alone.
 ///
 /// Monitoring belongs to the administrators: the machine, the services, the alerts, the
 /// audit log and the actions on the stack. One part of it is shared with team leaders, for
@@ -195,6 +214,10 @@ pub fn can(actor: Actor, action: Action) -> bool {
             Some(Member) => v.declared_by_actor,
             None => false,
         },
+        Action::ManageMapCatalogue => actor.is_admin,
+        Action::ChooseTeamMaps => actor.team_role == Some(Leader),
+        Action::ViewTeamMaps => actor.is_admin || actor.team_role.is_some(),
+        Action::UseTeamFiles => actor.team_role.is_some(),
     }
 }
 
@@ -257,9 +280,35 @@ mod tests {
             Action::CreateVideoStream,
             Action::UseVideoStream,
             Action::ManageVideoStream(VideoStreamRef { declared_by_actor: true }),
+            Action::ManageMapCatalogue,
+            Action::ChooseTeamMaps,
+            Action::ViewTeamMaps,
+            Action::UseTeamFiles,
         ] {
             assert!(!can(OUTSIDER, action), "{action:?}");
         }
+    }
+
+    #[test]
+    fn administrators_keep_the_map_catalogue_and_leaders_pick_the_team_maps() {
+        assert!(can(ADMIN, Action::ManageMapCatalogue));
+        for actor in [LEADER, MEMBER, OUTSIDER] {
+            assert!(!can(actor, Action::ManageMapCatalogue), "{actor:?}");
+        }
+        assert!(can(LEADER, Action::ChooseTeamMaps));
+        for actor in [ADMIN, MEMBER, OUTSIDER] {
+            assert!(!can(actor, Action::ChooseTeamMaps), "{actor:?}");
+        }
+        for actor in [ADMIN, LEADER, MEMBER] {
+            assert!(can(actor, Action::ViewTeamMaps), "{actor:?}");
+        }
+    }
+
+    #[test]
+    fn team_files_are_the_teams() {
+        assert!(can(LEADER, Action::UseTeamFiles) && can(MEMBER, Action::UseTeamFiles));
+        assert!(!can(ADMIN, Action::UseTeamFiles), "an administrator outside the team does not see them");
+        assert!(!can(OUTSIDER, Action::UseTeamFiles));
     }
 
     #[test]

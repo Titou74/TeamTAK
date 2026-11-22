@@ -467,6 +467,8 @@ async fn zips_carry_only_the_connection() {
         "displayServerConnectionWidget",
         "prefs_enable_channels",
         &format!("prefs_enable_channels_host-{host}"),
+        // ATAK's "Apply TAK Server profile updates", for the team's maps.
+        "deviceProfileEnableOnConnect",
     ];
 
     let enrollment = Package::open(&team.leader.package(&access, "enrollment").await);

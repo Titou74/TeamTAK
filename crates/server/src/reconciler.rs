@@ -12,7 +12,8 @@
 //!
 //! Video streams follow the same clock: a pass gives TAK Server the feeds of the streams
 //! valid at its time, and disconnects from the video server whoever still uses a stream
-//! that is not.
+//! that is not. So do maps: a pass gives TAK Server the device profiles of the groups that
+//! exist at its time.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,6 +30,7 @@ use time::OffsetDateTime;
 use tokio::sync::{Mutex, MutexGuard, Notify};
 use uuid::Uuid;
 
+use crate::maps;
 use crate::video::{self, VideoServer};
 
 /// Context of the password column, authenticated with the ciphertext.
@@ -40,7 +42,8 @@ const AUTOMATIC_DELETION_LIMIT: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trigger {
-    /// Right after a change made through the API.
+    /// Right after a change made through the API, or by the platform itself (a map source
+    /// that stops or starts working).
     Change,
     /// The timer.
     Periodic,
@@ -197,11 +200,13 @@ impl Reconciler {
             }
             None => Vec::new(),
         };
+        let device_profiles = maps::desired_profiles(&self.db, now).await?;
         Ok(DesiredState {
             accounts,
             revoke_fingerprints: revoke.into_iter().map(|(f,)| f).collect(),
             protected_usernames: self.protected_usernames.clone(),
             video_feeds: Some(video_feeds),
+            device_profiles: Some(device_profiles),
         })
     }
 
@@ -378,8 +383,8 @@ pub async fn sync_certificates(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, a
 }
 
 /// True when a change is what the start or the end of an event calls for: an account
-/// entering or leaving a group that was due, or a video stream of that group appearing in
-/// TAK Server or leaving it.
+/// entering or leaving a group that was due, or a video stream or the maps of that group
+/// appearing in TAK Server or leaving it.
 fn is_scheduled(change: &Change, due: &BTreeSet<String>) -> bool {
     let follows_the_group = matches!(
         change,
@@ -388,6 +393,8 @@ fn is_scheduled(change: &Change, due: &BTreeSet<String>) -> bool {
             | Change::VideoFeedAdded { .. }
             | Change::VideoFeedRemoved { .. }
             | Change::VideoStopped { .. }
+            | Change::DeviceProfileAdded { .. }
+            | Change::DeviceProfileRemoved { .. }
     );
     follows_the_group && change.group().is_some_and(|g| due.contains(g))
 }
@@ -460,6 +467,12 @@ mod tests {
         assert!(is_scheduled(&stopped, &due), "and is cut when it ends");
         let updated = Change::VideoFeedUpdated { path: "evt-exercise/cam".into(), group: "evt-exercise".into() };
         assert!(!is_scheduled(&updated, &due), "an address changed by nobody is drift");
+        let maps = Change::DeviceProfileAdded { name: "teamtak-maps-evt-exercise".into(), group: "evt-exercise".into() };
+        assert!(is_scheduled(&maps, &due), "an event's maps reach its devices when it starts");
+        let gone = Change::DeviceProfileRemoved { name: "teamtak-maps-evt-exercise".into(), group: "evt-exercise".into() };
+        assert!(is_scheduled(&gone, &due), "and leave TAK Server when it ends");
+        let edited = Change::DeviceProfileUpdated { name: "teamtak-maps-evt-exercise".into(), group: "evt-exercise".into() };
+        assert!(!is_scheduled(&edited, &due), "a profile changed by nobody is drift");
     }
 
     #[test]

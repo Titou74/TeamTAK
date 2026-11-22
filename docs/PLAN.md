@@ -260,7 +260,9 @@ Each access can be handed over in three forms:
   still have to be validated on real phones);
 - username and password (manual enrollment);
 - zip (data package) containing only the server address, the truststore and, optionally, the client
-  certificate. **Never** a callsign, team colour, role or group in the zip.
+  certificate, plus three ATAK settings about the connection itself: the channels shown for the
+  server, and TAK Server's profile updates applied (for the maps, added in phase 4). **Never** a
+  callsign, team colour, role or group in the zip.
 
 ### Cross-team events
 A team creates a dated event (start, end) and invites other teams. On acceptance, the platform creates
@@ -378,6 +380,109 @@ federation.
 
 Still to check on real devices: ATAK and iTAK listing and playing the feed (`rtsp://view:<key>@…`,
 RTSP over TCP), a DJI controller and Larix publishing over RTMP and SRT.
+
+**Maps per team — done (2026-11-21), chosen second by the user ("tu peux l'ajouter").** Decisions:
+- **A catalogue kept by the administrators.** ATAK map sources (`customMapSource` XML files) are
+  uploaded one by one or as a zip; an ATAK data package of map sources works as it is. A file of the
+  same name replaces the old one, on the phones too (a device keeps a map source by its file name).
+  A file goes to phones as it is, so it is checked first: a `customMapSource` root, a name, an
+  `http(s)` tile URL with `{$z}`, `{$x}`, `{$y}` (or `{$q}`), no DTD.
+- **Providers' terms.** TeamTAK suggests only providers whose terms let a server hand their address
+  to a few dozen phones: IGN's Géoplateforme (plan and aerial photographs, open data, no key) and
+  OpenTopoMap (a volunteer server: no mass downloads). Not OpenStreetMap's own tile servers (no
+  offline use, and an attribution on the map that ATAK does not show), never Google or Bing (their
+  tiles only through their own applications and terms), as decided for CloudTAK's Google basemaps.
+  Such a source can still be added; the catalogue and the leaders' picker flag it. The user's own
+  zip of map sources (`mapsources-2026-11-16.zip`: IGN plan and photographs, OpenTopoMap, three
+  Google layers) is not in the repository.
+- **Who picks.** A team's leaders pick the maps of the team's channel; an event's organisers (the
+  leaders of the host team, or the administrators for an event they organise) the maps of the
+  event's channel, which reach the devices of every team taking part while it runs. Every member
+  sees them and downloads them as a data package. At most 30 maps per channel.
+- **Leaders add sources of their own** (asked by the user on 2026-11-21: "let the team admins add
+  a new base map"): only their team sees them, they go on the team's channel at once, the
+  administrators see and can remove them. A Google or Bing source added by a leader is accepted
+  and flagged (the user's choice, over keeping such sources to the administrators).
+- **Every source is checked before it is sent to anyone** (asked by the user: "so people are not
+  sent maps that don't work"): the file is read, then one of its tiles is fetched from the server,
+  at the lowest zoom level the source offers and a few levels deeper, over three points, until
+  one is a PNG, JPEG, GIF or WebP image; otherwise the source is refused with the provider's
+  answer. Only public addresses are fetched: private, local and reserved ranges are refused,
+  through a resolver that drops them, after redirects too. Every source is checked again every six
+  hours; one that fails twice in a row is held back from the profiles until a check finds it
+  working (audit log: `map_source_broken`, `map_source_working`). Since a profile cannot take a map
+  back from a phone, this only stops new devices getting a broken map.
+- **The user's zip** was imported on the local stack (its Google layers flagged); the repository
+  only suggests its three other sources, with the same file names.
+- **Device profiles, kept by the reconciliation** like the video feeds: one connection profile per
+  group that has maps and exists now, `teamtak-maps-<group>`, for that group only; and one
+  enrollment profile, `teamtak-enrollment`, for every active team's group, whose only file turns on
+  ATAK's "Apply TAK Server profile updates" (`deviceProfileEnableOnConnect`). That setting is off
+  by default in ATAK (checked in ATAK-CIV's source), and ATAK then asks for no profile when it
+  connects; the connection zips set it too. Neither sets callsign, team colour, role or groups.
+  Profiles not named `teamtak-…` are left alone. An event's profile appearing at its start and
+  leaving at its end is the schedule at work, not drift.
+- **Established on TAK Server 5.8-RELEASE-103** (classes `ProfileAPI`, `ProfileAdminAPI`,
+  `ProfileService` and `ProfileRepository` of `takserver.war`, then on the local stack with the
+  platform's administrator certificate):
+  - administration: `GET /Marti/api/device/profile`; `POST /Marti/api/device/profile/{name}?group=…`
+    creates an active enrollment profile (answers 200 and changes nothing when the name exists);
+    `PUT /Marti/api/device/profile/{name}` with a JSON profile sets its groups and, from `type`,
+    whether it applies at enrollment or at connection, never both; `PUT …/{name}/file?filename=`
+    adds a file; `DELETE …/{name}/file/{id}` and `DELETE …/{id}` remove; `GET …/{name}/files` and
+    `GET …/{name}/missionpackage` read (file *i* at `file<i>/<name>`, with `onReceiveImport` and
+    `onReceiveDelete`);
+  - devices: `GET /Marti/api/tls/profile/enrollment?clientUid=` on 8446 (username and password),
+    `GET /Marti/api/device/profile/connection?clientUid=&syncSecago=` on 8443 (certificate). A
+    profile goes to a device whose groups share a bit with the profile's (for a connection, the
+    groups of the streaming connection named by `clientUid`); with `syncSecago` only the profiles
+    updated since are sent, and adding or removing a file updates the profile. With
+    `x509useGroupCache`, TAK Server adds its own `enable-channels.pref` to every answer;
+  - a group a profile names that TAK Server does not know yet is created.
+- **Limits**, stated in the docs and on the team page: a profile adds files to a device and never
+  removes any; the guide names ATAK only, so the team page offers the maps as a data package for
+  iTAK (or ATAK with the setting off); offline maps (MBTiles, SQLite) are not handed out, and an
+  area is downloaded for offline use only where the provider allows it, for an event's zone.
+
+Still to check on real devices: ATAK asking for the connection profile and listing the maps under
+Mobile; the enrollment profile turning "Apply TAK Server profile updates" on after a QR code or a
+username and password; a device set up with a zip of TeamTAK 1.1.0 or older (the setting stays
+off until ticked or the zip is imported again); what iTAK does with TAK Server's profiles and with
+the maps' data package.
+
+**Team files — done (2026-11-22), the user's idea, built after a design checkpoint ("Yes, build
+it").** Decisions:
+- **What a team sees is what its devices would get now**: the data packages of Enterprise Sync
+  and the Data Sync missions whose groups meet the team's group or a running event's. The
+  platform's administrator certificate sees everything, so the platform filters each answer of
+  TAK Server itself.
+- **Nothing of a protected mission**: a mission with a password or on invitation is listed locked,
+  without files, and its files and the archives of deleted missions are left out of the data
+  packages. TeamTAK asks for no mission password.
+- **Leaders and members** see, download and send; an administrator outside the team does not. A
+  member removes what they sent through TeamTAK, a leader what the team sent (through TeamTAK or
+  with its accesses), never another team's file.
+- **Sending**: to the team's channel or a running event's, always for that group only; a plain
+  file is wrapped in a data package so that ATAK imports it; into a mission when it is neither
+  protected nor read-only. **No mission is created by TeamTAK** (the dropped automatic mission
+  stays dropped).
+- **Limits**: a setting, 100 MB per file by default, at most 400 MB (TAK Server's default
+  `enterpriseSyncSizeLimitMB`); the body limit of the upload routes follows it.
+- **Audit**: sent, downloaded, removed, added to and taken out of a mission.
+- Established on TAK Server 5.8-RELEASE-103 (bytecode, then the local stack): an upload with the
+  administrator's certificate and no `Groups` (capital G) is stored for every group; only
+  `GET /Marti/api/files/metadata` gives the groups of an upload, and only `GET /Marti/sync/search`
+  its key; several uploads can share a hash (`/Marti/sync/delete?Hash=` would remove them all;
+  `PrimaryKey=` removes one, and the `DELETE` method is refused there); the administrator's
+  certificate reads a protected mission's files without its password, and so does
+  `files/metadata?mission=`; deleting a mission leaves an `ARCHIVED_MISSION` resource; a mission's
+  default role is listed only when it is not the usual one (`MISSION_WRITE` decides whether files
+  can be added); a mission shows a file under the name of the first upload of the same content,
+  whichever mission or channel that upload was for.
+
+Still to check on real devices: ATAK listing a data package sent from TeamTAK among the server's
+and importing a wrapped PDF or KML; a file added to a mission from TeamTAK reaching ATAK's Data
+Sync.
 
 CloudTAK, checked 2026-11-20 on v13.124.0 (licence, then accounts). Licence: AGPL-3.0-only,
 standard text with no added terms. Its production dependencies (MIT, Apache-2.0, BSD, ISC,

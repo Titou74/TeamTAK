@@ -118,6 +118,32 @@ audit_actions! {
     VideoStreamRegenerated => "video_stream_regenerated",
     VideoStreamRemoved => "video_stream_removed",
 
+    /// A map source joined the catalogue (uploaded, or a suggested one added).
+    MapSourceAdded => "map_source_added",
+    /// A map source of the catalogue got a new content: devices get it in place of the old.
+    MapSourceUpdated => "map_source_updated",
+    /// A map source left the catalogue, and every channel.
+    MapSourceRemoved => "map_source_removed",
+    /// The maps of a team's channel changed.
+    TeamMapsChanged => "team_maps_changed",
+    /// The maps of an event's channel changed.
+    EventMapsChanged => "event_maps_changed",
+    /// A map source failed its checks twice in a row: it is held back from the devices.
+    MapSourceBroken => "map_source_broken",
+    /// A map source held back works again.
+    MapSourceWorking => "map_source_working",
+
+    /// A member sent a data package to TAK Server for one of the team's channels.
+    FileUploaded => "file_uploaded",
+    /// A member downloaded a data package or a mission's file through the team page.
+    FileDownloaded => "file_downloaded",
+    /// A data package was removed from TAK Server.
+    FileDeleted => "file_deleted",
+    /// A member added a file to a Data Sync mission.
+    MissionFileAdded => "mission_file_added",
+    /// A file was taken out of a Data Sync mission.
+    MissionFileRemoved => "mission_file_removed",
+
     ReconciliationRequested => "reconciliation_requested",
     SettingsChanged => "settings_changed",
 
@@ -162,8 +188,12 @@ pub enum Detail {
     Settings,
     /// Number of files a housekeeping run deleted.
     DeletedFiles,
-    /// The TAK group, team or event, a video stream belongs to.
+    /// The TAK group, team or event, a video stream or maps belong to.
     Channel,
+    /// Names of the maps a channel has after a change.
+    Maps,
+    /// The Data Sync mission a file belongs to.
+    Mission,
 }
 
 impl Detail {
@@ -188,6 +218,8 @@ impl Detail {
         Detail::Settings,
         Detail::DeletedFiles,
         Detail::Channel,
+        Detail::Maps,
+        Detail::Mission,
     ];
 
     pub fn name(self) -> &'static str {
@@ -211,6 +243,8 @@ impl Detail {
             Detail::Settings => "settings",
             Detail::DeletedFiles => "deleted_files",
             Detail::Channel => "channel",
+            Detail::Maps => "maps",
+            Detail::Mission => "mission",
         }
     }
 }

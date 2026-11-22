@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClockIcon, CalendarPlusIcon, ChevronDownIcon, ChevronRightIcon, LogOutIcon, MailIcon, SquareIcon, UserPlusIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { CalendarClockIcon, CalendarPlusIcon, ChevronDownIcon, ChevronRightIcon, LogOutIcon, MailIcon, MapIcon, SquareIcon, UserPlusIcon, XIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { EventPhaseBadge } from "@/components/badges";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EventMapsDialog } from "@/components/maps-section";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { api, type Synced } from "@/lib/api";
 import { browserTimeZone, formatDateTimeRange, formatRelative, fromLocalInput, toLocalInput } from "@/lib/format";
 import { currentLanguage } from "@/i18n";
 import { useErrorText, useNotifyError } from "@/lib/hooks";
-import type { EventTeam, InvitableTeam, Team, TeamEvent } from "@/lib/types";
+import type { ChannelMaps, EventTeam, InvitableTeam, Team, TeamEvent } from "@/lib/types";
 
 export type Reload = () => Promise<unknown>;
 
@@ -34,6 +35,9 @@ export interface EventActions {
   end: () => Promise<Synced>;
   cancel: () => Promise<Synced>;
   leave: () => Promise<Synced>;
+  /** The maps of the event's channel, and the catalogue to pick from. */
+  maps: () => Promise<ChannelMaps>;
+  setMaps: (sourceIds: string[]) => Promise<Synced>;
 }
 
 function teamEventActions(teamId: string, eventId: string): EventActions {
@@ -44,6 +48,8 @@ function teamEventActions(teamId: string, eventId: string): EventActions {
     end: () => api.endEvent(teamId, eventId),
     cancel: () => api.cancelEvent(teamId, eventId),
     leave: () => api.leaveEvent(teamId, eventId),
+    maps: () => api.eventMaps(teamId, eventId),
+    setMaps: (ids) => api.setEventMaps(teamId, eventId, ids),
   };
 }
 
@@ -57,6 +63,8 @@ export function adminEventActions(eventId: string): EventActions {
     cancel: () => api.adminCancelEvent(eventId),
     // An administrator organises; leaving is for the teams.
     leave: () => Promise.reject(new Error("an administrator does not leave an event")),
+    maps: () => api.adminEventMaps(eventId),
+    setMaps: (ids) => api.adminSetEventMaps(eventId, ids),
   };
 }
 
@@ -358,6 +366,8 @@ export function EventItem({
   const notifyError = useNotifyError();
   const [confirming, setConfirming] = useState<Confirmation | null>(null);
   const [editing, setEditing] = useState(false);
+  const [choosingMaps, setChoosingMaps] = useState(false);
+  const closeMaps = useCallback(() => setChoosingMaps(false), []);
   const [chosen, setChosen] = useState("");
   const [adding, setAdding] = useState(false);
   const { permissions } = event;
@@ -492,6 +502,12 @@ export function EventItem({
               {t("events.dates.action")}
             </Button>
           )}
+          {permissions.manage && open && (
+            <Button variant="ghost" size="sm" onClick={() => setChoosingMaps(true)}>
+              <MapIcon />
+              {t("events.maps.action")}
+            </Button>
+          )}
           {permissions.end && (
             <Button variant="ghost" size="sm" onClick={() => setConfirming({ kind: "end" })}>
               <SquareIcon />
@@ -514,6 +530,9 @@ export function EventItem({
       )}
 
       {editing && <ChangeDatesDialog event={event} actions={actions} onClose={() => setEditing(false)} reload={reload} />}
+      {choosingMaps && (
+        <EventMapsDialog eventId={event.id} eventName={event.name} load={actions.maps} save={actions.setMaps} onClose={closeMaps} />
+      )}
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(next) => !next && setConfirming(null)}
