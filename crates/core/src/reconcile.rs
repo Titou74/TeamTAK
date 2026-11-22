@@ -15,7 +15,8 @@
 //! the groups added later, so it is cut as well (the client reconnects by itself).
 //!
 //! The video feeds TAK Server lists follow the same way ([`crate::video::plan_feeds`]): one
-//! per valid video stream, for the group of the stream.
+//! per valid video stream, for the group of the stream. So do its device profiles
+//! ([`crate::maps::plan_profiles`]): one per group that has maps, and the enrollment profile.
 //!
 //! TAK Server can also keep listing a session whose connection is gone, which no cut removes:
 //! see [`settle_failed_cuts`] for how such a leftover is told apart from a real failure.
@@ -23,6 +24,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::directory::{Directory, DirectorySnapshot};
+use crate::maps::{group_of_profile, plan_profiles, DesiredProfile, ProfileAction, PROFILE_PREFIX};
 use crate::tak::{IssuedCertificate, Subscription, TakError, TakServer};
 use crate::video::{path_of_url, plan_feeds, split_path, DesiredFeed, FeedAction};
 
@@ -48,6 +50,9 @@ pub struct DesiredState {
     /// The video feeds TAK Server must list, one per valid video stream; `None` leaves its
     /// video feeds as they are.
     pub video_feeds: Option<Vec<DesiredFeed>>,
+    /// The device profiles TeamTAK keeps in TAK Server (maps of each group, enrollment);
+    /// `None` leaves its profiles as they are.
+    pub device_profiles: Option<Vec<DesiredProfile>>,
 }
 
 impl DesiredState {
@@ -316,6 +321,13 @@ pub enum Change {
     /// Devices publishing or watching a stream that is no longer valid were disconnected
     /// from the video server.
     VideoStopped { path: String, group: String },
+    /// A device profile was created in TAK Server, with its files: the maps of a group, or
+    /// the enrollment profile (`group` is then empty).
+    DeviceProfileAdded { name: String, group: String },
+    /// Its files, groups or kind changed (maps added or taken off, a team approved).
+    DeviceProfileUpdated { name: String, group: String },
+    /// The group has no map left, or is gone (the event is over, the team suspended).
+    DeviceProfileRemoved { name: String, group: String },
 }
 
 /// Every value [`Change::kind`] can return; the UI has a text for each
@@ -335,6 +347,9 @@ pub const CHANGE_KINDS: &[&str] = &[
     "video_feed_updated",
     "video_feed_removed",
     "video_stopped",
+    "device_profile_added",
+    "device_profile_updated",
+    "device_profile_removed",
 ];
 
 impl Change {
@@ -355,12 +370,15 @@ impl Change {
             Change::VideoFeedUpdated { .. } => "video_feed_updated",
             Change::VideoFeedRemoved { .. } => "video_feed_removed",
             Change::VideoStopped { .. } => "video_stopped",
+            Change::DeviceProfileAdded { .. } => "device_profile_added",
+            Change::DeviceProfileUpdated { .. } => "device_profile_updated",
+            Change::DeviceProfileRemoved { .. } => "device_profile_removed",
         }
     }
 
     /// The account concerned (the raw member identifier for a foreign member; the callsign
     /// of the device for a session TAK Server lists without a username); for video, the path
-    /// of the stream.
+    /// of the stream; for a device profile, its name.
     pub fn subject(&self) -> &str {
         match self {
             Change::UserCreated { username }
@@ -376,10 +394,14 @@ impl Change {
             | Change::VideoFeedUpdated { path, .. }
             | Change::VideoFeedRemoved { path, .. }
             | Change::VideoStopped { path, .. } => path,
+            Change::DeviceProfileAdded { name, .. }
+            | Change::DeviceProfileUpdated { name, .. }
+            | Change::DeviceProfileRemoved { name, .. } => name,
         }
     }
 
-    /// The group, when the change is about a membership or a video stream of that group.
+    /// The group, when the change is about a membership, a video stream or the maps of that
+    /// group.
     pub fn group(&self) -> Option<&str> {
         match self {
             Change::MemberAdded { group, .. }
@@ -388,7 +410,10 @@ impl Change {
             Change::VideoFeedAdded { group, .. }
             | Change::VideoFeedUpdated { group, .. }
             | Change::VideoFeedRemoved { group, .. }
-            | Change::VideoStopped { group, .. } => Some(group.as_str()).filter(|g| !g.is_empty()),
+            | Change::VideoStopped { group, .. }
+            | Change::DeviceProfileAdded { group, .. }
+            | Change::DeviceProfileUpdated { group, .. }
+            | Change::DeviceProfileRemoved { group, .. } => Some(group.as_str()).filter(|g| !g.is_empty()),
             _ => None,
         }
     }
@@ -622,7 +647,101 @@ pub async fn run_pass_with(
     if let Some(feeds) = &desired.video_feeds {
         sync_video_feeds(feeds, tak, &mut report).await;
     }
+
+    // 7. Device profiles: the maps of each group, handed to its devices when they connect.
+    if let Some(profiles) = &desired.device_profiles {
+        sync_device_profiles(profiles, tak, &mut report).await;
+    }
     report
+}
+
+/// The change a profile action makes, for the journal: one per profile and pass.
+fn profile_change(name: &str, kind: fn(String, String) -> Change) -> Change {
+    kind(name.to_string(), group_of_profile(name).unwrap_or_default().to_string())
+}
+
+async fn sync_device_profiles(desired: &[DesiredProfile], tak: &dyn TakServer, report: &mut PassReport) {
+    let listed = match tak.device_profiles().await {
+        Ok(listed) => listed,
+        Err(e) => return report.errors.push(format!("listing device profiles: {e}")),
+    };
+    let mut files = BTreeMap::new();
+    let wanted: BTreeSet<&str> = desired.iter().map(|p| p.name.as_str()).collect();
+    // Only the files of the profiles that stay are compared; the others go whole.
+    for profile in listed.iter().filter(|p| p.name.starts_with(PROFILE_PREFIX) && wanted.contains(p.name.as_str())) {
+        match tak.profile_files(&profile.name).await {
+            Ok(found) => {
+                files.insert(profile.name.clone(), found);
+            }
+            Err(e) => return report.errors.push(format!("reading the files of device profile {}: {e}", profile.name)),
+        }
+    }
+    // One journal entry per profile, whatever the number of calls it took.
+    let mut changes: BTreeMap<String, Change> = BTreeMap::new();
+    let updated = |changes: &mut BTreeMap<String, Change>, name: &str| {
+        changes.entry(name.to_string()).or_insert_with(|| profile_change(name, |name, group| Change::DeviceProfileUpdated { name, group }));
+    };
+    let mut created = Vec::new();
+    for action in plan_profiles(desired, &listed, &files) {
+        match action {
+            ProfileAction::Create(want) => {
+                let groups: Vec<String> = want.groups.iter().cloned().collect();
+                match tak.create_device_profile(&want.name, &groups).await {
+                    Ok(()) => created.push(want),
+                    Err(e) => report.errors.push(format!("creating device profile {}: {e}", want.name)),
+                }
+            }
+            ProfileAction::Set { id, desired: want } => {
+                let groups: Vec<String> = want.groups.iter().cloned().collect();
+                match tak.set_device_profile(id, &want.name, want.kind, &groups).await {
+                    Ok(()) => updated(&mut changes, &want.name),
+                    Err(e) => report.errors.push(format!("setting device profile {}: {e}", want.name)),
+                }
+            }
+            ProfileAction::AddFile { profile, file, data } => match tak.add_profile_file(&profile, &file, &data).await {
+                Ok(()) => updated(&mut changes, &profile),
+                Err(e) => report.errors.push(format!("adding {file} to device profile {profile}: {e}")),
+            },
+            ProfileAction::DeleteFile { profile, file, file_id } => match tak.delete_profile_file(&profile, file_id).await {
+                Ok(()) => updated(&mut changes, &profile),
+                Err(e) => report.errors.push(format!("removing {file} from device profile {profile}: {e}")),
+            },
+            ProfileAction::Delete { id, name } => match tak.delete_device_profile(id).await {
+                Ok(()) => {
+                    changes.insert(name.clone(), profile_change(&name, |name, group| Change::DeviceProfileRemoved { name, group }));
+                }
+                Err(e) => report.errors.push(format!("removing device profile {name}: {e}")),
+            },
+        }
+    }
+    if !created.is_empty() {
+        // TAK Server answers a creation without the new profile's identifier, and makes it an
+        // enrollment profile: it is read back, set as wanted, then given its files.
+        match tak.device_profiles().await {
+            Err(e) => report.errors.push(format!("listing device profiles: {e}")),
+            Ok(relisted) => {
+                for want in created {
+                    let Some(have) = relisted.iter().find(|p| p.name == want.name) else {
+                        report.errors.push(format!("device profile {} not listed after its creation", want.name));
+                        continue;
+                    };
+                    if have.kind != Some(want.kind) || have.groups != want.groups || !have.active {
+                        let groups: Vec<String> = want.groups.iter().cloned().collect();
+                        if let Err(e) = tak.set_device_profile(have.id, &want.name, want.kind, &groups).await {
+                            report.errors.push(format!("setting device profile {}: {e}", want.name));
+                        }
+                    }
+                    for (file, data) in &want.files {
+                        if let Err(e) = tak.add_profile_file(&want.name, file, data).await {
+                            report.errors.push(format!("adding {file} to device profile {}: {e}", want.name));
+                        }
+                    }
+                    changes.insert(want.name.clone(), profile_change(&want.name, |name, group| Change::DeviceProfileAdded { name, group }));
+                }
+            }
+        }
+    }
+    report.changes.extend(changes.into_values());
 }
 
 async fn sync_video_feeds(desired: &[DesiredFeed], tak: &dyn TakServer, report: &mut PassReport) {
@@ -1198,6 +1317,9 @@ mod tests {
             Change::VideoFeedUpdated { path: u(), group: u() },
             Change::VideoFeedRemoved { path: u(), group: u() },
             Change::VideoStopped { path: u(), group: u() },
+            Change::DeviceProfileAdded { name: u(), group: u() },
+            Change::DeviceProfileUpdated { name: u(), group: u() },
+            Change::DeviceProfileRemoved { name: u(), group: u() },
         ];
         let kinds: BTreeSet<&str> = all.iter().map(Change::kind).collect();
         assert_eq!(kinds, CHANGE_KINDS.iter().copied().collect::<BTreeSet<_>>());
@@ -1250,6 +1372,74 @@ mod tests {
         tak.clear_calls();
         run_pass(&want, &dir, &tak).await;
         assert!(!tak.calls().iter().any(|c| c.contains("video")), "{:?}", tak.calls());
+    }
+
+    #[tokio::test]
+    async fn device_profiles_follow_the_maps_of_each_group() {
+        use crate::maps::{enrollment_profile, maps_profile, ENROLLMENT_PROFILE};
+        use crate::tak::ProfileKind;
+        let (dir, tak) = (MemoryDirectory::new(), MemoryTakServer::new());
+        let foreign = tak.add_foreign_profile("hq-settings", &["alpha"]);
+        let mut want = two_teams();
+        let maps = |entries: &[(&str, &str)]| -> BTreeMap<String, Vec<u8>> {
+            entries.iter().map(|(n, d)| (n.to_string(), d.as_bytes().to_vec())).collect()
+        };
+        want.device_profiles = Some(vec![
+            enrollment_profile(["alpha".to_string(), "bravo".to_string()].into()).unwrap(),
+            maps_profile("alpha", maps(&[("IGN-Plan.xml", "plan"), ("OpenTopoMap.xml", "otm")])).unwrap(),
+            maps_profile("evt-exercise", maps(&[("IGN-Plan.xml", "plan")])).unwrap(),
+        ]);
+        let report = run_pass(&want, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let added: Vec<(&str, Option<&str>)> =
+            report.changes.iter().filter(|c| c.kind() == "device_profile_added").map(|c| (c.subject(), c.group())).collect();
+        assert_eq!(
+            added,
+            vec![(ENROLLMENT_PROFILE, None), ("teamtak-maps-alpha", Some("alpha")), ("teamtak-maps-evt-exercise", Some("evt-exercise"))],
+            "one entry per profile, whatever the number of files"
+        );
+        let profiles = tak.profiles();
+        let alpha = profiles.iter().find(|(p, _)| p.name == "teamtak-maps-alpha").unwrap();
+        assert_eq!(alpha.0.kind, Some(ProfileKind::Connection), "created as an enrollment profile, then set");
+        assert_eq!(alpha.0.groups.iter().map(String::as_str).collect::<Vec<_>>(), ["alpha"]);
+        assert_eq!(alpha.1.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["IGN-Plan.xml", "OpenTopoMap.xml"]);
+        let enrollment = profiles.iter().find(|(p, _)| p.name == ENROLLMENT_PROFILE).unwrap();
+        assert_eq!(enrollment.0.kind, Some(ProfileKind::Enrollment));
+
+        assert!(run_pass(&want, &dir, &tak).await.is_clean(), "nothing to do the second time");
+
+        // A map changed, one taken off; the event is over; someone edited a profile in TAK Server.
+        want.device_profiles = Some(vec![
+            enrollment_profile(["alpha".to_string(), "bravo".to_string()].into()).unwrap(),
+            maps_profile("alpha", maps(&[("IGN-Plan.xml", "plan v2")])).unwrap(),
+        ]);
+        tak.edit_profile(ENROLLMENT_PROFILE, |p, _| {
+            p.groups.remove("bravo");
+        });
+        let report = run_pass(&want, &dir, &tak).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let kinds: Vec<(&str, &str)> = report.changes.iter().map(|c| (c.kind(), c.subject())).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("device_profile_updated", ENROLLMENT_PROFILE),
+                ("device_profile_updated", "teamtak-maps-alpha"),
+                ("device_profile_removed", "teamtak-maps-evt-exercise"),
+            ]
+        );
+        assert_eq!(report.changes[2].group(), Some("evt-exercise"), "read back from the name");
+        let profiles = tak.profiles();
+        let alpha = profiles.iter().find(|(p, _)| p.name == "teamtak-maps-alpha").unwrap();
+        assert_eq!(alpha.1.len(), 1);
+        assert_eq!(alpha.1[0].data, b"plan v2");
+        assert!(profiles.iter().any(|(p, _)| p.id == foreign), "a profile made by someone else stays");
+        assert_eq!(profiles.len(), 3);
+
+        // Profiles left alone: nothing asked about them.
+        want.device_profiles = None;
+        tak.clear_calls();
+        run_pass(&want, &dir, &tak).await;
+        assert!(!tak.calls().iter().any(|c| c.contains("profile")), "{:?}", tak.calls());
     }
 
     #[test]

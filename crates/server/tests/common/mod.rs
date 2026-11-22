@@ -609,6 +609,12 @@ impl Session {
         self.get("/me").await.ok()["account"]["id"].as_str().unwrap().to_string()
     }
 
+    /// A file the API hands over (`/teams/{id}/maps/package`): its status and its bytes.
+    pub async fn download(&self, path: &str) -> (u16, Vec<u8>) {
+        let response = self.http.get(format!("{}/api{path}", base_url())).send().await.unwrap();
+        (response.status().as_u16(), response.bytes().await.unwrap().to_vec())
+    }
+
     /// Downloads a connection zip.
     pub async fn package(&self, access_id: &str, form: &str) -> Vec<u8> {
         self.package_at(access_id, form, "").await.1
@@ -961,6 +967,69 @@ pub async fn device_api_get(identity: &Identity, path: &str) -> Result<Value, St
         return Err(format!("{url} ({address}): HTTP {status}: {body}"));
     }
     serde_json::from_str(&body).map_err(|e| format!("{url}: not JSON ({e}): {body}"))
+}
+
+/// A GET on TAK Server's API with a device's certificate, as bytes (a data package), with the
+/// HTTP status. An error says what went wrong on the way.
+pub async fn device_api_bytes(identity: &Identity, path: &str) -> Result<(u16, Vec<u8>), String> {
+    install_crypto();
+    let chain: Vec<CertificateDer<'static>> = identity.chain.iter().cloned().map(CertificateDer::from).collect();
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key.clone()));
+    let tls = tls_builder()
+        .with_root_certificates(root_store(&identity.roots))
+        .with_client_auth_cert(chain, key)
+        .map_err(|e| e.to_string())?;
+    let address = tak_api_address();
+    let http = reqwest::Client::builder()
+        .tls_backend_preconfigured(tls)
+        .resolve(TAK_SERVER_NAME, address)
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let url = format!("https://{TAK_SERVER_NAME}:{}{path}", address.port());
+    let answer = http.get(&url).send().await.map_err(|e| format!("{url} ({address}): {e:?}"))?;
+    let status = answer.status().as_u16();
+    let body = answer.bytes().await.map_err(|e| e.to_string())?.to_vec();
+    Ok((status, body))
+}
+
+/// What TAK Server hands a phone that enrolls with a username and a password: the
+/// enrollment profiles of its groups (`GET /Marti/api/tls/profile/enrollment` on 8446), as a
+/// data package, with the HTTP status (204: nothing).
+pub async fn enrollment_profiles(roots: &[CertificateDer<'static>], username: &str, password: &str, device: &str) -> (u16, Vec<u8>) {
+    install_crypto();
+    let tls = tls_builder().with_root_certificates(root_store(roots)).with_no_client_auth();
+    let http = reqwest::Client::builder()
+        .tls_backend_preconfigured(tls)
+        .resolve("localhost", "127.0.0.1:8446".parse().unwrap())
+        .build()
+        .unwrap();
+    let answer = http
+        .get(format!("https://{TAK_SERVER_NAME}:8446/Marti/api/tls/profile/enrollment?clientUid={device}"))
+        .basic_auth(username, Some(password))
+        .send()
+        .await
+        .expect("8446 reachable");
+    let status = answer.status().as_u16();
+    (status, answer.bytes().await.unwrap().to_vec())
+}
+
+/// The files of a data package, by name (directories dropped: `file0/IGN-Plan.xml` gives
+/// `IGN-Plan.xml`), without its manifest.
+pub fn package_files(zip_bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).expect("a zip");
+    let mut files = BTreeMap::new();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).unwrap();
+        let path = entry.name().unwrap().to_string();
+        if entry.is_dir() || path.starts_with("MANIFEST/") {
+            continue;
+        }
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).unwrap();
+        files.insert(path.rsplit('/').next().unwrap().to_string(), data);
+    }
+    files
 }
 
 // ------------------------------------------------------------------------------- TAK client

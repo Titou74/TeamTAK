@@ -10,6 +10,7 @@ pub mod challenge;
 pub mod directory;
 pub mod events;
 pub mod login;
+pub mod maps;
 pub mod names;
 pub mod package;
 pub mod policy;

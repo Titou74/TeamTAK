@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/app-shell";
 import { ModeBadge, StatusBadge } from "@/components/badges";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { adminEventActions, CreateEventDialog, EventItem, useEventClock, type Reload } from "@/components/events-section";
+import { MapCatalogueTab } from "@/components/map-catalogue";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -630,6 +631,7 @@ export function AdminPage({ me }: { me: Me }) {
         <TabsList>
           <TabsTrigger value="teams">{t("admin.tabs.teams")}</TabsTrigger>
           <TabsTrigger value="events">{t("admin.tabs.events")}</TabsTrigger>
+          <TabsTrigger value="maps">{t("admin.tabs.maps")}</TabsTrigger>
           <TabsTrigger value="accounts">{t("admin.tabs.accounts")}</TabsTrigger>
           <TabsTrigger value="sync">{t("admin.tabs.sync")}</TabsTrigger>
         </TabsList>
@@ -638,6 +640,9 @@ export function AdminPage({ me }: { me: Me }) {
         </TabsContent>
         <TabsContent value="events" className="pt-4">
           <EventsTab />
+        </TabsContent>
+        <TabsContent value="maps" className="pt-4">
+          <MapCatalogueTab />
         </TabsContent>
         <TabsContent value="accounts" className="pt-4">
           <AccountsTab me={me} />

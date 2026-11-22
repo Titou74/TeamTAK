@@ -20,9 +20,13 @@ import type {
   AdminAccount,
   AdminTeam,
   AdminTeams,
+  ChannelMaps,
   InvitableTeam,
   LoginChallenge,
   LoginProof,
+  MapCatalogue,
+  MapSource,
+  MapUploadResult,
   Me,
   PublicConfig,
   Reconciliation,
@@ -30,6 +34,7 @@ import type {
   TeamDetail,
   TeamEvent,
   TeamEvents,
+  TeamMaps,
   TeamMode,
   TeamRole,
   TeamVideo,
@@ -92,6 +97,14 @@ export interface Synced {
   synced: boolean;
 }
 
+/** A file the server hands over, with the name it chose. */
+async function download(path: string, fallback: string): Promise<{ name: string; blob: Blob }> {
+  const response = await request("GET", path);
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallback;
+  return { name, blob: await response.blob() };
+}
+
 export const api = {
   config: () => json<PublicConfig>("GET", "/config"),
   me: () => json<Me>("GET", "/me"),
@@ -124,13 +137,8 @@ export const api = {
   deleteAccess: (id: string) => json<Synced>("DELETE", `/accesses/${id}`),
   /** Downloads a connection zip and returns it with the file name chosen by the server. */
   /** A connection zip; `port` is one of the access's `server.ports`, the main one when absent. */
-  accessPackage: async (id: string, form: "enrollment" | "certificate", port?: number) => {
-    const query = port === undefined ? "" : `?port=${port}`;
-    const response = await request("GET", `/accesses/${id}/package/${form}${query}`);
-    const disposition = response.headers.get("Content-Disposition") ?? "";
-    const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${form}.zip`;
-    return { name, blob: await response.blob() };
-  },
+  accessPackage: (id: string, form: "enrollment" | "certificate", port?: number) =>
+    download(`/accesses/${id}/package/${form}${port === undefined ? "" : `?port=${port}`}`, `${form}.zip`),
 
   // Cross-team events. Every call names the team the caller acts for.
   teamEvents: (teamId: string) => json<TeamEvents>("GET", `/teams/${teamId}/events`),
@@ -159,6 +167,21 @@ export const api = {
   regenerateVideoStream: (id: string) => json<Synced>("POST", `/video-streams/${id}/regenerate`),
   deleteVideoStream: (id: string) => json<Synced>("DELETE", `/video-streams/${id}`),
 
+  // Maps of a team's channel and of the events it takes part in.
+  teamMaps: (teamId: string) => json<TeamMaps>("GET", `/teams/${teamId}/maps`),
+  setTeamMaps: (teamId: string, sourceIds: string[]) => json<Synced>("PUT", `/teams/${teamId}/maps`, { source_ids: sourceIds }),
+  /** A data package of the maps the team's devices get now, to import by hand. */
+  teamMapsPackage: (teamId: string) => download(`/teams/${teamId}/maps/package`, "maps.zip"),
+  /** A leader adds map sources of the team's own: one file, a map source or a zip of them, in base64. */
+  uploadTeamMapSource: (teamId: string, name: string, data: string) =>
+    json<Synced & { results: MapUploadResult[] }>("POST", `/teams/${teamId}/map-sources`, { name, data }),
+  removeTeamMapSource: (teamId: string, sourceId: string) => json<Synced>("DELETE", `/teams/${teamId}/map-sources/${sourceId}`),
+  /** Checks a map source again now; answers it as it is afterwards. */
+  checkMapSource: (id: string) => json<MapSource>("POST", `/map-sources/${id}/check`),
+  eventMaps: (teamId: string, eventId: string) => json<ChannelMaps>("GET", `/teams/${teamId}/events/${eventId}/maps`),
+  setEventMaps: (teamId: string, eventId: string, sourceIds: string[]) =>
+    json<Synced>("PUT", `/teams/${teamId}/events/${eventId}/maps`, { source_ids: sourceIds }),
+
   adminTeams: () => json<AdminTeams>("GET", "/admin/teams"),
   adminEvents: () => json<{ events: TeamEvent[] }>("GET", "/admin/events"),
   adminCancelEvent: (eventId: string) => json<Synced>("POST", `/admin/events/${eventId}/cancel`),
@@ -172,6 +195,16 @@ export const api = {
     json<Synced & { team_id: string; name: string }>("POST", `/admin/events/${eventId}/teams`, { team_id: teamId }),
   adminRemoveTeamFromEvent: (eventId: string, teamId: string) =>
     json<Synced>("DELETE", `/admin/events/${eventId}/teams/${teamId}`),
+  adminEventMaps: (eventId: string) => json<ChannelMaps>("GET", `/admin/events/${eventId}/maps`),
+  adminSetEventMaps: (eventId: string, sourceIds: string[]) =>
+    json<Synced>("PUT", `/admin/events/${eventId}/maps`, { source_ids: sourceIds }),
+  // The map catalogue (administrators).
+  mapCatalogue: () => json<MapCatalogue>("GET", "/admin/map-sources"),
+  /** One file, a map source or a zip of them; `data` is its content in base64. */
+  uploadMapSource: (name: string, data: string) =>
+    json<Synced & { results: MapUploadResult[] }>("POST", "/admin/map-sources", { name, data }),
+  addMapSuggestions: (keys: string[]) => json<{ results: MapUploadResult[] }>("POST", "/admin/map-sources/suggestions", { keys }),
+  removeMapSource: (id: string) => json<Synced>("DELETE", `/admin/map-sources/${id}`),
   decideTeam: (id: string, approve: boolean, options: { member_cap?: number; note?: string }) =>
     json<Team>("POST", `/admin/teams/${id}/decision`, { approve, ...options }),
   adminUpdateTeam: (id: string, changes: { member_cap?: number; suspended?: boolean }) =>

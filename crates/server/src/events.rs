@@ -35,6 +35,7 @@ use crate::audit::{self, AuditAction, Detail, Details, Target};
 use crate::auth::{Account, AdminAccount, CurrentAccount};
 use crate::error::{ApiError, ApiResult};
 use crate::locale::{self, Template};
+use crate::maps;
 use crate::state::SharedState;
 use crate::teams::{apply_change, team_context, TeamContext};
 
@@ -1008,6 +1009,84 @@ pub async fn admin_end_event(
     require_organizer()?;
     organized_event(&state, event_id).await?;
     end_early(&state, event_id, &admin).await.map(Json)
+}
+
+// ------------------------------------------------------------------- maps of an event
+
+/// Loads an event whose maps may still change: one that is not over.
+async fn open_event(state: &SharedState, event_id: Uuid) -> ApiResult<EventRow> {
+    let event: Option<EventRow> = sqlx::query_as(concat!("SELECT ", event_columns!(), " FROM events e WHERE e.id = $1"))
+        .bind(event_id)
+        .fetch_optional(&state.db)
+        .await?;
+    let event = event.ok_or(ApiError::NotFound)?;
+    if event.phase(clock_now()).is_open() {
+        Ok(event)
+    } else {
+        Err(ApiError::EventClosed)
+    }
+}
+
+/// Replaces the maps of an event and records it.
+async fn change_event_maps(state: &SharedState, event: &EventRow, ids: &[Uuid], by: &Account) -> ApiResult<Value> {
+    // A team's event may take the host's own sources; one the administrators organise, the catalogue's.
+    let (names, synced) = maps::replace_maps(state, maps::Channel::Event(event.id), event.host_team_id, ids, by).await?;
+    tracing::info!(event = %event.group_name, maps = names.len(), by = %by.email, "event maps changed");
+    let details = maps::maps_details(&event.group_name, &names);
+    audit::record(&state.db, audit::Actor::Account(by), AuditAction::EventMapsChanged, event_target(event), details).await;
+    Ok(json!({ "synced": synced }))
+}
+
+/// `GET /api/teams/{id}/events/{event_id}/maps`: the maps of an event the team hosts, and
+/// the catalogue to pick from, for its leaders.
+pub async fn event_maps(
+    State(state): State<SharedState>,
+    CurrentAccount(account): CurrentAccount,
+    Path((team_id, event_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<Json<Value>> {
+    let ectx = event_context(&state, team_id, event_id, &account).await?;
+    ectx.require_host(Action::ManageEvent)?;
+    maps::event_maps_view(&state, event_id, Some(team_id)).await.map(Json)
+}
+
+/// `PUT /api/teams/{id}/events/{event_id}/maps`: a leader of the host team picks the maps of
+/// the event's channel. Its devices get them while the event runs.
+pub async fn set_event_maps(
+    State(state): State<SharedState>,
+    CurrentAccount(account): CurrentAccount,
+    Path((team_id, event_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<maps::ChannelMapsBody>,
+) -> ApiResult<Json<Value>> {
+    let ectx = event_context(&state, team_id, event_id, &account).await?;
+    ectx.ctx.team.require_active()?;
+    ectx.require_host(Action::ManageEvent)?;
+    let event = open_event(&state, event_id).await?;
+    change_event_maps(&state, &event, &body.source_ids, &account).await.map(Json)
+}
+
+/// `GET /api/admin/events/{id}/maps`: the maps of an event the administrators organise.
+pub async fn admin_event_maps(
+    State(state): State<SharedState>,
+    AdminAccount(_admin): AdminAccount,
+    Path(event_id): Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    require_organizer()?;
+    organized_event(&state, event_id).await?;
+    maps::event_maps_view(&state, event_id, None).await.map(Json)
+}
+
+/// `PUT /api/admin/events/{id}/maps`: an administrator picks the maps of an event they
+/// organise.
+pub async fn admin_set_event_maps(
+    State(state): State<SharedState>,
+    AdminAccount(admin): AdminAccount,
+    Path(event_id): Path<Uuid>,
+    Json(body): Json<maps::ChannelMapsBody>,
+) -> ApiResult<Json<Value>> {
+    require_organizer()?;
+    organized_event(&state, event_id).await?;
+    let event = open_event(&state, event_id).await?;
+    change_event_maps(&state, &event, &body.source_ids, &admin).await.map(Json)
 }
 
 // ------------------------------------------------------------------- deletion of a team

@@ -377,6 +377,9 @@
       "textAdmin": "Your members stop seeing the other teams, and being seen by them, at once. The administrators are told by e-mail and can add your team again.",
       "confirm": "Leave the event",
       "done": "Your team left the event."
+    },
+    "maps": {
+      "action": "Maps"
     }
   },
   "video": {
@@ -471,6 +474,137 @@
       "pending": "Stream deleted. TAK Server could not be told yet: it leaves ATAK within a minute."
     }
   },
+  "maps": {
+    "title": "Maps",
+    "description": "Map sources for ATAK. TAK Server hands each channel's maps to its devices when they connect: they show up among the maps of ATAK (Mobile tab), and ATAK fetches the tiles it needs while the map is shown.",
+    "none": "No map.",
+    "broken": {
+      "label": "Not working",
+      "help": "Its tiles failed two checks in a row: TeamTAK no longer hands it to devices until it works again. Phones that have it keep it.",
+      "text": "Not handed to devices: {{reason}}.",
+      "lastCheckFailed": "Latest check failed ({{reason}}); one more failure and it is held back."
+    },
+    "owner": "Team {{team}}",
+    "ownSource": "Team's own",
+    "check": {
+      "action": "Check {{name}} again",
+      "works": "{{name}} works",
+      "stillFailing": "{{name}} still does not work"
+    },
+    "addSource": {
+      "action": "Add map sources",
+      "checking": "Checking…",
+      "help": "Map source files (.xml, customMapSource) or a zip of them, up to {{max}} files: they go on the team channel once they are checked. Only your team sees them.",
+      "done_one": "{{count}} map source added to the team channel",
+      "done_other": "{{count}} map sources added to the team channel"
+    },
+    "removeSource": {
+      "action": "Remove {{name}} from TeamTAK",
+      "title": "Remove {{name}}?",
+      "text": "It leaves the team's sources and every channel that has it. Phones that have it keep it.",
+      "confirm": "Remove",
+      "done": "{{name}} removed"
+    },
+    "channel": {
+      "team": "Team channel",
+      "event": "Event “{{name}}”",
+      "scheduledHelp": "These maps reach the devices of the teams that take part from the event's start to its end."
+    },
+    "download": {
+      "action": "Download the maps"
+    },
+    "notes": {
+      "atak": "ATAK: nothing to import. Connection zips, and enrolling by QR code or by username and password, turn on “Apply TAK Server profile updates”. A device already connected gets new maps the next time it connects; one set up with a zip of TeamTAK 1.1.0 or older needs that setting ticked in ATAK, or its zip again.",
+      "itak": "iTAK, or ATAK with that setting off: download the maps and open the data package on the phone.",
+      "removal": "A map taken off a channel stays on the phones that have it: delete it there if it must go.",
+      "checks": "Every map source is checked before it is handed out: one of its tiles must come back as an image. TeamTAK checks them again every six hours, and holds back one that fails twice in a row until it works again.",
+      "offline": "Download areas for offline use only where the map's provider allows it, and only for the area of an event."
+    },
+    "choose": {
+      "action": "Choose",
+      "teamTitle": "Maps of the team channel",
+      "teamDescription": "The devices of the team get these maps from TAK Server.",
+      "eventTitle": "Maps of “{{name}}”",
+      "eventDescription": "The devices of every team that takes part get these maps while the event runs.",
+      "done": "Maps saved",
+      "pendingSync": "Saved, but TAK Server could not be told yet: it will be within a minute.",
+      "emptyCatalogue": "The catalogue is empty: an administrator adds map sources in the administration area.",
+      "restrictedWarning": "A map ticked comes from a provider that allows its tiles only through its own applications (Google, Bing…): handing it to the devices is the responsibility of whoever picks it.",
+      "tooMany": "A channel can have {{max}} maps at most.",
+      "removalNote": "Unticking a map takes it off TAK Server; the phones that have it keep it."
+    },
+    "terms": {
+      "open": {
+        "label": "Open data",
+        "help": "Open data on a public service meant for it (IGN's Géoplateforme)."
+      },
+      "light_use": {
+        "label": "Light use",
+        "help": "Free to use from an app, without mass downloads: a volunteer server. Download only small areas for offline use."
+      },
+      "no_offline": {
+        "label": "No offline",
+        "help": "Interactive use only: the provider forbids downloading areas for offline use, and wants its attribution on the map, which ATAK does not show."
+      },
+      "restricted": {
+        "label": "Restricted terms",
+        "help": "The provider allows its tiles only through its own applications and terms (Google, Bing…). TeamTAK never suggests it."
+      },
+      "unknown": {
+        "label": "Check the terms",
+        "help": "TeamTAK does not know this provider: check that its terms allow this use."
+      }
+    },
+    "problem": {
+      "too_large": "too large",
+      "not_xml": "not well-formed XML, or it declares a DTD",
+      "not_map_source": "not a map source (customMapSource)",
+      "bad_name": "no name, or one longer than 60 characters",
+      "bad_url": "no tile address with {$z}, {$x} and {$y}",
+      "bad_zoom": "wrong zoom levels",
+      "not_an_upload": "neither a map source (.xml) nor a zip of them",
+      "bad_zip": "damaged zip, or more files than allowed",
+      "unreachable": "the tile server does not answer",
+      "http_status": "the tile server answered {{status}} instead of a tile",
+      "not_an_image": "the tile server answered with something that is not an image",
+      "private_address": "the tile address leads to a private or local network",
+      "unsupported_url": "the tile address has a placeholder ATAK does not know"
+    },
+    "outcome": {
+      "added": "Added",
+      "updated": "Replaced",
+      "unchanged": "Unchanged",
+      "rejected": "Rejected"
+    },
+    "suggestion": {
+      "ign-plan": "IGN's map of France, from the Géoplateforme (open data, no key).",
+      "ign-ortho": "IGN's aerial photographs of France, from the Géoplateforme (open data, no key).",
+      "opentopomap": "Topographic map of the world from OpenStreetMap data, on a volunteer server: no mass downloads."
+    },
+    "catalogue": {
+      "title_one": "Map catalogue ({{count}} source)",
+      "title_other": "Map catalogue ({{count}} sources)",
+      "description": "The map sources teams and events pick their maps from, and the ones teams added for themselves. Which providers go in, and their terms, is a matter for whoever runs this server.",
+      "upload": "Add map sources",
+      "uploadHelp": "Map source files (.xml, customMapSource) or a zip of them, such as a data package exported from ATAK, up to {{max}} files. Each is checked first: one of its tiles must come back as an image. A file named like one already here replaces it, on the phones too.",
+      "uploaded_one": "{{count}} map source stored",
+      "uploaded_other": "{{count}} map sources stored",
+      "removed": "{{name}} removed from the catalogue",
+      "none": "No map source yet.",
+      "uses": "Teams: {{teams}} · events: {{events}}",
+      "remove": "Remove {{name}}",
+      "removeTitle": "Remove {{name}}?",
+      "removeText": "It leaves the catalogue and the channels that have it ({{teams}} teams, {{events}} events). Phones that have it keep it.",
+      "removeConfirm": "Remove",
+      "restrictedTitle": "Sources with restricted terms",
+      "restrictedText": "Some sources come from providers that allow their tiles only through their own applications (Google, Bing…). They are flagged wherever they are picked; TeamTAK never suggests them."
+    },
+    "suggestions": {
+      "title": "Suggested sources",
+      "description": "Providers whose terms allow a server like this one to hand their address to a few dozen phones. OpenStreetMap's own tile servers are not among them: they forbid offline use and want an attribution ATAK does not show.",
+      "add": "Add"
+    }
+  },
   "profile": {
     "title": "Profile",
     "description": "How you appear to the members of your teams, the language of this site and of the e-mails you receive, and whether this site is light or dark.",
@@ -496,7 +630,8 @@
       "teams": "Teams",
       "events": "Events",
       "accounts": "Accounts",
-      "sync": "TAK server sync"
+      "sync": "TAK server sync",
+      "maps": "Maps"
     },
     "requests": {
       "title_one": "{{count}} request to review",
@@ -605,7 +740,10 @@
       "video_feed_added": "Video stream listed in TAK Server",
       "video_feed_updated": "Address of a video stream updated in TAK Server",
       "video_feed_removed": "Video stream withdrawn from TAK Server",
-      "video_stopped": "Devices disconnected from a video stream"
+      "video_stopped": "Devices disconnected from a video stream",
+      "device_profile_added": "Device profile created in TAK Server",
+      "device_profile_updated": "Device profile updated in TAK Server",
+      "device_profile_removed": "Device profile removed from TAK Server"
     },
     "triggers": {
       "change": "Platform change",
@@ -1165,7 +1303,14 @@
       "service_restarted": "Service restarted",
       "backup_run": "Backup run",
       "letsencrypt_synced": "Let's Encrypt certificate handed to TAK Server",
-      "logs_rotated": "TAK Server logs cleaned"
+      "logs_rotated": "TAK Server logs cleaned",
+      "map_source_added": "Map source added to the catalogue",
+      "map_source_updated": "Map source replaced in the catalogue",
+      "map_source_removed": "Map source removed from the catalogue",
+      "team_maps_changed": "Maps of a team changed",
+      "event_maps_changed": "Maps of an event changed",
+      "map_source_broken": "Map source held back: it no longer works",
+      "map_source_working": "Map source works again"
     },
     "details": {
       "mode": "Mode:",
@@ -1186,7 +1331,8 @@
       "encrypted": "Encrypted:",
       "settings": "Settings changed:",
       "deleted_files": "Files cleaned:",
-      "channel": "Channel:"
+      "channel": "Channel:",
+      "maps": "Maps"
     },
     "values": {
       "mode_shared": "shared identity",
@@ -1326,6 +1472,8 @@
     "video_off": "The video server is turned off on this installation (VIDEO=off in deploy/.env).",
     "invalid_stream_name": "This name gives no usable address: use letters or digits.",
     "stream_name_taken": "A stream of this channel already has this name: choose another one.",
-    "too_many_video_streams": "The team already has the maximum number of streams on this channel: delete one first."
+    "too_many_video_streams": "The team already has the maximum number of streams on this channel: delete one first.",
+    "too_many_map_sources": "The map catalogue is full.",
+    "too_many_maps": "Too many maps for one channel."
   }
 }

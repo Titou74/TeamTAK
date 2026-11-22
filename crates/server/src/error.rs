@@ -112,6 +112,10 @@ api_errors! {
     StreamNameTaken => ("stream_name_taken", CONFLICT),
     /// The team already has the maximum number of streams in this channel.
     TooManyVideoStreams => ("too_many_video_streams", CONFLICT),
+    /// The map catalogue holds the maximum number of sources.
+    TooManyMapSources => ("too_many_map_sources", CONFLICT),
+    /// More maps than one channel may have.
+    TooManyMaps => ("too_many_maps", BAD_REQUEST),
     Internal => ("internal", INTERNAL_SERVER_ERROR),
 }
 

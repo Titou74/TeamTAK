@@ -346,3 +346,102 @@ export interface VideoStreamDetail {
   regenerated_at: string | null;
   can_manage: boolean;
 }
+
+// Maps for ATAK (crates/server/src/maps.rs).
+
+/** What the provider of a map's tiles allows, as far as TeamTAK knows (`maps.terms.<code>`). */
+export type MapTerms = "open" | "light_use" | "no_offline" | "restricted" | "unknown";
+
+/** A map source of the catalogue. Its file stays on the server: TAK Server hands it to devices. */
+export interface MapSource {
+  id: string;
+  /** Name of the file on the devices. */
+  file_name: string;
+  /** The name ATAK lists. */
+  name: string;
+  url: string;
+  host: string;
+  terms: MapTerms;
+  min_zoom: number | null;
+  max_zoom: number | null;
+  tile_type: string | null;
+  /** The team that added it, which alone sees it; null for the administrators' catalogue. */
+  team_id: string | null;
+  team_name: string | null;
+  checked_at: string;
+  /** Why the latest check failed; null when it worked. */
+  problem: MapProblem | null;
+  /** Held back from the devices: it failed twice in a row. */
+  broken: boolean;
+  updated_at: string;
+}
+
+/** Why a file is not a map source, or why a source does not work (`maps.problem.<code>`). */
+export interface MapProblem {
+  code: string;
+  /** The HTTP status, for `http_status`. */
+  status: number | null;
+}
+
+export interface AdminMapSource extends MapSource {
+  /** Teams whose channel has it. */
+  teams: number;
+  /** Events not over whose channel has it. */
+  events: number;
+}
+
+export interface MapSuggestion {
+  key: string;
+  name: string;
+  file_name: string;
+  host: string;
+  terms: MapTerms;
+  /** A source with the same file name is in the catalogue. */
+  present: boolean;
+}
+
+export interface MapCatalogue {
+  sources: AdminMapSource[];
+  suggestions: MapSuggestion[];
+  limits: { upload_bytes: number; files: number; per_channel: number };
+}
+
+export interface MapUploadResult {
+  /** The file as uploaded, or as named in the zip. */
+  file: string;
+  outcome: "added" | "updated" | "unchanged" | "rejected";
+  /** Why it was rejected. */
+  problem?: MapProblem;
+  id?: string;
+  file_name?: string;
+  name?: string;
+  host?: string;
+  terms?: MapTerms;
+}
+
+export interface MapChannel {
+  /** The TAK group: the team's slug or the event's group name. */
+  group: string;
+  kind: "team" | "event";
+  name: string;
+  event_id: string | null;
+  phase: EventPhase | null;
+  maps: MapSource[];
+  can_edit: boolean;
+}
+
+export interface TeamMaps {
+  channels: MapChannel[];
+  /** The catalogue and the team's own sources, for whoever can change a channel's maps; empty otherwise. */
+  catalogue: MapSource[];
+  per_channel: number;
+  permissions: { add_sources: boolean };
+  limits: { upload_bytes: number; files: number };
+}
+
+/** The maps of one event, for its organisers. */
+export interface ChannelMaps {
+  maps: MapSource[];
+  catalogue: MapSource[];
+  per_channel: number;
+}

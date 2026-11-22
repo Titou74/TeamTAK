@@ -9,6 +9,7 @@ mod error;
 mod events;
 mod locale;
 mod mail;
+mod maps;
 mod monitor;
 mod reconciler;
 mod settings;
@@ -86,13 +87,29 @@ async fn require_csrf_header(request: Request, next: Next) -> Response {
 
 /// Largest request body the API accepts. Its requests are small JSON documents.
 const MAX_BODY_BYTES: usize = 64 * 1024;
+/// Largest body of an upload of map sources: one file, base64 in JSON.
+const MAX_UPLOAD_BODY_BYTES: usize = teamtak_core::maps::MAX_UPLOAD_BYTES * 4 / 3 + 4096;
+
+/// How large a request's body may be.
+fn body_limit(request: &Request) -> usize {
+    // Inside `/api`, the path no longer carries it.
+    let path = request.uri().path();
+    let path = path.strip_prefix("/api").unwrap_or(path);
+    let upload = path == "/admin/map-sources" || (path.starts_with("/teams/") && path.ends_with("/map-sources"));
+    if request.method() == Method::POST && upload {
+        MAX_UPLOAD_BODY_BYTES
+    } else {
+        MAX_BODY_BYTES
+    }
+}
 
 /// Reads the whole request body before the handler runs. A handler that takes no body would
 /// otherwise leave it unread; the connection is then closed with data pending and the proxy
 /// sees a reset instead of the answer.
 async fn read_whole_body(request: Request, next: Next) -> Response {
+    let limit = body_limit(&request);
     let (parts, body) = request.into_parts();
-    match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
+    match axum::body::to_bytes(body, limit).await {
         Ok(bytes) => next.run(Request::from_parts(parts, axum::body::Body::from(bytes))).await,
         Err(_) => ApiError::InvalidInput.into_response(),
     }
@@ -148,6 +165,12 @@ fn api_router(state: SharedState) -> Router {
         .route("/teams/{id}/video", get(video::team_video).post(video::create_stream))
         .route("/video-streams/{id}", get(video::stream_detail).delete(video::delete_stream))
         .route("/video-streams/{id}/regenerate", post(video::regenerate_stream))
+        .route("/teams/{id}/maps", get(maps::team_maps).put(maps::set_team_maps))
+        .route("/teams/{id}/maps/package", get(maps::team_maps_package))
+        .route("/teams/{id}/map-sources", post(maps::team_upload))
+        .route("/teams/{id}/map-sources/{source_id}", delete(maps::team_remove_source))
+        .route("/map-sources/{id}/check", post(maps::check_now))
+        .route("/teams/{id}/events/{event_id}/maps", get(events::event_maps).put(events::set_event_maps))
         .route("/invitations/{id}/answer", post(teams::answer_invitation))
         .route("/accesses/{id}", get(accesses::access_detail).delete(accesses::delete_access))
         .route("/accesses/{id}/package/{form}", get(accesses::access_package))
@@ -161,6 +184,10 @@ fn api_router(state: SharedState) -> Router {
         .route("/admin/events/{id}/cancel", post(events::admin_cancel_event))
         .route("/admin/events/{id}/teams", post(events::admin_assign_team))
         .route("/admin/events/{id}/teams/{team_id}", delete(events::admin_remove_team))
+        .route("/admin/events/{id}/maps", get(events::admin_event_maps).put(events::admin_set_event_maps))
+        .route("/admin/map-sources", get(maps::admin_catalogue).post(maps::upload))
+        .route("/admin/map-sources/suggestions", post(maps::add_suggestions))
+        .route("/admin/map-sources/{id}", delete(maps::remove_source))
         .route("/admin/accounts", get(admin::list_accounts).post(admin::invite_account))
         .route("/admin/accounts/{id}", patch(admin::update_account))
         .route("/admin/reconciliation", get(admin::reconciliation))
@@ -217,6 +244,7 @@ async fn serve(config: Config) -> Result<()> {
     let state = state::build_state(config).await?;
     tokio::spawn(reconciler::run_periodically(state.reconciler.clone(), interval));
     tokio::spawn(monitor::run_periodically(state.monitor.clone()));
+    tokio::spawn(maps::run_checks_periodically(state.clone()));
 
     let internal = tokio::net::TcpListener::bind(internal_addr).await.with_context(|| format!("listening on {internal_addr}"))?;
     let internal_app = internal_router(state.clone());

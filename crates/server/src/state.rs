@@ -35,6 +35,8 @@ pub struct AppState {
     pub tak_admin_visits: Visits,
     /// The video server; `None` when it is turned off.
     pub video: Option<Arc<VideoServer>>,
+    /// Fetches a tile of a map source to tell whether it works.
+    pub map_checker: Arc<teamtak_core::maps::TileChecker>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -107,5 +109,6 @@ pub async fn build_state(config: Config) -> Result<SharedState> {
         truststore_p12,
         tak_admin_visits: Visits::default(),
         video,
+        map_checker: crate::maps::checker().context("setting up the map source checker")?,
     }))
 }

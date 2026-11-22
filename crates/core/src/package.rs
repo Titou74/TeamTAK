@@ -4,7 +4,8 @@
 //! A zip holds the server address, the truststore and, optionally, a client certificate.
 //! It never holds a callsign, a team colour, a role or a group: groups come from the
 //! directory through TAK Server. It turns on ATAK's channels for the server, so that the
-//! device lists those groups.
+//! device lists those groups, and ATAK's "Apply TAK Server profile updates", so that the
+//! device gets its team's maps (`crate::maps`).
 
 use std::io::{Cursor, Write};
 
@@ -179,6 +180,9 @@ pub fn config_pref(package: &ConnectionPackage) -> String {
     // Server's own profile. The list itself comes from TAK Server's API on 8443.
     s.push_str(&entry(CHANNELS_PREF, "String", "true"));
     s.push_str(&entry(&channels_host_pref(&package.host), "String", "true"));
+    // Off by default in ATAK: without it the device never asks TAK Server for the profiles
+    // that carry its team's maps (a device that enrolls gets it from the enrollment profile).
+    s.push_str(&entry(crate::maps::PROFILES_ON_CONNECT_PREF, "Boolean", "true"));
     s.push_str("  </preference>\n</preferences>\n");
     s
 }
@@ -316,6 +320,7 @@ mod tests {
         "displayServerConnectionWidget",
         "prefs_enable_channels",
         "prefs_enable_channels_host-tak.example.org",
+        "deviceProfileEnableOnConnect",
     ];
 
     fn keys(pref: &str) -> Vec<String> {
@@ -385,6 +390,13 @@ mod tests {
             );
         }
         assert_eq!(channels_host_pref("10.0.0.5"), "prefs_enable_channels_host-10.0.0.5");
+    }
+
+    #[test]
+    fn every_zip_asks_for_the_profiles_of_its_server() {
+        let pref = config_pref(&package(None));
+        let app = &pref[pref.find(r#"name="com.atakmap.app_preferences""#).expect("app preferences")..];
+        assert!(app.contains(r#"<entry key="deviceProfileEnableOnConnect" class="class java.lang.Boolean">true</entry>"#), "{pref}");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! TAK Server 5.8 over HTTPS, with the calls validated in phase 0:
 //!
 //! - port 8443, client certificate declared administrator: groups, sessions, certificates,
-//!   video feeds;
+//!   video feeds, device profiles;
 //! - port 8446, HTTP Basic with the directory account: certificate enrollment.
 
 use std::sync::Arc;
@@ -15,7 +15,10 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use super::enroll;
-use super::{normalize_fingerprint, EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer, VideoFeed};
+use super::{
+    normalize_fingerprint, DeviceProfile, EnrolledCertificate, IssuedCertificate, ProfileFile, ProfileKind, Subscription, TakError,
+    TakServer, VideoFeed,
+};
 
 #[derive(Clone)]
 pub struct HttpTakConfig {
@@ -143,6 +146,23 @@ impl HttpTakServer {
         Ok(())
     }
 
+    /// A call with a raw body.
+    async fn api_send_bytes(&self, method: reqwest::Method, path: &str, body: Vec<u8>) -> Result<(), TakError> {
+        let url = format!("{}{}", self.config.api_url, path);
+        let response = self
+            .api
+            .request(method.clone(), &url)
+            .header("Content-Type", "application/octet-stream")
+            .body(body)
+            .send()
+            .await
+            .map_err(unavailable)?;
+        if !response.status().is_success() {
+            return Err(TakError::Status { call: format!("{method} {path}"), status: response.status().as_u16() });
+        }
+        Ok(())
+    }
+
     async fn api_data(&self, path: &str) -> Result<Vec<Value>, TakError> {
         let body: Value = self.api_call(reqwest::Method::GET, path).await?.json().await.map_err(unavailable)?;
         match body.get("data") {
@@ -220,6 +240,48 @@ pub fn video_collection(feed: &VideoFeed) -> Value {
             "rtspReliable": "1",
         }],
     })
+}
+
+/// Reads one element of `GET /Marti/api/device/profile`.
+pub fn parse_device_profile(v: &Value) -> Option<DeviceProfile> {
+    let groups = v.get("groups").and_then(|g| g.as_array()).map(|items| items.iter().filter_map(|g| g.as_str()).map(str::to_string).collect());
+    Some(DeviceProfile {
+        id: v.get("id")?.as_i64()?,
+        name: text(v, "name")?,
+        kind: text(v, "type").as_deref().and_then(ProfileKind::from_tak_type),
+        active: v.get("active").and_then(|a| a.as_bool()).unwrap_or(false),
+        groups: groups.unwrap_or_default(),
+    })
+}
+
+/// The body of `PUT /Marti/api/device/profile/{name}`. TAK Server sets the profile's groups
+/// from `groups`, and when it is applied from `type`: a profile is applied at enrollment or
+/// at connection, not both.
+pub fn device_profile_body(id: i64, name: &str, kind: ProfileKind, groups: &[String]) -> Value {
+    serde_json::json!({ "id": id, "name": name, "active": true, "type": kind.as_tak_type(), "tool": null, "groups": groups })
+}
+
+/// The files of the data package TAK Server makes of a profile
+/// (`GET /Marti/api/device/profile/{name}/missionpackage`): file `i` of the profile, in the
+/// order of `GET …/files`, is at `file<i>/<name>`.
+pub fn read_profile_package(zip_bytes: &[u8]) -> Result<std::collections::BTreeMap<usize, (String, Vec<u8>)>, TakError> {
+    use std::io::Read;
+    let bad = |e: &dyn std::fmt::Display| TakError::Protocol(format!("profile package: {e}"));
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).map_err(|e| bad(&e))?;
+    let mut files = std::collections::BTreeMap::new();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| bad(&e))?;
+        let path = entry.name().map_err(|e| bad(&e))?.to_string();
+        let Some((dir, name)) = path.split_once('/') else { continue };
+        let Some(index) = dir.strip_prefix("file").and_then(|n| n.parse::<usize>().ok()) else { continue };
+        if entry.is_dir() || name.is_empty() {
+            continue;
+        }
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).map_err(|e| bad(&e))?;
+        files.insert(index, (name.to_string(), data));
+    }
+    Ok(files)
 }
 
 /// Reads one element of `subscriptions/all`.
@@ -345,6 +407,63 @@ impl TakServer for HttpTakServer {
     async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError> {
         self.api_call(reqwest::Method::DELETE, &format!("/Marti/api/video/{}", encode_segment(uid))).await.map(|_| ())
     }
+
+    async fn device_profiles(&self) -> Result<Vec<DeviceProfile>, TakError> {
+        let items = self.api_data("/Marti/api/device/profile").await?;
+        Ok(items.iter().filter_map(parse_device_profile).collect())
+    }
+
+    async fn profile_files(&self, profile: &str) -> Result<Vec<ProfileFile>, TakError> {
+        // The list gives identifiers and names, the profile's data package the contents: two
+        // calls, whatever the number of files.
+        let base = format!("/Marti/api/device/profile/{}", encode_segment(profile));
+        let listed = self.api_data(&format!("{base}/files")).await?;
+        let listed: Vec<(i64, String)> =
+            listed.iter().filter_map(|f| Some((f.get("id")?.as_i64()?, text(f, "name")?))).collect();
+        if listed.is_empty() {
+            return Ok(Vec::new());
+        }
+        let package = self.api_call(reqwest::Method::GET, &format!("{base}/missionpackage")).await?;
+        let package = read_profile_package(&package.bytes().await.map_err(unavailable)?)?;
+        let mut files = Vec::with_capacity(listed.len());
+        for (index, (id, name)) in listed.into_iter().enumerate() {
+            let data = match package.get(&index) {
+                Some((packed, data)) if *packed == name => data.clone(),
+                // Not where expected (a file added meanwhile): asked for alone.
+                _ => {
+                    let path = format!("{base}/file/{id}");
+                    self.api_call(reqwest::Method::GET, &path).await?.bytes().await.map_err(unavailable)?.to_vec()
+                }
+            };
+            files.push(ProfileFile { id, name, data });
+        }
+        Ok(files)
+    }
+
+    async fn create_device_profile(&self, name: &str, groups: &[String]) -> Result<(), TakError> {
+        let query: Vec<String> = groups.iter().map(|g| format!("group={}", encode_segment(g))).collect();
+        let path = format!("/Marti/api/device/profile/{}?{}", encode_segment(name), query.join("&"));
+        self.api_call(reqwest::Method::POST, &path).await.map(|_| ())
+    }
+
+    async fn set_device_profile(&self, id: i64, name: &str, kind: ProfileKind, groups: &[String]) -> Result<(), TakError> {
+        let path = format!("/Marti/api/device/profile/{}", encode_segment(name));
+        self.api_send(reqwest::Method::PUT, &path, &device_profile_body(id, name, kind, groups)).await
+    }
+
+    async fn add_profile_file(&self, profile: &str, file_name: &str, data: &[u8]) -> Result<(), TakError> {
+        let path = format!("/Marti/api/device/profile/{}/file?filename={}", encode_segment(profile), encode_segment(file_name));
+        self.api_send_bytes(reqwest::Method::PUT, &path, data.to_vec()).await
+    }
+
+    async fn delete_profile_file(&self, profile: &str, file_id: i64) -> Result<(), TakError> {
+        let path = format!("/Marti/api/device/profile/{}/file/{file_id}", encode_segment(profile));
+        self.api_call(reqwest::Method::DELETE, &path).await.map(|_| ())
+    }
+
+    async fn delete_device_profile(&self, id: i64) -> Result<(), TakError> {
+        self.api_call(reqwest::Method::DELETE, &format!("/Marti/api/device/profile/{id}")).await.map(|_| ())
+    }
 }
 
 #[cfg(test)]
@@ -428,6 +547,43 @@ mod tests {
         assert_eq!(sent["feeds"][0]["url"], "rtsp://view:k@h:8554/alpha/drone-1");
         assert_eq!(sent["feeds"][0]["rtspReliable"], "1");
         assert_eq!(parse_video_collections(&json!({"videoConnections": [sent]})).unwrap(), vec![feeds[0].clone()], "read back as written");
+    }
+
+    #[test]
+    fn device_profiles_are_read_as_the_server_lists_them() {
+        // Shape observed on TAK Server 5.8-RELEASE-103.
+        let v = json!({"id": 1, "name": "teamtak-maps-alpha", "active": true, "applyOnEnrollment": false, "applyOnConnect": true,
+            "type": "Connection", "updated": 1795287469274i64, "tool": null, "groups": ["evt-exercise", "alpha"]});
+        let p = parse_device_profile(&v).unwrap();
+        assert_eq!((p.id, p.name.as_str(), p.kind, p.active), (1, "teamtak-maps-alpha", Some(ProfileKind::Connection), true));
+        assert_eq!(p.groups.iter().map(String::as_str).collect::<Vec<_>>(), ["alpha", "evt-exercise"]);
+        let tool = parse_device_profile(&json!({"id": 2, "name": "t", "active": false, "type": "Tool", "groups": []})).unwrap();
+        assert_eq!((tool.kind, tool.active), (None, false));
+        let body = device_profile_body(1, "teamtak-enrollment", ProfileKind::Enrollment, &["alpha".into()]);
+        assert_eq!(body["type"], "Enrollment");
+        assert_eq!(body["groups"], json!(["alpha"]));
+        assert_eq!(body["active"], true);
+    }
+
+    #[test]
+    fn a_profile_package_is_read_by_file_index() {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        // The layout of TAK Server 5.8's profile packages.
+        for (path, data) in [("file0/", ""), ("file0/a.xml", "A"), ("file1/", ""), ("file1/b.xml", "B"), ("MANIFEST/manifest.xml", "<m/>")] {
+            if path.ends_with('/') {
+                zip.add_directory(path, options).unwrap();
+            } else {
+                zip.start_file(path, options).unwrap();
+                zip.write_all(data.as_bytes()).unwrap();
+            }
+        }
+        let files = read_profile_package(&zip.finish().unwrap().into_inner()).unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[&0], ("a.xml".to_string(), b"A".to_vec()));
+        assert_eq!(files[&1], ("b.xml".to_string(), b"B".to_vec()));
+        assert!(read_profile_package(b"not a zip").is_err());
     }
 
     #[test]

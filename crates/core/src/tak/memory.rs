@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use time::{Duration, OffsetDateTime};
 
-use super::{EnrolledCertificate, IssuedCertificate, Subscription, TakError, TakServer, VideoFeed};
+use super::{DeviceProfile, EnrolledCertificate, IssuedCertificate, ProfileFile, ProfileKind, Subscription, TakError, TakServer, VideoFeed};
 
 #[derive(Default)]
 struct State {
@@ -25,6 +25,9 @@ struct State {
     video_feeds: Vec<(VideoFeed, String)>,
     /// Sessions listed with no connection behind them: no cut or revocation removes them.
     leftovers: BTreeSet<String>,
+    /// Device profiles and their files.
+    profiles: Vec<(DeviceProfile, Vec<ProfileFile>)>,
+    next_profile_id: i64,
 }
 
 #[derive(Default)]
@@ -97,6 +100,35 @@ impl MemoryTakServer {
     /// Adds a feed, as if someone had registered it in TAK Server's own pages.
     pub fn add_foreign_video_feed(&self, feed: VideoFeed, group: &str) {
         self.state.lock().unwrap().video_feeds.push((feed, group.into()));
+    }
+
+    /// The device profiles, each with its files.
+    pub fn profiles(&self) -> Vec<(DeviceProfile, Vec<ProfileFile>)> {
+        self.state.lock().unwrap().profiles.clone()
+    }
+
+    /// Adds a profile, as if someone had made it in TAK Server's own pages.
+    pub fn add_foreign_profile(&self, name: &str, groups: &[&str]) -> i64 {
+        let mut s = self.state.lock().unwrap();
+        s.next_profile_id += 1;
+        let id = s.next_profile_id;
+        let profile = DeviceProfile {
+            id,
+            name: name.into(),
+            kind: Some(ProfileKind::Enrollment),
+            active: true,
+            groups: groups.iter().map(|g| g.to_string()).collect(),
+        };
+        s.profiles.push((profile, Vec::new()));
+        id
+    }
+
+    /// Changes a profile behind the platform's back, as an administrator could in TAK Server.
+    pub fn edit_profile(&self, name: &str, edit: impl FnOnce(&mut DeviceProfile, &mut Vec<ProfileFile>)) {
+        let mut s = self.state.lock().unwrap();
+        if let Some((profile, files)) = s.profiles.iter_mut().find(|(p, _)| p.name == name) {
+            edit(profile, files);
+        }
     }
 
     pub fn certificates(&self) -> Vec<IssuedCertificate> {
@@ -231,6 +263,68 @@ impl TakServer for MemoryTakServer {
 
     async fn delete_video_feed(&self, uid: &str) -> Result<(), TakError> {
         self.enter(format!("delete_video_feed {uid}"))?.video_feeds.retain(|(f, _)| f.uid != uid);
+        Ok(())
+    }
+    async fn device_profiles(&self) -> Result<Vec<DeviceProfile>, TakError> {
+        Ok(self.enter("device_profiles".into())?.profiles.iter().map(|(p, _)| p.clone()).collect())
+    }
+
+    async fn profile_files(&self, profile: &str) -> Result<Vec<ProfileFile>, TakError> {
+        let s = self.enter(format!("profile_files {profile}"))?;
+        let found = s.profiles.iter().find(|(p, _)| p.name == profile).map(|(_, f)| f.clone());
+        found.ok_or(TakError::Status { call: format!("GET /Marti/api/device/profile/{profile}/files"), status: 404 })
+    }
+
+    async fn create_device_profile(&self, name: &str, groups: &[String]) -> Result<(), TakError> {
+        let mut s = self.enter(format!("create_device_profile {name} {}", groups.join(",")))?;
+        // TAK Server answers 200 and changes nothing when the name exists.
+        if s.profiles.iter().any(|(p, _)| p.name == name) {
+            return Ok(());
+        }
+        s.next_profile_id += 1;
+        let id = s.next_profile_id;
+        let profile =
+            DeviceProfile { id, name: name.into(), kind: Some(ProfileKind::Enrollment), active: true, groups: groups.iter().cloned().collect() };
+        s.profiles.push((profile, Vec::new()));
+        Ok(())
+    }
+
+    async fn set_device_profile(&self, id: i64, name: &str, kind: ProfileKind, groups: &[String]) -> Result<(), TakError> {
+        let mut s = self.enter(format!("set_device_profile {name} {} {}", kind.as_tak_type(), groups.join(",")))?;
+        match s.profiles.iter_mut().find(|(p, _)| p.id == id) {
+            Some((p, _)) => {
+                p.kind = Some(kind);
+                p.active = true;
+                p.groups = groups.iter().cloned().collect();
+                Ok(())
+            }
+            None => Err(TakError::Status { call: format!("PUT /Marti/api/device/profile/{name}"), status: 500 }),
+        }
+    }
+
+    async fn add_profile_file(&self, profile: &str, file_name: &str, data: &[u8]) -> Result<(), TakError> {
+        let mut s = self.enter(format!("add_profile_file {profile} {file_name}"))?;
+        s.next_profile_id += 1;
+        let id = s.next_profile_id;
+        match s.profiles.iter_mut().find(|(p, _)| p.name == profile) {
+            Some((_, files)) => {
+                files.push(ProfileFile { id, name: file_name.into(), data: data.to_vec() });
+                Ok(())
+            }
+            None => Err(TakError::Status { call: format!("PUT /Marti/api/device/profile/{profile}/file"), status: 404 }),
+        }
+    }
+
+    async fn delete_profile_file(&self, profile: &str, file_id: i64) -> Result<(), TakError> {
+        let mut s = self.enter(format!("delete_profile_file {profile} {file_id}"))?;
+        for (_, files) in s.profiles.iter_mut() {
+            files.retain(|f| f.id != file_id);
+        }
+        Ok(())
+    }
+
+    async fn delete_device_profile(&self, id: i64) -> Result<(), TakError> {
+        self.enter(format!("delete_device_profile {id}"))?.profiles.retain(|(p, _)| p.id != id);
         Ok(())
     }
 }

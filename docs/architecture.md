@@ -74,11 +74,15 @@ reach it over the Docker network.
   team's channel or for an event's; it gets an address to publish to and one to watch from, each
   with its own key, and TAK Server lists it to the members of that channel, so ATAK shows it
   without anything to type ([Video streams](#video-streams)).
+- **Maps.** The administrators keep a catalogue of map sources; a team's leaders pick the team's
+  maps from it, and an event's organisers the event's. TAK Server hands them to the devices of
+  that channel when they connect, as device profiles, and ATAK lists them among its maps
+  ([Maps](#maps)).
 - **Reconciliation.** PostgreSQL is the source of truth. After every change, every minute, and at
   the instant an event starts or ends, a pass compares it with OpenLDAP and TAK Server and corrects
   the difference: accounts, group memberships, passwords, certificates that should not work,
-  sessions left with no group, the video feeds TAK Server lists, and the devices still using a
-  video stream that no longer works. What a pass corrects without the platform having asked for
+  sessions left with no group, the video feeds TAK Server lists, the devices still using a
+  video stream that no longer works, and the device profiles that carry the maps. What a pass corrects without the platform having asked for
   it is reported as drift in the administration area. TAK Server sometimes keeps listing a
   session whose connection is gone, without any group, and refuses to cut it (when a device
   disconnects right after connecting, more often just after TAK Server started). Such a leftover
@@ -155,6 +159,77 @@ platform decides which exist and who may use them.
 What the platform reads of the video server, the live streams and their viewers, comes from its
 control API (9997), which is not published either. The team page shows each stream live or not;
 the monitoring page lists the live streams of every team ([monitoring](monitoring.md)).
+
+## Maps
+
+An ATAK map source is a small XML file (`customMapSource`): a name, zoom levels, a tile type and
+a URL template with `{$z}`, `{$x}` and `{$y}`. ATAK lists it among its maps (Mobile tab) and
+fetches the tiles it needs while the map is shown. Nothing of the map itself goes through the
+server or to the phone in advance.
+
+- **The catalogue belongs to the administrators** (Administration, Maps). They upload map source
+  files, or a zip of them such as a data package exported from ATAK, or add a suggested source.
+  A file is checked before it is kept: a `customMapSource` root, a name, an `http(s)` tile URL
+  with `{$z}`, `{$x}` and `{$y}` (or `{$q}`), and no DTD, since it goes to phones as it is. A
+  device keeps a map source by its file name, so the catalogue keeps the uploaded name when it is
+  plain (`IGN-Plan.xml`), and a file of the same name replaces the old one, on the phones too.
+- **A team's leaders add sources of their own** from the team page, the same way (a file or a
+  zip). Only their team sees them; they go on the team's channel at once, and the leaders can also
+  pick them for an event their team hosts. The administrators see them in the catalogue, with the
+  team's name, and can remove them.
+- **Every source is checked before anyone gets it.** Besides reading the file, TeamTAK fetches
+  one of its tiles, the way a phone would: the lowest zoom level the source offers, then a few
+  levels deeper, over France, the equator and New York, until one comes back as an image (PNG,
+  JPEG, GIF or WebP). A source with no such tile is refused, with what the provider answered.
+  The fetch goes to public addresses only: a name or address that leads to a private, local or
+  reserved network (the stack's own services among them) is refused, even after a redirect.
+  Every source is checked again every six hours; one that fails twice in a row is held back from
+  the devices (its profiles no longer carry it, the team page and the catalogue say why) until a
+  check finds it working again, which the audit log records too. *Check again* runs a check at
+  once. A check runs from the server: a provider that answers the server differently from the
+  phones (a blocked address range, a key bound to an app) gives a different result.
+- **What each provider allows** is shown next to each source, as far as TeamTAK knows it: open
+  data (IGN's Géoplateforme), light use without mass downloads (OpenTopoMap, a volunteer server),
+  no offline use (OpenStreetMap's own tile servers, whose policy also wants an attribution on the
+  map, which ATAK does not show), restricted (Google, Bing: their tiles only through their own
+  applications and terms), or unknown. Only the first two kinds are suggested: IGN's plan and
+  aerial photographs, and OpenTopoMap. A restricted source can still be added, by an
+  administrator or by a team's leaders; it is flagged wherever it is picked.
+- **Who picks.** A team's leaders pick the maps of the team's channel, an event's organisers the
+  maps of the event's channel (the leaders of the host team, from the catalogue and their team's
+  own sources, or the administrators for an event they organise, from the catalogue), at most 30
+  per channel. Every member sees them and can download them.
+- **Device profiles.** The reconciliation keeps one device profile in TAK Server per group that
+  has maps and exists now (TAK Server 5.8's device profiles, `/Marti/api/device/profile`):
+  - `teamtak-maps-<group>`, applied on connection, for that group only. A device that asks for
+    its profiles (`GET /Marti/api/device/profile/connection?clientUid=…&syncSecago=…`, with its
+    certificate on 8443) gets the profiles of the groups of its streaming connection, as a data
+    package that ATAK imports by itself. An event's profile exists from its start to its end, like
+    its group; a suspended team has none.
+  - `teamtak-enrollment`, applied at enrollment, for the group of every active team. It holds one
+    preference file, which turns on ATAK's *Apply TAK Server profile updates*
+    (`deviceProfileEnableOnConnect`): it is off in ATAK by default, and ATAK then asks for no
+    profile when it connects. A device enrolled by QR code or by username and password gets it;
+    every connection zip sets the same preference. Nothing else is set: no callsign, team colour,
+    role or group.
+
+  Profiles whose name does not start with `teamtak-` were made by someone else, in TAK Server's
+  own pages, and are left alone.
+- **When a device gets them.** ATAK asks for profiles when it connects, giving the seconds since
+  it last did; TAK Server answers with the profiles changed since (every file added or removed
+  counts as a change). A device already connected gets new maps, or those of an event that just
+  started, the next time it connects.
+- **Limits.**
+  - A profile adds files to a device and never removes any. A map taken off a channel, removed
+    from the catalogue, or that of an event that ended, stays on the phones that have it: delete
+    it there if it must go.
+  - TAK Server's guide describes device profiles for ATAK only. For iTAK, or for ATAK with the
+    setting off (a device set up with a zip from TeamTAK 1.1.0 or older), the team page offers the
+    maps its devices get now (the team's and those of the events running) as a data package to
+    import by hand.
+  - Offline maps (MBTiles, SQLite) are not handed out: they are large. Downloading an area for
+    offline use from a map source is up to the user, only where its provider allows it, and only
+    for an event's zone.
 
 ## Sign-ups and team approval
 
