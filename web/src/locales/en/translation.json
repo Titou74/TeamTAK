@@ -29,7 +29,8 @@
   "footer": {
     "poweredBy": "Powered by TeamTAK",
     "licence": "AGPL-3.0 licence",
-    "source": "Source code"
+    "source": "Source code",
+    "terms": "Terms of use"
   },
   "login": {
     "title": "Sign in",
@@ -50,6 +51,16 @@
     "changeEmail": "Use another address",
     "codeSent": "A new code is on its way.",
     "codeAlreadySent": "A code was just sent to this address: enter it below."
+  },
+  "termsOfUse": {
+    "title": "Terms of use",
+    "version": "Version of {{date}}",
+    "accept": "I have read and accept the",
+    "link": "terms of use",
+    "gateIntro": "To go on using this service, read and accept its terms of use.",
+    "gateAccept": "I accept",
+    "accepted": "You accepted the terms of use on {{date}}.",
+    "read": "Read them again"
   },
   "home": {
     "title": "My teams",
@@ -1497,6 +1508,7 @@
     "invalid_code": "This code is wrong or has expired. Check it, or ask for a new one.",
     "mail_unavailable": "The e-mail could not be sent. Please try again in a moment.",
     "signups_closed": "This server accepts new accounts by invitation only, and no invitation is waiting for this address. Ask a team leader or an administrator to invite you.",
+    "terms_not_accepted": "Accept the terms of use to go on. If they have just changed, reload the page.",
     "account_exists": "This address already has an account: it can sign in.",
     "team_name_taken": "A team with this name already exists.",
     "too_many_pending_requests": "You already have several requests waiting. Wait for an answer before sending another one.",

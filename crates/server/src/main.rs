@@ -17,6 +17,7 @@ mod settings;
 mod state;
 mod tak_admin;
 mod teams;
+mod terms;
 mod video;
 
 use std::net::SocketAddr;
@@ -153,6 +154,7 @@ fn api_router(state: SharedState) -> Router {
         .route("/auth/verify", post(auth::verify))
         .route("/auth/logout", post(auth::logout))
         .route("/me", get(auth::me).patch(auth::update_me))
+        .route("/me/terms", post(terms::accept))
         .route("/teams", post(teams::request_team))
         .route("/teams/{id}", get(teams::team_detail).patch(teams::update_team).delete(teams::delete_team))
         .route("/teams/{id}/invitations", post(teams::invite))

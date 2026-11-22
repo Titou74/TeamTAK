@@ -13,6 +13,7 @@ import { LoginPage } from "@/pages/login";
 import { MonitoringPage } from "@/pages/monitoring";
 import { ProfilePage } from "@/pages/profile";
 import { TeamPage } from "@/pages/team";
+import { TermsGate } from "@/pages/terms-gate";
 
 export function App() {
   const { t } = useTranslation();
@@ -52,6 +53,10 @@ export function App() {
   }
   if (!me.data) {
     return <LoginPage />;
+  }
+  // Signed in before the terms of use existed, or before they changed.
+  if (!me.data.terms.accepted_at) {
+    return <TermsGate />;
   }
   return (
     <AppShell me={me.data}>

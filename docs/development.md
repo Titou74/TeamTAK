@@ -40,10 +40,11 @@ To rebuild and restart the platform after a change:
 ## Languages
 
 The UI is in English by default, French is available, and every text goes through translation
-keys. To add a language, add `web/src/locales/<code>/translation.json` and `email.json` with the
-same keys as English, and one entry in `web/src/i18n/languages.ts`. The server picks the e-mail
-texts up from the same folder at build time. `pnpm check:i18n` verifies that every language has the
-same keys and placeholders and that every key used by the code exists.
+keys. To add a language, add `web/src/locales/<code>/translation.json`, `email.json` and
+`terms.json` (the [terms of use](architecture.md#terms-of-use)) with the same keys as English, and
+one entry in `web/src/i18n/languages.ts`. The server picks the e-mail texts up from the same folder
+at build time. `pnpm check:i18n` verifies that every language has the same keys and placeholders
+and that every key used by the code exists.
 
 ## Tests
 

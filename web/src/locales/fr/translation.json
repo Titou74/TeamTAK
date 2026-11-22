@@ -30,7 +30,8 @@
   "footer": {
     "poweredBy": "Propulsé par TeamTAK",
     "licence": "Licence AGPL-3.0",
-    "source": "Code source"
+    "source": "Code source",
+    "terms": "Conditions d'utilisation"
   },
   "login": {
     "title": "Connexion",
@@ -51,6 +52,16 @@
     "changeEmail": "Utiliser une autre adresse",
     "codeSent": "Un nouveau code vient d'être envoyé.",
     "codeAlreadySent": "Un code vient d'être envoyé à cette adresse : saisissez-le ci-dessous."
+  },
+  "termsOfUse": {
+    "title": "Conditions générales d'utilisation",
+    "version": "Version du {{date}}",
+    "accept": "J'ai lu et j'accepte les",
+    "link": "conditions générales d'utilisation",
+    "gateIntro": "Pour continuer à utiliser ce service, lisez et acceptez ses conditions générales d'utilisation.",
+    "gateAccept": "J'accepte",
+    "accepted": "Vous avez accepté les conditions générales d'utilisation le {{date}}.",
+    "read": "Les relire"
   },
   "home": {
     "title": "Mes équipes",
@@ -1546,6 +1557,7 @@
     "invalid_code": "Ce code est incorrect ou a expiré. Vérifiez-le, ou demandez-en un nouveau.",
     "mail_unavailable": "L'e-mail n'a pas pu être envoyé. Veuillez réessayer dans un instant.",
     "signups_closed": "Ce serveur n'accepte de nouveaux comptes que sur invitation, et aucune invitation n'attend cette adresse. Demandez à un chef d'équipe ou à un administrateur de vous inviter.",
+    "terms_not_accepted": "Acceptez les conditions générales d'utilisation pour continuer. Si elles viennent de changer, rechargez la page.",
     "account_exists": "Cette adresse a déjà un compte : elle peut se connecter.",
     "team_name_taken": "Une équipe porte déjà ce nom.",
     "too_many_pending_requests": "Vous avez déjà plusieurs demandes en attente. Attendez une réponse avant d'en envoyer une autre.",

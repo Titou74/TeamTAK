@@ -1,8 +1,8 @@
 // Checks the rules of docs/PLAN.md, section 6, on the translation files:
 //
 //   1. every language of the language list has a folder, and every folder is in the list;
-//   2. every resource file (translation.json, email.json) has exactly the same keys in
-//      every language, plural forms aside;
+//   2. every resource file (translation.json, email.json, terms.json) has exactly the same
+//      keys in every language, plural forms aside;
 //   3. each language has the plural forms its grammar needs (English: one/other; French:
 //      one/many/other), and each text uses the same {{placeholders}} as the English one;
 //   4. every key the code uses exists, and every key that exists is used.

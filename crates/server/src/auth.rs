@@ -23,6 +23,7 @@ use crate::error::{ApiError, ApiResult, Refusal};
 use crate::locale::{self, Template};
 use crate::settings;
 use crate::state::SharedState;
+use crate::terms;
 
 pub const SESSION_COOKIE: &str = "tm_session";
 
@@ -283,10 +284,15 @@ pub struct VerifyBody {
     code: String,
     #[serde(default)]
     language: Option<String>,
+    /// The version of the terms of use the person accepted on the sign-in page; refused
+    /// unless it is the version in force.
+    #[serde(default)]
+    terms_version: Option<String>,
 }
 
 /// `POST /api/auth/verify`: exchanges a code for a session. The first successful login of an
-/// address creates its account, when sign-ups are open or an invitation waits for it.
+/// address creates its account, when sign-ups are open or an invitation waits for it. Every
+/// sign-in accepts the terms of use in force, and records it on the account.
 pub async fn verify(
     State(state): State<SharedState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -298,6 +304,8 @@ pub async fn verify(
     let code = login::normalize_code(&body.code);
     let ip = client_ip(&headers, peer);
     let policy = state.config.login;
+    // Before the code is even looked at: no attempt is spent on a form sent without them.
+    terms::require_current(body.terms_version.as_deref())?;
 
     let (failures,): (i64,) =
         sqlx::query_as("SELECT count(*) FROM login_failures WHERE ip = $1 AND created_at > now() - make_interval(secs => $2)")
@@ -354,13 +362,15 @@ pub async fn verify(
         .await?;
     let language = body.language.as_deref().map(locale::resolve).unwrap_or(locale::DEFAULT_LANGUAGE);
     let account: Account = sqlx::query_as(
-        "INSERT INTO accounts (id, email, language, last_login_at) VALUES ($1, $2, $3, now())
-         ON CONFLICT (email) DO UPDATE SET last_login_at = now()
+        "INSERT INTO accounts (id, email, language, last_login_at, terms_version, terms_accepted_at)
+         VALUES ($1, $2, $3, now(), $4, now())
+         ON CONFLICT (email) DO UPDATE SET last_login_at = now(), terms_version = $4, terms_accepted_at = now()
          RETURNING id, email, display_name, language, theme, is_admin",
     )
     .bind(Uuid::new_v4())
     .bind(&email)
     .bind(language)
+    .bind(terms::TERMS_VERSION)
     .fetch_one(&mut *tx)
     .await?;
     let token = teamtak_core::random_string(48, teamtak_core::UNAMBIGUOUS);
@@ -464,7 +474,9 @@ pub async fn me_payload(state: &SharedState, account: &Account) -> ApiResult<Val
     .await?;
     // Only administrators may open TAK Server's administration; nobody else is told where.
     let tak_admin_url = if account.is_admin { state.config.tak_admin_url.clone() } else { None };
-    Ok(json!({ "account": account, "teams": teams, "invitations": invitations, "tak_admin_url": tak_admin_url }))
+    // Until the account accepts the terms in force, the UI shows them and nothing else.
+    let terms = terms::status(&state.db, account.id).await?;
+    Ok(json!({ "account": account, "teams": teams, "invitations": invitations, "tak_admin_url": tak_admin_url, "terms": terms }))
 }
 
 /// `GET /api/me`

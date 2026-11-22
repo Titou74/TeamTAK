@@ -53,6 +53,9 @@ api_errors! {
     MailUnavailable => ("mail_unavailable", SERVICE_UNAVAILABLE),
     /// Sign-ups are by invitation only, and no invitation waits for this address.
     SignupsClosed => ("signups_closed", FORBIDDEN),
+    /// The terms of use in force were not accepted: missing, or an older version (a page
+    /// loaded before they changed).
+    TermsNotAccepted => ("terms_not_accepted", BAD_REQUEST),
     /// An administrator invited an address that already has an account.
     AccountExists => ("account_exists", CONFLICT),
     TeamNameTaken => ("team_name_taken", CONFLICT),

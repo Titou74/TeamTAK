@@ -44,22 +44,60 @@ async fn login_by_one_time_code() {
 
     // A wrong code is refused and creates nothing.
     let wrong = if code == "000000" { "000001" } else { "000000" };
-    browser.post("/auth/verify", json!({ "email": address, "code": wrong })).await.expect_error(400, "invalid_code");
+    browser.post("/auth/verify", json!({ "email": address, "code": wrong, "terms_version": terms_version() })).await.expect_error(400, "invalid_code");
     browser.get("/me").await.expect_error(401, "unauthenticated");
 
     // The right one opens a session and creates the account, with the page's language.
-    let me = browser.post("/auth/verify", json!({ "email": address, "code": code, "language": "fr" })).await.ok();
+    let me = browser.post("/auth/verify", json!({ "email": address, "code": code, "language": "fr", "terms_version": terms_version() })).await.ok();
     assert_eq!(me["account"]["email"], address);
     assert_eq!(me["account"]["language"], "fr");
     assert_eq!(me["account"]["is_admin"], false);
     assert_eq!(browser.get("/me").await.ok()["account"]["email"], address);
 
     // A code works once.
-    Session::anonymous().post("/auth/verify", json!({ "email": address, "code": code })).await.expect_error(400, "invalid_code");
+    Session::anonymous().post("/auth/verify", json!({ "email": address, "code": code, "terms_version": terms_version() })).await.expect_error(400, "invalid_code");
 
     // Signing out ends the session.
     browser.post("/auth/logout", json!({})).await.ok();
     browser.get("/me").await.expect_error(401, "unauthenticated");
+}
+
+#[tokio::test]
+#[ignore = "needs the running stack"]
+async fn signing_in_accepts_the_terms_of_use() {
+    let version = terms_version();
+    let address = email("terms");
+    let browser = Session::anonymous();
+    browser.request_code(&address, Some("en")).await.ok();
+    let code = code_in(&latest_mail(&address).await);
+
+    // Without the terms in force, nobody signs in, and the code is not spent on it.
+    browser.post("/auth/verify", json!({ "email": address, "code": code })).await.expect_error(400, "terms_not_accepted");
+    browser
+        .post("/auth/verify", json!({ "email": address, "code": code, "terms_version": "2000-01-01" }))
+        .await
+        .expect_error(400, "terms_not_accepted");
+    browser.get("/me").await.expect_error(401, "unauthenticated");
+
+    // Signing in with them records the acceptance on the account.
+    let me = browser.post("/auth/verify", json!({ "email": address, "code": code, "terms_version": version })).await.ok();
+    assert_eq!(me["terms"]["version"], version);
+    assert!(me["terms"]["accepted_at"].is_string(), "{me}");
+
+    // Terms that changed since: the account must accept them again before going on.
+    let sql = format!("UPDATE accounts SET terms_version = '2000-01-01' WHERE email = '{address}';");
+    let (ok, output) = compose_exec("postgres", &["psql", "-U", "teamtak", "-d", "teamtak", "-v", "ON_ERROR_STOP=1"], Some(&sql));
+    assert!(ok, "{output}");
+    let me = browser.get("/me").await.ok();
+    assert_eq!(me["terms"]["accepted_at"], Value::Null, "{me}");
+    browser.post("/me/terms", json!({ "version": "2000-01-01" })).await.expect_error(400, "terms_not_accepted");
+    browser.post("/me/terms", json!({})).await.expect_error(400, "terms_not_accepted");
+    let me = browser.post("/me/terms", json!({ "version": version })).await.ok();
+    assert!(me["terms"]["accepted_at"].is_string(), "{me}");
+    assert!(browser.get("/me").await.ok()["terms"]["accepted_at"].is_string());
+
+    // Only a signed-in account accepts them that way.
+    Session::anonymous().post("/me/terms", json!({ "version": version })).await.expect_error(401, "unauthenticated");
 }
 
 #[tokio::test]
@@ -105,9 +143,9 @@ async fn login_codes_are_rate_limited_per_address() {
     let code = code_in(&latest_mail(&victim).await);
     for guess in 0..5 {
         let wrong = format!("{:06}", (code.parse::<u32>().unwrap() + 1 + guess) % 1_000_000);
-        browser.post("/auth/verify", json!({ "email": victim, "code": wrong })).await.expect_error(400, "invalid_code");
+        browser.post("/auth/verify", json!({ "email": victim, "code": wrong, "terms_version": terms_version() })).await.expect_error(400, "invalid_code");
     }
-    browser.post("/auth/verify", json!({ "email": victim, "code": code })).await.expect_error(400, "invalid_code");
+    browser.post("/auth/verify", json!({ "email": victim, "code": code, "terms_version": terms_version() })).await.expect_error(400, "invalid_code");
 
     browser.request_code("not-an-address", None).await.expect_error(400, "invalid_email");
 }
@@ -241,7 +279,7 @@ async fn sign_ups_by_invitation_only() {
     let mail = latest_mail(&stranger).await;
     assert_eq!(mail.subject, "Sign-up by invitation only");
     assert!(mail.text.contains("by invitation only"), "{}", mail.text);
-    browser.post("/auth/verify", json!({ "email": stranger, "code": "123456" })).await.expect_error(400, "invalid_code");
+    browser.post("/auth/verify", json!({ "email": stranger, "code": "123456", "terms_version": terms_version() })).await.expect_error(400, "invalid_code");
     // The e-mail saying no waits for the countdown, like a code.
     browser.request_code_once(&stranger, Some("en")).await.expect_error(429, "resend_too_soon");
 
@@ -258,7 +296,7 @@ async fn sign_ups_by_invitation_only() {
     browser.request_code(&withdrawn, Some("en")).await.ok();
     let code = code_in(&latest_mail(&withdrawn).await);
     team.leader.delete(&format!("/teams/{}/invitations/{}", team.id, invitation["id"].as_str().unwrap())).await.ok();
-    browser.post("/auth/verify", json!({ "email": withdrawn, "code": code })).await.expect_error(403, "signups_closed");
+    browser.post("/auth/verify", json!({ "email": withdrawn, "code": code, "terms_version": terms_version() })).await.expect_error(403, "signups_closed");
     browser.get("/me").await.expect_error(401, "unauthenticated");
 
     // An administrator invites someone to the platform: an account at once, and an e-mail in

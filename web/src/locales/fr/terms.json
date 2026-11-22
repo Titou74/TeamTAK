@@ -1,0 +1,116 @@
+{
+  "version": "2026-11-22",
+  "intro": "Les présentes conditions générales d'utilisation (les « CGU ») encadrent l'utilisation de ce service. En cochant la case prévue à la connexion, ou en les acceptant lorsqu'elles vous sont présentées, vous déclarez les avoir lues et les accepter sans réserve. Si vous ne les acceptez pas, n'utilisez pas le service.",
+  "sections": [
+    {
+      "title": "Objet du service",
+      "body": [
+        "Ce service permet à des équipes de partager un serveur TAK (Team Awareness Kit) : comptes, équipes, accès pour ATAK et iTAK, événements communs, flux vidéo, cartes et fichiers. Il repose sur TeamTAK, un logiciel libre distribué sous licence AGPL-3.0."
+      ]
+    },
+    {
+      "title": "Qui fait quoi",
+      "body": [
+        "Ces CGU distinguent plusieurs rôles :",
+        {
+          "items": [
+            "le créateur : l'auteur du logiciel TeamTAK et les personnes qui contribuent à son code. Il publie un logiciel ; il n'exploite pas ce serveur, n'en administre pas le contenu et n'a pas accès à ses données ;",
+            "le mainteneur : la personne qui héberge ce serveur et en assure la maintenance technique (installation, mises à jour, sauvegardes, surveillance) ;",
+            "les administrateurs : les comptes qui ont le rôle d'administrateur sur ce serveur. Ils en règlent le fonctionnement : inscriptions, approbation des équipes, catalogue des cartes, paramètres ;",
+            "les chefs d'équipe : ils gèrent leur équipe, ses membres, ses accès, ses événements et ses cartes ;",
+            "les utilisateurs : toute personne qui se connecte au service ou se sert d'un accès qu'il fournit, chefs d'équipe et administrateurs compris."
+          ]
+        },
+        "Une même personne peut tenir plusieurs rôles : elle répond alors des actes qu'elle accomplit dans chacun d'eux."
+      ]
+    },
+    {
+      "title": "Accès au service et compte",
+      "body": [
+        "La connexion se fait avec une adresse e-mail et un code à usage unique. Vous êtes responsable de la sécurité de votre messagerie : quiconque y a accès peut se connecter à votre compte. Vous donnez des informations exactes et ne vous faites pas passer pour quelqu'un d'autre.",
+        "Un compte n'ouvre aucun accès au serveur TAK tant qu'il n'appartient pas à une équipe. Les administrateurs peuvent refuser une demande d'équipe et suspendre une équipe, notamment en cas de manquement aux présentes CGU.",
+        "Les accès TAK (QR codes, data packages, certificats, identifiants et mots de passe) sont réservés à l'équipe ou à la personne à qui ils sont remis. Ne les transmettez pas hors de l'équipe et ne les publiez pas. S'ils ont pu être divulgués, prévenez sans délai votre chef d'équipe : il peut les régénérer."
+      ]
+    },
+    {
+      "title": "Règles d'utilisation",
+      "body": [
+        "Vous utilisez le service de manière loyale et conforme aux lois et règlements applicables. Il est notamment interdit :",
+        {
+          "items": [
+            "de diffuser des contenus illicites, notamment diffamatoires, injurieux, haineux, violents ou pornographiques, ou portant atteinte à la vie privée, au droit à l'image ou aux droits d'autrui ;",
+            "de suivre, localiser, filmer ou surveiller une personne à son insu ou sans base légale ;",
+            "de diffuser des cartes, vidéos, fichiers ou données sans en détenir les droits, ou en violation des conditions de leur fournisseur ;",
+            "de tenter d'accéder aux données d'une autre équipe, à un compte qui n'est pas le vôtre ou aux parties du serveur qui ne vous sont pas ouvertes ;",
+            "de contourner ou de tester les protections du service (code à usage unique, vérification anti-robot, limites, certificats) sans l'accord écrit du mainteneur ;",
+            "de perturber le service : surcharge volontaire, envois massifs, robots, extraction automatisée de données ;",
+            "de se servir du service pour préparer ou commettre une infraction."
+          ]
+        },
+        "Le respect des réglementations propres à votre activité (vol de drones, radiocommunications, rassemblements, etc.) vous incombe."
+      ]
+    },
+    {
+      "title": "Protection du service et propriété intellectuelle",
+      "body": [
+        "Le logiciel TeamTAK est libre : son code source est publié sous licence AGPL-3.0, et les présentes CGU ne restreignent en rien les droits que cette licence vous accorde sur lui. La mention « Propulsé par TeamTAK » et le lien vers le code source doivent rester visibles, comme l'exige cette licence.",
+        "Les présentes CGU portent sur l'utilisation de ce serveur : sa sécurité, sa disponibilité et les données de ses équipes sont protégées. Toute tentative d'intrusion, d'altération ou d'entrave est susceptible de poursuites, notamment pénales.",
+        "TAK, ATAK, iTAK et TAK Server sont des produits de leurs éditeurs respectifs. TeamTAK est un projet indépendant, qui n'est ni édité ni approuvé par eux. Les noms et marques cités, comme Google Maps, appartiennent à leurs titulaires."
+      ]
+    },
+    {
+      "title": "Cartes, vidéos, fichiers et autres contenus",
+      "body": [
+        "Le service ne fournit aucun contenu par lui-même. Les sources de cartes sont ajoutées au catalogue par un administrateur, ou pour son équipe par un chef d'équipe ; les flux vidéo sont déclarés par les utilisateurs ; les fichiers sont envoyés par les utilisateurs et leurs appareils.",
+        "Celui qui ajoute ou choisit une source de carte doit seul vérifier qu'il a le droit de l'utiliser ainsi : de nombreux fournisseurs, comme Google Maps ou Bing, n'autorisent leurs tuiles que dans leurs propres applications. Le service signale les fournisseurs connus pour leurs conditions restrictives, mais ne vérifie pas les droits attachés à une source et ne la cautionne pas.",
+        "Une source de carte, une vidéo, un fichier ou un réglage mis en place en violation des droits d'un tiers ou des conditions d'un fournisseur engage la seule responsabilité de l'administrateur, du chef d'équipe ou de l'utilisateur qui l'a mis en place. Elle n'engage ni le créateur de TeamTAK, ni le mainteneur du service.",
+        "Les cartes, positions et autres informations affichées peuvent être inexactes, incomplètes ou en retard."
+      ]
+    },
+    {
+      "title": "Responsabilité",
+      "body": [
+        "Le service et le logiciel sont fournis « en l'état », sans aucune garantie : ni de disponibilité, ni de continuité, ni d'exactitude, ni d'adéquation à un usage particulier. Ils peuvent être interrompus à tout moment, notamment pour maintenance.",
+        "Le service ne doit jamais être le seul moyen de communiquer, de se localiser ou de donner l'alerte lorsque la sécurité de personnes est en jeu.",
+        "Chaque utilisateur est seul responsable de l'usage qu'il fait du service, des contenus qu'il y dépose et des réglages qu'il y fait. Toute utilisation frauduleuse, abusive ou illicite du service engage exclusivement la responsabilité de son auteur : elle ne peut être imputée ni au créateur de TeamTAK, ni au mainteneur du service, qui n'y participent pas.",
+        "Le créateur et le mainteneur ne contrôlent pas les contenus et réglages mis en place par les administrateurs, les chefs d'équipe et les utilisateurs. Ils ne sauraient être tenus responsables des dommages, directs ou indirects, résultant de l'utilisation du service, de son indisponibilité, d'une perte de données ou d'un usage contraire aux présentes CGU.",
+        "Si un tiers met en cause le créateur ou le mainteneur du fait d'un usage, d'un contenu ou d'un réglage dont vous êtes l'auteur, vous vous engagez à les garantir des condamnations prononcées et des frais engagés pour leur défense.",
+        "Ces limitations s'appliquent dans toute la mesure permise par la loi. Elles n'écartent pas la responsabilité qui ne peut légalement l'être, notamment en cas de faute lourde ou intentionnelle, ni les droits que vous tenez de dispositions impératives."
+      ]
+    },
+    {
+      "title": "Signaler un contenu ou un abus",
+      "body": [
+        "Si vous constatez un contenu illicite, un abus ou une faille de sécurité, signalez-le sans délai à votre chef d'équipe ou aux administrateurs du service. Ils peuvent retirer le contenu, régénérer ou retirer des accès et suspendre une équipe."
+      ]
+    },
+    {
+      "title": "Données personnelles",
+      "body": [
+        "Le service traite les données nécessaires à son fonctionnement : votre adresse e-mail, votre nom d'affichage, votre langue et votre thème, vos équipes et vos rôles, la date de votre dernière connexion et celle de votre acceptation des CGU, l'adresse IP des demandes de code (gardée deux jours, contre les abus) et le journal des actions qui modifient le service (qui, quoi, quand, depuis quelle adresse IP), gardé un an sauf autre réglage des administrateurs.",
+        "Les positions, messages, vidéos et fichiers échangés par les appareils passent par le serveur TAK et peuvent y être conservés selon sa configuration.",
+        "Ces données restent sur ce serveur. Elles sont accessibles aux administrateurs et, pour les besoins techniques, au mainteneur ; elles ne sont ni vendues ni cédées. Le logiciel TeamTAK ne transmet aucune donnée personnelle à son créateur.",
+        "Le service n'utilise qu'un cookie, strictement nécessaire à votre session, et garde votre langue et votre thème dans votre navigateur. Il n'utilise ni traceur publicitaire ni outil de mesure d'audience.",
+        "Vous pouvez demander aux administrateurs du service l'accès à vos données, leur rectification ou leur effacement. Vous pouvez aussi saisir l'autorité de protection des données de votre pays (en France, la CNIL)."
+      ]
+    },
+    {
+      "title": "Suspension et fin d'utilisation",
+      "body": [
+        "Les administrateurs peuvent suspendre une équipe ou retirer des accès en cas de manquement aux présentes CGU, sans préavis ni indemnité. Vous pouvez cesser d'utiliser le service à tout moment, et demander la suppression de votre compte aux administrateurs."
+      ]
+    },
+    {
+      "title": "Modification des CGU",
+      "body": [
+        "Les présentes CGU peuvent évoluer. Une nouvelle version vous est présentée à votre visite suivante, et doit être acceptée pour continuer à utiliser le service. La date de la version en vigueur figure en tête du document."
+      ]
+    },
+    {
+      "title": "Droit applicable",
+      "body": [
+        "Les présentes CGU sont régies par le droit du pays où le mainteneur du service est établi. Si l'une de leurs clauses était jugée nulle, les autres resteraient applicables."
+      ]
+    }
+  ]
+}
