@@ -37,7 +37,7 @@ import { currentLanguage } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import { useErrorText, useNotifyError, usePublicConfig } from "@/lib/hooks";
-import type { AdminTeam, AdminTeams, Me, TeamEvent } from "@/lib/types";
+import type { AdminAccount, AdminTeam, AdminTeams, Me, TeamEvent } from "@/lib/types";
 
 function RequestCard({ team, defaults, reload }: { team: AdminTeam; defaults: AdminTeams; reload: () => Promise<unknown> }) {
   const { t } = useTranslation();
@@ -412,22 +412,101 @@ function InviteAccountForm({ reload }: { reload: () => Promise<unknown> }) {
   );
 }
 
-function AccountsTab({ me }: { me: Me }) {
+/** One account of the list: the administrator role and the deletion, for every account but the caller's own. */
+function AccountRow({ account, isMe, reload }: { account: AdminAccount; isMe: boolean; reload: () => Promise<unknown> }) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const errorText = useErrorText();
   const notifyError = useNotifyError();
-  const query = useQuery({ queryKey: ["admin", "accounts"], queryFn: api.adminAccounts });
-  const invitationOnly = usePublicConfig().data?.invitation_only ?? false;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const blockedBy = account.sole_leader_of;
 
-  async function setAdmin(id: string, isAdmin: boolean) {
+  async function setAdmin(isAdmin: boolean) {
     try {
-      await api.setAdmin(id, isAdmin);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
+      await api.setAdmin(account.id, isAdmin);
+      await reload();
     } catch (e) {
       notifyError(e);
     }
   }
+
+  async function deleteAccount() {
+    try {
+      const result = await api.deleteAccount(account.id);
+      await reload();
+      if (result.email_sent) toast.success(t("admin.accounts.delete.done", { email: account.email }));
+      else toast.warning(t("admin.accounts.delete.mailNotSent", { email: account.email }), { duration: 15_000 });
+    } catch (e) {
+      notifyError(e);
+    }
+  }
+
+  return (
+    <TableRow>
+      <TableCell>
+        <span className="font-medium">{account.display_name || account.email}</span>
+        {account.is_admin && (
+          <Badge className="ml-2" variant="secondary">
+            {t("role.admin")}
+          </Badge>
+        )}
+        {account.display_name && <div className="text-xs text-muted-foreground">{account.email}</div>}
+      </TableCell>
+      <TableCell className="tabular-nums">{formatNumber(account.teams)}</TableCell>
+      <TableCell className="text-muted-foreground">
+        {account.last_login_at ? formatDateTime(account.last_login_at) : t("admin.accounts.never")}
+      </TableCell>
+      <TableCell className="text-right">
+        {!isMe && (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => void setAdmin(!account.is_admin)}>
+              {account.is_admin ? t("admin.accounts.revokeAdmin") : t("admin.accounts.makeAdmin")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("admin.accounts.delete.button", { email: account.email })}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2Icon />
+            </Button>
+            <ConfirmDialog
+              open={confirmDelete}
+              onOpenChange={setConfirmDelete}
+              title={t("admin.accounts.delete.title", { email: account.email })}
+              description={
+                blockedBy.length > 0 ? (
+                  <Alert variant="destructive">
+                    <CircleAlertIcon />
+                    <AlertDescription>
+                      {t("admin.accounts.delete.blocked", { count: blockedBy.length, teams: blockedBy.join(", ") })}
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <>
+                    <p>{t("admin.accounts.delete.what")}</p>
+                    <p>{t("admin.accounts.delete.kept")}</p>
+                    <p>{t("admin.accounts.delete.mail")}</p>
+                  </>
+                )
+              }
+              confirmLabel={t("admin.accounts.delete.confirm")}
+              destructive
+              confirmDisabled={blockedBy.length > 0}
+              onConfirm={deleteAccount}
+            />
+          </>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function AccountsTab({ me }: { me: Me }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const errorText = useErrorText();
+  const query = useQuery({ queryKey: ["admin", "accounts"], queryFn: api.adminAccounts });
+  const invitationOnly = usePublicConfig().data?.invitation_only ?? false;
+  const reload = () => queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
 
   if (query.isPending) return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
   if (query.isError) {
@@ -444,7 +523,7 @@ function AccountsTab({ me }: { me: Me }) {
         <CardDescription>{invitationOnly ? t("admin.accounts.descriptionInvitationOnly") : t("admin.accounts.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <InviteAccountForm reload={() => queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] })} />
+        <InviteAccountForm reload={reload} />
         <Table>
           <TableHeader>
             <TableRow>
@@ -456,28 +535,7 @@ function AccountsTab({ me }: { me: Me }) {
           </TableHeader>
           <TableBody>
             {query.data.accounts.map((account) => (
-              <TableRow key={account.id}>
-                <TableCell>
-                  <span className="font-medium">{account.display_name || account.email}</span>
-                  {account.is_admin && (
-                    <Badge className="ml-2" variant="secondary">
-                      {t("role.admin")}
-                    </Badge>
-                  )}
-                  {account.display_name && <div className="text-xs text-muted-foreground">{account.email}</div>}
-                </TableCell>
-                <TableCell className="tabular-nums">{formatNumber(account.teams)}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {account.last_login_at ? formatDateTime(account.last_login_at) : t("admin.accounts.never")}
-                </TableCell>
-                <TableCell className="text-right">
-                  {account.id !== me.account.id && (
-                    <Button variant="ghost" size="sm" onClick={() => void setAdmin(account.id, !account.is_admin)}>
-                      {account.is_admin ? t("admin.accounts.revokeAdmin") : t("admin.accounts.makeAdmin")}
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
+              <AccountRow key={account.id} account={account} isMe={account.id === me.account.id} reload={reload} />
             ))}
           </TableBody>
         </Table>

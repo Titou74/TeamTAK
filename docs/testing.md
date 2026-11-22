@@ -67,6 +67,13 @@ was through the platform; that a member removes only what they sent and a leader
 sent; that the size setting applies; that a mission's files are listed and can be added to and
 taken out, but nothing of a password-protected mission, and nothing goes into a read-only one.
 
+For the deletion of an account they prove that an administrator cannot delete their own account,
+a team's only leader or an unknown one, and that nobody else can delete any; that once deleted, the
+account is signed out, its device is cut and cannot reconnect, its directory account is gone, the
+invitations it sent and received and its pending team request are withdrawn, its video stream is
+gone, the rest of its team is untouched, the address gets an e-mail and the audit log names who
+did it.
+
 The tests use random names and can be replayed on the same stack. A word after the command runs
 only the tests whose name contains it. The whole suite takes about ten minutes; it stops and
 restarts the `app` container, stops the reverse proxy for a minute, and stops and restarts the mail

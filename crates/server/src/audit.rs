@@ -71,6 +71,8 @@ audit_actions! {
     AdminRevoked => "admin_revoked",
     /// An administrator created an account for an address and e-mailed it an invitation.
     AccountInvited => "account_invited",
+    /// An administrator deleted an account and what is tied to it (right to erasure).
+    AccountDeleted => "account_deleted",
 
     TeamRequested => "team_requested",
     /// A team was created active at once: team approval is off.
@@ -170,6 +172,8 @@ pub enum Detail {
     MemberCap,
     /// How many accesses an action removed.
     RemovedAccesses,
+    /// How many video streams an action removed.
+    RemovedStreams,
     /// Name of the other team an action on an event concerns.
     OtherTeam,
     StartsAt,
@@ -206,6 +210,7 @@ impl Detail {
         Detail::Port,
         Detail::MemberCap,
         Detail::RemovedAccesses,
+        Detail::RemovedStreams,
         Detail::OtherTeam,
         Detail::StartsAt,
         Detail::EndsAt,
@@ -231,6 +236,7 @@ impl Detail {
             Detail::Port => "port",
             Detail::MemberCap => "member_cap",
             Detail::RemovedAccesses => "removed_accesses",
+            Detail::RemovedStreams => "removed_streams",
             Detail::OtherTeam => "other_team",
             Detail::StartsAt => "starts_at",
             Detail::EndsAt => "ends_at",

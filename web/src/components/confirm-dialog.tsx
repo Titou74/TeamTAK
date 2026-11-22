@@ -21,6 +21,8 @@ interface ConfirmDialogProps {
   /** Label of the button that backs out; "Cancel" unless that word would be ambiguous. */
   dismissLabel?: string;
   destructive?: boolean;
+  /** The action cannot be taken yet; the description says why. */
+  confirmDisabled?: boolean;
   /** Runs when the user confirms; the dialog closes when it resolves. */
   onConfirm: () => Promise<unknown>;
 }
@@ -34,6 +36,7 @@ export function ConfirmDialog({
   confirmLabel,
   dismissLabel,
   destructive,
+  confirmDisabled,
   onConfirm,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
@@ -60,7 +63,7 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>{dismissLabel ?? t("common.cancel")}</AlertDialogCancel>
-          <AlertDialogAction variant={destructive ? "destructive" : "default"} disabled={pending} onClick={() => void confirm()}>
+          <AlertDialogAction variant={destructive ? "destructive" : "default"} disabled={pending || confirmDisabled} onClick={() => void confirm()}>
             {pending ? t("common.working") : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

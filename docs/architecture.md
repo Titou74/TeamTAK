@@ -306,6 +306,57 @@ sign-ups are open and new teams wait for approval, which is how the platform alw
 
 The administration's **Teams** tab shows both settings with a link to change them.
 
+## Deleting an account
+
+The terms of use let a user ask the administrators to erase their data and delete their account.
+An administrator does it from **Administration, Accounts**: the bin of the account's row, then a
+confirmation that says what goes and what stays (`DELETE /api/admin/accounts/{id}`, in
+[`crates/server/src/admin.rs`](../crates/server/src/admin.rs)).
+
+In one transaction, the platform deletes:
+
+- the account itself, its sessions (it is signed out everywhere at once) and its place in its teams;
+- its individual TAK accesses, the way removing a member does: their usernames are retired and
+  their certificates marked for revocation, then the reconciliation revokes them in TAK Server and
+  deletes the directory accounts, which disconnects its devices;
+- the video streams it declared: the reconciliation takes them off TAK Server and disconnects
+  whoever still publishes or watches them;
+- the invitations it sent that wait for an answer, and every invitation addressed to its e-mail;
+- its login codes and failed attempts, which carry its e-mail;
+- the team requests it alone leads that never became active (pending or rejected).
+
+What it did for its teams stays with them, tied to nobody (the references are `ON DELETE SET
+NULL`, migration 0015): the teams it asked for or decided on, the invitations it sent that were
+answered, the events it created or answered, the accesses it created for others, the map sources it
+added and the files it sent to TAK Server, which its teams' leaders now manage.
+
+The deletion is refused for the administrator's own account (`forbidden`: another administrator
+does it, as for the administrator role), for the last administrator (`last_admin`; the
+administrators' rows are locked so that two of them cannot delete each other at once), and while
+the account is the only leader of an active or suspended team (`last_leader`): another leader must
+be named, or the team deleted, first. The accounts list says which teams block it
+(`sole_leader_of`), and the confirmation then has no button to confirm.
+
+Afterwards the audit log records `account_deleted`, with the address as its object and the number
+of accesses and streams removed, and, so that each team's history shows what it lost, a
+`member_removed` for each of its teams, a `video_stream_removed` for each stream and a
+`team_deleted` for each request withdrawn. The address gets an e-mail in its language saying what was
+deleted (`email_sent` in the answer says whether the mail server took it).
+
+Some traces outlive the account, on purpose:
+
+- the **audit log** keeps the entries that name the address (who did what, and on whom) until they
+  are purged with the rest, after `audit_retention_days` (a year by default), as the terms of use
+  say; so do the e-mail of an administrator who changed the settings (`settings.updated_by`) and
+  asked for a backup (`backup_runs`, 90 days);
+- the **usernames** of its accesses, made from the start of the address (`alpha-jdupont`), stay
+  in `retired_usernames` for good, so that a certificate issued to it never matches a new account;
+  the certificates list keeps them, and the reconciliation's journal for 90 days;
+- **backups** taken before the deletion still hold the account, until they leave the backup folder
+  (the latest `backup_keep` archives are kept, 14 by default).
+
+The address can sign up again afterwards, as a new account with nothing of the old one.
+
 ## Login protections
 
 Asking for a login code sends an e-mail, so `POST /api/auth/request-code` is what a script would

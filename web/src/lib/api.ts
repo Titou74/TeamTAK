@@ -241,6 +241,12 @@ export const api = {
     json<Synced & { team: AdminTeam }>("PATCH", `/admin/teams/${id}`, changes),
   adminAccounts: () => json<{ accounts: AdminAccount[] }>("GET", "/admin/accounts"),
   setAdmin: (id: string, isAdmin: boolean) => json<void>("PATCH", `/admin/accounts/${id}`, { is_admin: isAdmin }),
+  /** Deletes the account and what is tied to it, and e-mails the address what was deleted. */
+  deleteAccount: (id: string) =>
+    json<Synced & { removed_accesses: number; removed_streams: number; withdrawn_teams: number; email_sent: boolean }>(
+      "DELETE",
+      `/admin/accounts/${id}`,
+    ),
   /** Creates an account for the address and e-mails it an invitation, in `language`. */
   inviteAccount: (email: string, language: string) =>
     json<{ id: string; email: string; email_sent: boolean }>("POST", "/admin/accounts", { email, language }),

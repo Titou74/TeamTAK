@@ -18,6 +18,10 @@
     "subject": "{{inviter}} vous invite sur TeamTAK",
     "body": "Bonjour,\n\n{{inviter}}, administrateur de la plateforme, vous invite sur TeamTAK, où les équipes obtiennent leur accès au serveur TAK. Un compte est prêt pour cette adresse e-mail ({{email}}).\n\nConnectez-vous avec elle ; il n'y a pas de mot de passe, un code arrive par e-mail :\n\n    {{url}}\n\nAprès la connexion, vous pouvez demander votre propre équipe, ou rejoindre celle dont le chef vous invite. Si vous n'attendiez pas cette invitation, ignorez ce message."
   },
+  "account_deleted": {
+    "subject": "Votre compte TeamTAK a été supprimé",
+    "body": "Bonjour,\n\nUn administrateur a supprimé votre compte TeamTAK ({{email}}) et ce qui y était lié : vos sessions, votre place dans vos équipes, vos invitations, vos accès TAK personnels, dont les certificats sont révoqués, et les flux vidéo que vous aviez déclarés.\n\nLes sources de cartes et les fichiers que vous avez ajoutés à une équipe restent à cette équipe, sans votre nom. Le journal des actions du service garde les entrées qui citent cette adresse jusqu'à ce qu'elles aient {{days}} jours, puis les efface.\n\nSi vous n'aviez pas demandé cette suppression, contactez les administrateurs du service."
+  },
   "team_request": {
     "subject": "Nouvelle demande d'équipe : {{team}}",
     "body": "Bonjour,\n\n{{requester}} demande la création de l'équipe « {{team}} ».\n\nMessage : {{message}}\n\nApprouvez ou refusez la demande dans l'espace d'administration :\n\n    {{url}}"
