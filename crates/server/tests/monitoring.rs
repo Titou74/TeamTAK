@@ -329,12 +329,18 @@ async fn the_server_name_is_shown_before_sign_in() {
     assert_eq!(saved["settings"]["server_name"], "Test bench", "spaces are tidied");
     // The sign-in page reads it before anyone is signed in.
     let browser = Session::anonymous();
-    assert_eq!(browser.get("/config").await.ok()["server_name"], "Test bench");
-    // It is in the subject of the e-mails, to tell them from those of another server.
+    let config = browser.get("/config").await.ok();
+    assert_eq!(config["server_name"], "Test bench");
+    // So is the version, for the footer of every page.
+    assert_eq!(config["version"], env!("CARGO_PKG_VERSION"));
+    // It is in the subject of the e-mails, to tell them from those of another server, and in
+    // their signature, above the attribution to TeamTAK.
     let address = email("named");
     browser.request_code(&address, None).await.ok();
     let mail = latest_mail(&address).await;
     assert!(mail.subject.starts_with("Your sign-in code"), "{}", mail.subject);
+    let text = mail.text.replace("\r\n", "\n");
+    assert!(text.contains("\n-- \nTest bench — ") && text.contains("\nPowered by TeamTAK"), "{text}");
     assert!(mail_subjects(&address).await[0].starts_with("[Test bench] Your sign-in code"), "{:?}", mail_subjects(&address).await);
     admin.post("/admin/settings/mail-test", json!({})).await.ok();
     let test = mail_subjects(&admin.email).await;

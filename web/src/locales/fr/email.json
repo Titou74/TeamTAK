@@ -1,5 +1,8 @@
 {
-  "signature": "TeamTAK — {{url}}",
+  "signature": {
+    "server": "{{server_name}} — {{url}}",
+    "powered_by": "Propulsé par TeamTAK"
+  },
   "datetime_format": "[day]/[month]/[year] à [hour]:[minute] UTC",
   "decimal_separator": ",",
   "login_code": {

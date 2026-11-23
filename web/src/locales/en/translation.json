@@ -28,6 +28,7 @@
   },
   "footer": {
     "poweredBy": "Powered by TeamTAK",
+    "version": "Version {{version}}",
     "licence": "AGPL-3.0 licence",
     "source": "Source code",
     "terms": "Terms of use"
@@ -1442,7 +1443,7 @@
     "default": "Default: {{value}}",
     "server": {
       "title": "Server name",
-      "description": "Tells this server from the others you run: it is shown on the sign-in page, in the browser tab, under TeamTAK at the top left, and in the subject of every e-mail.",
+      "description": "Tells this server from the others you run: it is shown on the sign-in page, in the browser tab, under TeamTAK at the top left, and in the subject and signature of every e-mail.",
       "name": "Name of this server",
       "nameHint": "For example the event or the domain name (tak.example.org). Up to 60 characters; leave empty for none.",
       "namePlaceholder": "Exercise North"

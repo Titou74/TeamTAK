@@ -56,6 +56,8 @@ export interface PublicConfig {
   resend_cooldown_seconds: number;
   /** Name an administrator gave this server, to tell it from others; empty for none. */
   server_name: string;
+  /** Version of TeamTAK that runs ("1.3.0"), shown in the footer. */
+  version: string;
   /** An address gets an account only with an invitation waiting for it. */
   invitation_only: boolean;
   /** False: a team asked for is active at once, without an administrator. */
