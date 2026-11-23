@@ -286,7 +286,7 @@ something waiting; nothing is ever updated from the web UI, on purpose.
 | What | How | Said by the monitoring page |
 |---|---|---|
 | TeamTAK itself | `sudo ./install.sh`, which gets the latest release ([below](#updating-teamtak)) | "TeamTAK … is available", and an alert e-mail |
-| Caddy, PostgreSQL, the mail catcher, the video server | `cd deploy && docker compose pull && docker compose up -d` | "Newer image available" |
+| Caddy, PostgreSQL, the mail catcher, the video server | `cd deploy && docker compose pull && docker compose up -d && docker image prune -f` (the last command removes the images the pull replaced) | "Newer image available" |
 | The directory (OpenLDAP) | Pinned by digest in `deploy/docker-compose.yml`: change the digest, test, then `./install.sh` | "Pinned; a newer build exists" |
 | The server's packages | `sudo apt update && sudo apt full-upgrade`, then `sudo reboot` if asked | pending updates, security updates, restart required |
 | TAK Server | [Upgrading TAK Server](#upgrading-tak-server) | "TAK Server … is available", or a ZIP of a newer version at the repository root |
@@ -324,8 +324,10 @@ sudo ./install.sh --release 1.0.4
 No other option is needed: the script reads `deploy/.env`. It keeps the settings, the secrets, the
 certificate authority and the TAK Server images, adds to `deploy/.env` the settings a new version
 introduces, rebuilds the platform and agent images, tagged with the new version taken from git
-(`teamtak/app:<version>`), and restarts the services that changed; the images of the previous
-version are removed at the end. The
+(`teamtak/app:<version>`), and restarts the services that changed. At the end, once everything is
+healthy, it removes the images the stack no longer runs: the platform and agent of the previous
+version, and those of Caddy, PostgreSQL or the video server that the new version no longer names.
+The images of the previous TAK Server version are kept ([Upgrading TAK Server](#upgrading-tak-server)). The
 platform applies its database migrations by itself when it starts. The script then runs the same
 checks as a first install and stops with an error if the platform cannot reach the directory or
 TAK Server.
@@ -386,8 +388,10 @@ stops before changing anything otherwise), writes the new version in `deploy/.en
 the stack; TAK Server's database image upgrades its own schema when it starts. It then checks that
 the platform reaches TAK Server, as a normal install does.
 
-The ZIP of the old version can then be deleted: a ZIP is only read to build missing images. Keep
-it, though, if you may go back.
+The images of the old version stay, to go back without rebuilding them (about 6 GB); those of
+older versions are removed, so only the installed version and the previous one are kept. The ZIP
+of the old version can then be deleted: a ZIP is only read to build missing images. Keep it,
+though, if you may go back past the previous version.
 
 To go back: put `TAK_VERSION`, `TAK_IMAGE` and `TAK_DB_IMAGE` back to the old version in
 `deploy/.env` and run `sudo ./install.sh`. If the new version already changed the database, restore

@@ -110,7 +110,7 @@ sudo apt update && sudo apt full-upgrade
 ```
 
 ```bash
-cd deploy && docker compose pull && docker compose up -d
+cd deploy && docker compose pull && docker compose up -d && docker image prune -f
 ```
 
 Pending updates are known on Debian and Ubuntu only (elsewhere the page says "unknown"). The agent

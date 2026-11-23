@@ -452,3 +452,64 @@ grant_admin_certificates() {
       | grep -v -E 'JDK_JAVA_OPTIONS|^--add-opens|^$' | tail -n 5
   done
 }
+
+# ----------------------------------------------------------------------------- old images
+# Docker keeps an image until it is removed, even once no container runs it: each update would
+# otherwise leave behind a few hundred MB (the platform, the agent, Caddy...) to several GB
+# (TAK Server).
+
+# The platform's and agent's images, tagged with TeamTAK's version (docker-compose.yml).
+PLATFORM_IMAGE_REPOS="teamtak/app teamtak/agent"
+
+# Identifiers of the images the containers of this stack run (sha256:...), one per line.
+stack_image_ids() {
+  local id
+  for id in $(docker ps -a -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT"); do
+    docker inspect --format '{{.Image}}' "$id" 2>/dev/null || true
+  done | sort -u
+}
+
+# The tags of the images of a repository ("teamtak/app:1.3.1"), one per line.
+repo_tags() {
+  docker image ls --filter "reference=$1" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$' || true
+}
+
+# Removes what an update left behind, once the stack runs on its new images:
+# - the platform's and agent's images of other versions than TEAMTAK_VERSION;
+# - TAK Server's images of other versions than the installed one, except the newest of them:
+#   after --upgrade-tak, the version to go back to stays ready, without its ZIP;
+# - among the images given in $1 (identifiers, separated by spaces or newlines: what the stack
+#   ran before the update), those it runs no longer: a version of Caddy, PostgreSQL or the
+#   video server that TeamTAK no longer names, the image a rebuild under the same tag left
+#   untagged, the image of a service turned off;
+# - the images Compose built for this stack and later left untagged.
+# Never forced: Docker refuses to remove an image a container still uses, of this stack or of
+# another project, and one that carries several tags. Prints what it removes.
+remove_old_images() {
+  local before="${1:-}" tak_repo="${TAK_IMAGE%:*}" tak_db_repo="${TAK_DB_IMAGE%:*}"
+  local prev keep repo ref id tags tag now short
+  # TAK Server's newest version other than the installed one.
+  prev="$( { repo_tags "$tak_repo"; repo_tags "$tak_db_repo"; } | sed 's/.*://' \
+    | { grep -vxF "${TAK_IMAGE##*:}" || true; } | sort -V | tail -n 1)"
+  keep=" $TAK_IMAGE $TAK_DB_IMAGE "
+  [ -z "$prev" ] || keep="$keep$tak_repo:$prev $tak_db_repo:$prev "
+  for repo in $PLATFORM_IMAGE_REPOS; do keep="$keep$repo:$TEAMTAK_VERSION "; done
+
+  # By tag: the other versions of the images built here.
+  for ref in $(for repo in $PLATFORM_IMAGE_REPOS "$tak_repo" "$tak_db_repo"; do repo_tags "$repo"; done); do
+    case "$keep" in *" $ref "*) continue ;; esac
+    docker image rm "$ref" > /dev/null 2>&1 && info "removed an image no longer used: $ref" || true
+  done
+
+  # By identifier: what the stack ran before and runs no longer, what Compose left untagged.
+  now=" $(stack_image_ids | tr '\n' ' ') "
+  for id in $before $(docker image ls -q --no-trunc --filter dangling=true --filter "label=com.docker.compose.project=$COMPOSE_PROJECT"); do
+    case "$now" in *" $id "*) continue ;; esac
+    tags="$(docker image inspect --format '{{join .RepoTags " "}}' "$id" 2>/dev/null)" || continue
+    for tag in $tags; do
+      case "$keep" in *" $tag "*) continue 2 ;; esac
+    done
+    short="${id#sha256:}"
+    docker image rm "$id" > /dev/null 2>&1 && info "removed an image no longer used: ${tags:-${short:0:12}, untagged}" || true
+  done
+}

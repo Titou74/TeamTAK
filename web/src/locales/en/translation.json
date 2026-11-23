@@ -991,7 +991,7 @@
         "unknown": "Not compared yet"
       },
       "updateHelpTitle": "What “newer image” means, and how to update",
-      "updateHelp": "Every image is pinned. For an image pulled by its tag (Caddy, PostgreSQL, the mail catcher, the video server), “newer” means the registry now serves another image under the same tag: a patch release or a rebuild. The directory's image is pinned to one exact build on purpose; a newer build is shown for information, and moving to it is a change of the Compose file to test first. The images built on this server follow the TAK Server version and this repository. Registries are asked twice a day at most. The platform never pulls an image by itself; over SSH:",
+      "updateHelp": "Every image is pinned. For an image pulled by its tag (Caddy, PostgreSQL, the mail catcher, the video server), “newer” means the registry now serves another image under the same tag: a patch release or a rebuild. The directory's image is pinned to one exact build on purpose; a newer build is shown for information, and moving to it is a change of the Compose file to test first. The images built on this server follow the TAK Server version and this repository. Registries are asked twice a day at most. The platform never pulls an image by itself; over SSH (the last command removes the images the pull replaced):",
       "updateCommandLabel": "the command that updates the images",
       "updateAvailable": "A newer image is available for at least one service.",
       "restart": "Restart",

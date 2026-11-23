@@ -1030,6 +1030,9 @@ fi
 # ----------------------------------------------------------------------------- start
 
 log "Starting the stack"
+# The images the stack runs before it is brought up to date: those it runs no longer are
+# removed at the end.
+images_before="$(stack_image_ids)"
 # 8443 of the machine passes from Caddy (TAK Server's administration pages, 1.0.7 and older) to
 # TAK Server's API. Compose re-creates both, in no set order: Caddy lets the port go first, so
 # that Docker does not refuse it to TAK Server.
@@ -1086,13 +1089,11 @@ if [ -n "${ADMIN_EMAIL:-}" ]; then
   compose exec -T app teamtak grant-admin "$ADMIN_EMAIL"
 fi
 
-# The platform and agent images of other versions (and the "local" tag of installations made
-# before the images carried the version): their containers were just replaced. Docker
-# refuses to remove one a container still uses.
-for image in $(docker image ls --filter reference=teamtak/app --filter reference=teamtak/agent --format '{{.Repository}}:{{.Tag}}'); do
-  case "$image" in *":$TEAMTAK_VERSION"|*":<none>") continue ;; esac
-  docker image rm "$image" > /dev/null 2>&1 && info "removed the image of another version: $image" || true
-done
+# What the update left behind, now that the containers were replaced and are healthy: the
+# platform and agent images of other versions (and the "local" tag of installations made
+# before the images carried the version), TAK Server's except the previous version, and the
+# images the stack ran before and runs no longer (deploy/scripts/lib.sh).
+remove_old_images "$images_before"
 
 log "TeamTAK $TEAMTAK_VERSION is running"
 info "Web:               $PUBLIC_URL"
