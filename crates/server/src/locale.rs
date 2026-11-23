@@ -178,18 +178,39 @@ impl Template {
 
 pub struct Rendered {
     pub subject: String,
+    /// Without the signature, which the mailer adds (see [`with_signature`]).
     pub body: String,
+    /// The language it is written in, the signature's too.
+    pub language: &'static str,
 }
 
 /// Renders an e-mail in `language` (English when the language is unknown). `vars` replace
-/// the `{{name}}` placeholders; `url` is also used by the signature.
-pub fn render(template: Template, language: &str, vars: &[(&str, &str)], url: &str) -> Rendered {
+/// the `{{name}}` placeholders.
+pub fn render(template: Template, language: &str, vars: &[(&str, &str)]) -> Rendered {
     let language = resolve(language);
     // A subject is a single line whatever the variables hold.
     let subject = fill(text(language, &[template.key(), "subject"]), vars).replace(['\r', '\n'], " ");
     let body = fill(text(language, &[template.key(), "body"]), vars);
-    let signature = fill(text(language, &["signature"]), &[("url", url)]);
-    Rendered { subject, body: format!("{body}\n\n-- \n{signature}\n") }
+    Rendered { subject, body, language }
+}
+
+/// `body` signed with the server it comes from: the name an administrator gave it and its
+/// address (the address alone when it has no name), then the attribution to TeamTAK.
+///
+/// ```text
+/// --
+/// Exercise North — https://tak.example.org
+/// Powered by TeamTAK
+/// ```
+pub fn with_signature(body: &str, language: &str, server_name: &str, url: &str) -> String {
+    let language = resolve(language);
+    let server = if server_name.is_empty() {
+        url.to_string()
+    } else {
+        fill(text(language, &["signature", "server"]), &[("server_name", server_name), ("url", url)])
+    };
+    let powered_by = text(language, &["signature", "powered_by"]);
+    format!("{body}\n\n-- \n{server}\n{powered_by}\n")
 }
 
 /// How the platform's own e-mails to administrators (alerts, the test e-mail) begin, in
@@ -323,7 +344,7 @@ pub fn render_alerts(language: &str, batch: &AlertBatch, url: &str) -> Rendered 
             ],
         ),
     };
-    render(Template::AlertDigest, lang, &[("subject", &subject), ("sections", &sections.join("\n\n")), ("url", url)], url)
+    render(Template::AlertDigest, lang, &[("subject", &subject), ("sections", &sections.join("\n\n")), ("url", url)])
 }
 
 #[cfg(test)]
@@ -388,35 +409,56 @@ mod tests {
     #[test]
     fn login_code_is_rendered_in_the_recipient_language() {
         let vars = [("code", "123456"), ("minutes", "10")];
-        let en = render(Template::LoginCode, "en", &vars, "https://tak.example.org");
-        let fr = render(Template::LoginCode, "fr", &vars, "https://tak.example.org");
+        let en = render(Template::LoginCode, "en", &vars);
+        let fr = render(Template::LoginCode, "fr", &vars);
         assert_eq!(en.subject, "Your sign-in code: 123456");
         assert_eq!(fr.subject, "Votre code de connexion : 123456");
         assert!(fr.body.contains("valable 10 minutes"));
-        assert!(en.body.contains("https://tak.example.org"));
+        assert_eq!((en.language, fr.language), ("en", "fr"));
         assert!(!en.body.contains("{{") && !fr.body.contains("{{"));
-        let fallback = render(Template::LoginCode, "de", &vars, "u");
+        let fallback = render(Template::LoginCode, "de", &vars);
         assert_eq!(fallback.subject, en.subject);
+        assert_eq!(fallback.language, "en", "the signature follows the language it fell back to");
+    }
+
+    #[test]
+    fn the_signature_names_the_server_then_teamtak() {
+        let url = "https://tak.example.org";
+        assert_eq!(
+            with_signature("Bonjour.", "fr", "Exercice Nord", url),
+            "Bonjour.\n\n-- \nExercice Nord — https://tak.example.org\nPropulsé par TeamTAK\n"
+        );
+        assert_eq!(
+            with_signature("Hello.", "en", "Exercise North", url),
+            "Hello.\n\n-- \nExercise North — https://tak.example.org\nPowered by TeamTAK\n"
+        );
+        // A server without a name signs with its address alone.
+        assert_eq!(with_signature("Hello.", "en", "", url), "Hello.\n\n-- \nhttps://tak.example.org\nPowered by TeamTAK\n");
+        assert_eq!(with_signature("Hallo.", "de", "", url), with_signature("Hallo.", "en", "", url), "unknown language: English");
+        for language in languages() {
+            let signed = with_signature("x", language, "Bench", url);
+            assert!(!signed.contains("{{") && signed.contains("Bench") && signed.contains(url) && signed.contains("TeamTAK"), "{language}: {signed}");
+        }
     }
 
     #[test]
     fn the_test_email_is_complete_in_every_language() {
         let date = format_datetime("fr", time::macros::datetime!(2026-11-20 14:05 UTC));
         for language in languages() {
-            let mail = render(Template::MailTest, language, &[("date", &date), ("url", "https://tak.example.org")], "https://tak.example.org");
+            let mail = render(Template::MailTest, language, &[("date", &date), ("url", "https://tak.example.org")]);
             let all = format!("{}\n{}", mail.subject, mail.body);
             assert!(!all.contains("{{"), "{language}: a placeholder was left: {all}");
             assert!(mail.subject.starts_with("[TeamTAK]"), "{language}: {}", mail.subject);
             assert!(mail.body.contains(&date) && mail.body.contains("https://tak.example.org"), "{language}: {}", mail.body);
         }
-        assert_eq!(render(Template::MailTest, "fr", &[], "u").subject, "[TeamTAK] E-mail de test");
+        assert_eq!(render(Template::MailTest, "fr", &[]).subject, "[TeamTAK] E-mail de test");
     }
 
     #[test]
     fn the_server_name_goes_in_every_subject() {
-        let test = render(Template::MailTest, "fr", &[], "u").subject;
+        let test = render(Template::MailTest, "fr", &[]).subject;
         assert_eq!(with_server_name(&test, "Exercice Nord"), "[TeamTAK · Exercice Nord] E-mail de test");
-        let code = render(Template::LoginCode, "en", &[("code", "123456"), ("minutes", "10")], "u").subject;
+        let code = render(Template::LoginCode, "en", &[("code", "123456"), ("minutes", "10")]).subject;
         assert_eq!(with_server_name(&code, "Exercise North"), "[Exercise North] Your sign-in code: 123456");
         // No name, no change.
         assert_eq!(with_server_name(&code, ""), code);
@@ -449,16 +491,16 @@ mod tests {
         assert_eq!(event_templates.len(), 9);
         for template in event_templates {
             for language in languages() {
-                let mail = render(template, language, &vars, "https://tak.example.org");
+                let mail = render(template, language, &vars);
                 let all = format!("{}\n{}", mail.subject, mail.body);
                 assert!(!all.contains("{{"), "{language} {}: a placeholder was left: {all}", template.key());
                 assert!(mail.subject.contains("Exercice Mont-Blanc"), "{language} {}", template.key());
                 assert!(mail.body.contains("https://tak.example.org/teams/1"), "{language} {}", template.key());
             }
         }
-        let fr = render(Template::EventInvitation, "fr", &vars, "u");
+        let fr = render(Template::EventInvitation, "fr", &vars);
         assert!(fr.subject.contains("Alpha") && fr.body.contains("20/11/2026 à 14:05 UTC") && fr.body.contains("evt-exercice-mont-blanc"));
-        let en = render(Template::EventAccepted, "en", &vars, "u");
+        let en = render(Template::EventAccepted, "en", &vars);
         assert!(en.subject.contains("Bravo"), "{}", en.subject);
     }
 
@@ -478,7 +520,7 @@ mod tests {
             for template in [EventCancelled, EventRescheduled, EventEndedEarly, EventTeamRemoved] {
                 let organizer = event_organizer(language, None);
                 let vars = [("event", "Rassemblement"), ("organizer", organizer.as_str()), ("url", "u")];
-                let mail = render(template, language, &vars, "u");
+                let mail = render(template, language, &vars);
                 assert!(mail.body.contains(&organizer), "{language} {}: {}", template.key(), mail.body);
             }
         }
@@ -649,17 +691,17 @@ mod tests {
     #[test]
     fn the_certificate_notice_tells_leaders_what_to_do() {
         let vars = [("team", "Alpha"), ("access", "alpha-shared"), ("days", "30"), ("date", "19/12/2026 à 14:05 UTC"), ("url", "https://tak.example.org/teams/1")];
-        let fr = render(Template::CertificateNotice, "fr", &vars, "https://tak.example.org");
+        let fr = render(Template::CertificateNotice, "fr", &vars);
         assert_eq!(fr.subject, "Alpha : le certificat TAK de alpha-shared expire dans 30 jours");
         assert!(fr.body.contains("Régénérer") && fr.body.contains("19/12/2026 à 14:05 UTC") && fr.body.contains("https://tak.example.org/teams/1"));
-        let en = render(Template::CertificateNotice, "en", &vars, "u");
+        let en = render(Template::CertificateNotice, "en", &vars);
         assert!(en.body.contains("Regenerate") && en.body.contains("Nothing renews it"));
         assert!(!en.body.contains("{{") && !fr.body.contains("{{"));
     }
 
     #[test]
     fn subjects_stay_on_one_line() {
-        let r = render(Template::TeamRequest, "en", &[("team", "A\r\nBcc: x"), ("requester", "r"), ("message", "m")], "u");
+        let r = render(Template::TeamRequest, "en", &[("team", "A\r\nBcc: x"), ("requester", "r"), ("message", "m")]);
         assert!(!r.subject.contains('\n') && !r.subject.contains('\r'));
     }
 }

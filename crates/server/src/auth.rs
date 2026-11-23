@@ -546,6 +546,9 @@ pub async fn public_config(State(state): State<SharedState>) -> ApiResult<Json<V
         "resend_cooldown_seconds": state.config.login.resend_cooldown_secs,
         // Shown on the sign-in page, so it is no secret.
         "server_name": settings.values.server_name,
+        // The version that runs, shown in the footer of every page: the source code is
+        // public, so it is no secret either.
+        "version": crate::monitor::release::INSTALLED,
         // The sign-in page says when new accounts need an invitation; the home page asks
         // for a team or creates one.
         "invitation_only": settings.values.invitation_only,

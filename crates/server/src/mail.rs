@@ -106,22 +106,25 @@ impl Mailer {
         }
     }
 
-    /// The name an administrator gave this server, for the subjects; empty for none, or when
-    /// it cannot be read (the e-mail still goes).
+    /// The name an administrator gave this server, for the subjects and the signature; empty
+    /// for none, or when it cannot be read (the e-mail still goes).
     async fn server_name(&self) -> String {
         let Some(db) = &self.db else { return String::new() };
         match crate::settings::load(db).await {
             Ok(stored) => stored.values.server_name,
             Err(e) => {
-                tracing::warn!(error = %e, "server name not read for an e-mail subject");
+                tracing::warn!(error = %e, "server name not read for an e-mail");
                 String::new()
             }
         }
     }
 
-    /// Sends an e-mail that was rendered already, with the server's name in its subject.
+    /// Sends an e-mail that was rendered already, with the server's name in its subject and
+    /// its signature.
     pub async fn send_rendered(&self, to: &str, template: Template, mut rendered: Rendered) -> Result<()> {
-        rendered.subject = locale::with_server_name(&rendered.subject, &self.server_name().await);
+        let server_name = self.server_name().await;
+        rendered.subject = locale::with_server_name(&rendered.subject, &server_name);
+        rendered.body = locale::with_signature(&rendered.body, rendered.language, &server_name, &self.public_url);
         let outcome = self.deliver(to, rendered).await;
         self.count(template, &outcome).await;
         outcome
@@ -129,7 +132,7 @@ impl Mailer {
 
     /// Sends `template` to `to`, written in `language` (English when unknown).
     pub async fn send(&self, to: &str, language: &str, template: Template, vars: &[(&str, &str)]) -> Result<()> {
-        self.send_rendered(to, template, locale::render(template, language, vars, &self.public_url)).await
+        self.send_rendered(to, template, locale::render(template, language, vars)).await
     }
 
     /// Like [`send`], for notifications whose failure must not fail the request: logged, and
