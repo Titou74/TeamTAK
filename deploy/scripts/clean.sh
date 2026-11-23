@@ -28,7 +28,11 @@ fi
 TAK_IMAGE_NAME="$(env_get TAK_IMAGE)"
 TAK_DB_IMAGE_NAME="$(env_get TAK_DB_IMAGE)"
 # Every version of the platform and agent images (teamtak/app:<version>).
-PLATFORM_IMAGES="$(docker image ls --filter reference=teamtak/app --filter reference=teamtak/agent --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$' || true)"
+PLATFORM_IMAGES="$(for repo in $PLATFORM_IMAGE_REPOS; do repo_tags "$repo"; done)"
+# Every version of TAK Server's images: an upgrade keeps the previous one.
+TAK_IMAGES="$(for repo in teamtak/takserver teamtak/takserver-db "${TAK_IMAGE_NAME%:*}" "${TAK_DB_IMAGE_NAME%:*}"; do
+  [ -z "$repo" ] || repo_tags "$repo"
+done | sort -u)"
 if [ -f "$ENV_FILE" ]; then
   compose down -v --remove-orphans
 else
@@ -40,7 +44,7 @@ if [ -d "$DATA_DIR" ]; then
 fi
 rm -f "$ENV_FILE"
 if [ "$IMAGES" = 1 ]; then
-  for image in "$TAK_IMAGE_NAME" "$TAK_DB_IMAGE_NAME" $PLATFORM_IMAGES; do
+  for image in $TAK_IMAGES $PLATFORM_IMAGES; do
     [ -n "$image" ] && docker image rm "$image" 2>/dev/null || true
   done
 fi

@@ -36,7 +36,7 @@ const MEMORY_WARN = 92;
 // Commands shown to the administrator, to run over SSH. The platform never runs them.
 const APT_UPGRADE = "sudo apt update && sudo apt full-upgrade";
 const REBOOT = "sudo reboot";
-const PULL_IMAGES = "cd deploy && docker compose pull && docker compose up -d";
+const PULL_IMAGES = "cd deploy && docker compose pull && docker compose up -d && docker image prune -f";
 const UPGRADE_TAK = "sudo ./install.sh --upgrade-tak";
 /** Installs that release, whatever the mode. `version` is a release's version as the server
  * reads it from its tag (`1.0.4`): nothing for the shell to interpret. */
