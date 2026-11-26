@@ -417,6 +417,37 @@ To change the text, edit every `terms.json` and set `version` there and `TERMS_V
 day's date. A modified text is a modified version of TeamTAK in the sense of the licence
 ([NOTICE](../NOTICE)).
 
+## Connection zips and the clients they are for
+
+A connection zip must work in four clients: **ATAK**, **WinTAK**, **TAK Aware** and **iTAK**. A
+change to what a zip holds (`crates/core/src/package.rs`) is checked against each of them, or
+says which it could not be checked against.
+
+The zip has the layout of TAK Server's own `make-connection-package.sh`: `config.pref`, the
+truststore and, with a certificate, the client store, plus `MANIFEST/manifest.xml`. The clients
+do not read `config.pref` the same way, so the client store is named twice there, both times
+among the connection's entries (`cot_streams`):
+
+- `certificateLocation0` and `clientPassword0`, with the connection's number: what ATAK reads.
+- `certificateLocation` and `clientPassword`, without it: the only names under which TAK Aware
+  finds a client store. With the numbered keys alone it imports the server and the truststore,
+  keeps no certificate, and its connection shows "Failed" (zips of 1.3.1 and older: import the
+  access's zip again after the update).
+
+The unnumbered keys are not written under `com.atakmap.app_preferences`, where many data
+packages put them: there ATAK takes them for the device's default certificate, and would use it
+for the user's other servers too. Among the connection's entries ATAK reads numbered keys only
+and ignores them.
+
+What was checked, and how:
+
+| Client | Checked |
+| --- | --- |
+| ATAK | On a phone (5.6.0, Android 13) for the zip itself; in ATAK-CIV's source (`PreferenceControl`) for the unnumbered keys being ignored |
+| TAK Aware | With its own parser (SwiftTAK, public source of October 2026) and a TLS connection made the way its public source does, against TAK Server 5.8; not on a phone |
+| WinTAK | Not checked: no device, and its source is not public |
+| iTAK | Not checked: no device, and its source is not public |
+
 ## QR codes and port 8446
 
 A zip carries its own truststore and works with the private certificate authority. A QR code
