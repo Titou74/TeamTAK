@@ -16,8 +16,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 # E-mail texts live next to the UI's translations and are compiled into the binary.
 COPY web/src/locales ./web/src/locales
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/src/target,sharing=locked \
     cargo build --release --locked -p teamtak-server \
     && cp target/release/teamtak /usr/local/bin/teamtak
 

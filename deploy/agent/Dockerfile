@@ -9,9 +9,11 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 # The server crate compiles the e-mail texts in; the workspace does not load without them.
 COPY web/src/locales ./web/src/locales
-# Same caches as the platform's image: what one build compiled, the other reuses.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
+# Same caches as the platform's image: what one build compiled, the other reuses. Locked:
+# the two images build at the same time, and two cargo runs unpacking the same crate into
+# a shared registry collide ("File exists").
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/src/target,sharing=locked \
     cargo build --release --locked -p teamtak-agent \
     && cp target/release/teamtak-agent /usr/local/bin/teamtak-agent
 
