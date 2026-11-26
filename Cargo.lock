@@ -2711,7 +2711,7 @@ dependencies = [
 
 [[package]]
 name = "teamtak-agent"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2729,7 +2729,7 @@ dependencies = [
 
 [[package]]
 name = "teamtak-core"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -2760,7 +2760,7 @@ dependencies = [
 
 [[package]]
 name = "teamtak-server"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
