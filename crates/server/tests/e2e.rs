@@ -499,6 +499,9 @@ async fn zips_carry_only_the_connection() {
         "caPassword0",
         "certificateLocation0",
         "clientPassword0",
+        // The same two, as TAK Aware reads them.
+        "certificateLocation",
+        "clientPassword",
         "enrollForCertificateWithTrust0",
         "useAuth0",
         "cacheCreds0",
@@ -520,6 +523,12 @@ async fn zips_carry_only_the_connection() {
     let p12 = format!("{username}.p12");
     assert_eq!(with_certificate.names(), ["MANIFEST/manifest.xml", "config.pref", p12.as_str(), "truststore.p12"]);
     assert!(with_certificate.pref_value("enrollForCertificateWithTrust0").is_none());
+    // The client store is named twice: with the connection's number for ATAK, without for
+    // TAK Aware, which otherwise imports the server and connects with no certificate.
+    assert_eq!(with_certificate.pref_value("certificateLocation0").unwrap(), format!("cert/{p12}"));
+    assert_eq!(with_certificate.pref_value("certificateLocation"), with_certificate.pref_value("certificateLocation0"));
+    assert_eq!(with_certificate.pref_value("clientPassword"), with_certificate.pref_value("clientPassword0"));
+    assert!(enrollment.pref_value("certificateLocation").is_none() && enrollment.pref_value("clientPassword").is_none());
 
     for package in [&enrollment, &with_certificate] {
         for key in package.pref_keys() {

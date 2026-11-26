@@ -6,6 +6,9 @@
 //! directory through TAK Server. It turns on ATAK's channels for the server, so that the
 //! device lists those groups, and ATAK's "Apply TAK Server profile updates", so that the
 //! device gets its team's maps (`crate::maps`).
+//!
+//! A zip must work in ATAK, WinTAK, TAK Aware and iTAK: docs/architecture.md ("Connection zips
+//! and the clients they are for") says what each reads and what was checked.
 
 use std::io::{Cursor, Write};
 
@@ -147,8 +150,8 @@ fn entry(key: &str, class: &str, value: &str) -> String {
 }
 
 /// `config.pref` of a package, with the same keys as the official script: a single
-/// `cot_streams` entry and nothing about the user or the device; and ATAK's channels turned
-/// on for the server.
+/// `cot_streams` entry and nothing about the user or the device; ATAK's channels turned on
+/// for the server; and the client store named a second time, the way TAK Aware reads it.
 pub fn config_pref(package: &ConnectionPackage) -> String {
     let mut s = String::from("<?xml version='1.0' encoding='ASCII' standalone='yes'?>\n<preferences>\n");
     s.push_str("  <preference version=\"1\" name=\"cot_streams\">\n");
@@ -160,8 +163,18 @@ pub fn config_pref(package: &ConnectionPackage) -> String {
     s.push_str(&entry("caPassword0", "String", TRUSTSTORE_PASSWORD));
     match &package.client {
         Some(client) => {
-            s.push_str(&entry("certificateLocation0", "String", &format!("cert/{}", client.file_name)));
+            let location = format!("cert/{}", client.file_name);
+            s.push_str(&entry("certificateLocation0", "String", &location));
             s.push_str(&entry("clientPassword0", "String", &client.password));
+            // TAK Aware (iPhone) finds the client store under these two names only, without
+            // the connection's number, wherever they are in the file: with the numbered keys
+            // alone it imports the server and the truststore, has no certificate, and its
+            // connection fails. They are written here, among the connection's entries, where
+            // ATAK reads numbered keys only and ignores them: under
+            // `com.atakmap.app_preferences` ATAK would make this certificate the device's
+            // default one, for its other servers too.
+            s.push_str(&entry("certificateLocation", "String", &location));
+            s.push_str(&entry("clientPassword", "String", &client.password));
         }
         None => {
             s.push_str(&entry("enrollForCertificateWithTrust0", "Boolean", "true"));
@@ -314,6 +327,8 @@ mod tests {
         "caPassword0",
         "certificateLocation0",
         "clientPassword0",
+        "certificateLocation",
+        "clientPassword",
         "enrollForCertificateWithTrust0",
         "useAuth0",
         "cacheCreds0",
@@ -355,6 +370,33 @@ mod tests {
         assert!(pref.contains("cert/alpha-shared.p12") && pref.contains("s3cret-pass"));
         assert!(!pref.contains("enrollForCertificateWithTrust0") && !pref.contains("useAuth0"));
         assert_eq!(files[3].1, p12);
+    }
+
+    /// The value of a preference and the name of the `<preference>` block it is in.
+    fn entry_of(pref: &str, key: &str) -> Option<(String, String)> {
+        let at = pref.find(&format!("<entry key=\"{key}\""))?;
+        let block = pref[..at].rsplit("<preference ").next()?.split("name=\"").nth(1)?.split('"').next()?;
+        let rest = &pref[at..];
+        Some((rest[rest.find('>')? + 1..rest.find("</entry>")?].to_string(), block.to_string()))
+    }
+
+    #[test]
+    fn certificate_zip_names_its_client_store_for_tak_aware_too() {
+        let (ca, cert, key) = test_chain();
+        let p12 = build_client_store("alpha-shared", &key, &cert, &[ca], "s3cret-pass", P12Format::Modern).unwrap();
+        let client = ClientStore { file_name: "alpha-shared.p12".into(), p12, password: "s3cret-pass".into() };
+        let pref = config_pref(&package(Some(client)));
+        // TAK Aware reads the store's location and password without the connection's number;
+        // ATAK reads them with it. Both are among the connection's entries: in ATAK's own
+        // preferences the unnumbered ones would replace the device's default certificate.
+        let connection = "cot_streams".to_string();
+        for (key, value) in [("certificateLocation", "cert/alpha-shared.p12"), ("clientPassword", "s3cret-pass")] {
+            assert_eq!(entry_of(&pref, key), Some((value.to_string(), connection.clone())), "{key}");
+            assert_eq!(entry_of(&pref, &format!("{key}0")), Some((value.to_string(), connection.clone())), "{key}0");
+        }
+        // Without a certificate there is no store to name.
+        let enrollment = config_pref(&package(None));
+        assert!(!enrollment.contains("certificateLocation") && !enrollment.contains("clientPassword"));
     }
 
     #[test]
